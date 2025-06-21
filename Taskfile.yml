@@ -1,0 +1,83 @@
+version: '3'
+
+vars:
+  CHART_PATH: infra/root_chart
+  RELEASE_NAME: alcohol-zinc
+
+includes:
+  helm: Taskfile.helm.yml
+  tear: tasks/Taskfile.tear.yml
+  stop: tasks/Taskfile.stop.yml
+  util: tasks/Taskfile.util.yml
+
+env:
+  DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: '0'
+tasks:
+  migration:create:
+    desc: Creates a migration
+    env:
+      LANDSCAPE: lapras
+    cmds:
+      - dotnet ef migrations --project ./App add {{.CLI_ARGS}}
+  run:
+    desc: Runs local .NET Server
+    env:
+      LANDSCAPE: corsola
+    cmds:
+      - dotnet run --project App
+  setup:
+    desc: Setups dotnet
+    cmds:
+      - dotnet restore --use-lock-file
+      - dotnet tool restore
+      - ./scripts/local/secrets.sh
+  build:
+    desc: Builds application
+    cmds:
+      - dotnet build --no-restore
+  tear:
+    desc: Tears down the local development cluster
+    cmds:
+      - ./scripts/local/delete-k3d-cluster.sh
+  exec:
+    desc: Starts any application in the cluster
+    cmds:
+      - ./scripts/local/exec.sh ./config/dev.yaml {{.CLI_ARGS}}
+  dev:
+    desc: Starts developing application
+    env:
+      DOTNET_WATCH_RESTART_ON_RUDE_EDIT: true
+    cmds:
+      - ./scripts/local/dev.sh ./config/dev.yaml dotnet watch run --project App
+  stop:
+    desc: Stops development in tilt
+    cmds:
+      - tilt down
+
+  latest:
+    desc: Get the latest versions of dependencies
+    cmds:
+      - task: util:latest-oci
+        vars:
+          NAME: bromine
+          OCI: ghcr.io/atomicloud/sulfoxide.bromine/sulfoxide-bromine
+      - task: util:latest-oci
+        vars:
+          NAME: postgres
+          OCI: registry-1.docker.io/bitnamicharts/postgresql
+      - task: util:latest-oci
+        vars:
+          NAME: minio
+          OCI: registry-1.docker.io/bitnamicharts/minio
+      - task: util:latest-oci
+        vars:
+          NAME: dragonfly
+          OCI: ghcr.io/dragonflydb/dragonfly/helm/dragonfly
+      - task: util:latest-oci
+        vars:
+          NAME: redis
+          OCI: registry-1.docker.io/bitnamicharts/redis
+  auth:token:
+    desc: Obtain Auth token via M2M semantics
+    cmds:
+      - ./scripts/local/auth-token.sh ./config/dev.yaml {{.CLI_ARGS}}

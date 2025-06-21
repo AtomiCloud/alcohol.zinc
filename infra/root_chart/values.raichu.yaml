@@ -1,0 +1,106 @@
+serviceTree:
+  landscape: &landscape raichu
+
+bromine:
+  enable: true
+  target: &target zinc
+  serviceTree:
+    landscape: *landscape
+
+# -- YAML Anchor for PodSecurityContext
+podSecurityContext: &podSecurityContext
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  runAsNonRoot: true
+
+# -- YAML Anchor for SecurityContext
+securityContext: &securityContext
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  capabilities:
+    drop:
+      - ALL
+xSecurityContext: &migrateSecurityContext
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  capabilities:
+    drop:
+      - ALL
+
+api:
+  enabled: true
+
+  fullnameOverride: 'zinc-api'
+
+  envFromSecret: *target
+  serviceTree:
+    landscape: *landscape
+  image:
+    repository: ghcr.io/atomicloud/alcohol.zinc/api
+  imagePullSecrets: []
+  securityContext: *securityContext
+  podSecurityContext: *podSecurityContext
+  resources:
+    limits:
+      cpu: '1'
+      memory: 1Gi
+    requests:
+      cpu: 500m
+      memory: 512Mi
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 30
+    targetCPUUtilizationPercentage: 80
+    targetMemoryUtilizationPercentage: 80
+
+  configMountPath: /app/Config
+
+  service:
+    type: ClusterIP
+    port: 80
+    containerPort: 9050
+
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: 'entei-zinc-letsencrypt-issuer'
+    hosts:
+      - host: api.zinc.alcohol.raichu.cluster.atomi.cloud
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+    tls:
+      - hosts:
+          - api.zinc.alcohol.raichu.cluster.atomi.cloud
+        secretName: api-zinc-alcohol-raichu-tls
+
+migration:
+  enabled: true
+  fullnameOverride: 'zinc-migration'
+  envFromSecret: *target
+  securityContext: *migrateSecurityContext
+  podSecurityContext: *podSecurityContext
+  configMountPath: /app/Config
+
+  image:
+    repository: ghcr.io/atomicloud/alcohol.zinc/migrate
+  serviceTree:
+    landscape: *landscape
+
+maindb:
+  enable: false
+
+maincache:
+  enable: false
+
+mainstorage:
+  enable: false

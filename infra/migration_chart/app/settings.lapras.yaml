@@ -1,0 +1,56 @@
+$schema: ./schema.json
+# Native
+App:
+  Landscape: lapras
+  EnableSwagger: true
+  GenerateConfig: true
+Swagger:
+  Title: Lapras Alcohol Zinc API
+# OTEL
+Logs:
+  Exporter:
+    Console:
+      Enabled: false
+    Otlp:
+      Enabled: false
+Trace:
+  Exporter:
+    Otlp:
+      Enabled: false
+
+Metrics:
+  Exporter:
+    Otlp:
+      Enabled: false
+
+# Infra-based
+Database:
+  MAIN:
+    Host: zinc-maindb
+    User: admin
+    Password: supersecret
+    AutoMigrate: true
+
+Cache:
+  MAIN:
+    Endpoints:
+      - zinc-maincache:6379
+    Password: supersecret
+BlockStorage:
+  MAIN:
+    Read:
+      Host: mainstorage.zinc.alcohol.lapras.lvh.me
+      Port: 20010
+      Scheme: http
+    Write:
+      Host: zinc-mainstorage
+      Port: 9000
+      Scheme: http
+    Policy: Private
+    UseSSL: false
+    EnsureBucketCreation: true
+
+Encryption:
+  Secret: supersecret
+# external
+HttpClient: {}

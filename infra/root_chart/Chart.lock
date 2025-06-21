@@ -1,0 +1,21 @@
+dependencies:
+- name: dotnet-chart
+  repository: file://../api_chart
+  version: 0.1.0
+- name: dotnet-migration
+  repository: file://../migration_chart
+  version: 0.1.0
+- name: sulfoxide-bromine
+  repository: oci://ghcr.io/atomicloud/sulfoxide.bromine
+  version: 1.6.0
+- name: postgresql
+  repository: oci://registry-1.docker.io/bitnamicharts
+  version: 15.5.16
+- name: minio
+  repository: oci://registry-1.docker.io/bitnamicharts
+  version: 14.6.20
+- name: dragonfly
+  repository: oci://ghcr.io/dragonflydb/dragonfly/helm
+  version: v1.20.1
+digest: sha256:6fd7f0dec8122d0207fd0ec91f950a7c7d2fe9839b40c856c569621037a56ea8
+generated: "2025-06-21T03:35:52.767544+08:00"

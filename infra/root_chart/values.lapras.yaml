@@ -1,0 +1,55 @@
+serviceTree:
+  landscape: &landscape lapras
+
+bromine:
+  enable: true
+  serviceTree:
+    landscape: *landscape
+
+api:
+  enabled: true
+  serviceTree:
+    landscape: *landscape
+
+  fullnameOverride: 'zinc-api'
+  replicaCount: 1
+
+  configMountPath: /app/App/Config
+
+  service:
+    type: ClusterIP
+    port: 80
+    containerPort: 9001
+
+  ingress:
+    enabled: true
+    className: traefik
+    hosts:
+      - host: api.zinc.alcohol.lapras.lvh.me
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+    tls: []
+
+migration:
+  fullnameOverride: 'zinc-migration'
+  enabled: false
+
+maindb:
+  enable: true
+  fullnameOverride: 'zinc-maindb'
+
+maincache:
+  enable: true
+  fullnameOverride: 'zinc-maincache'
+  resources:
+    requests:
+      memory: '256Mi'
+      cpu: '100m'
+    limits:
+      memory: '512Mi'
+      cpu: '250m'
+
+mainstorage:
+  enable: true
+  fullnameOverride: 'zinc-mainstorage'

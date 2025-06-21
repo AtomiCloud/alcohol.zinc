@@ -1,0 +1,40 @@
+$schema: ./schema.json
+# Native
+App:
+  Landscape: raichu
+  EnableSwagger: true
+  GenerateConfig: false
+Swagger:
+  Title: Raichu Alcohol Zinc API
+# OTEL
+Logs:
+  Exporter:
+    Console:
+      Enabled: false
+    Otlp:
+      Enabled: true
+Trace:
+  Exporter:
+    Otlp:
+      Enabled: true
+
+Metrics:
+  Exporter:
+    Otlp:
+      Enabled: true
+
+# Infra-based
+Database:
+  MAIN:
+    AutoMigrate: false
+
+Cache:
+  MAIN:
+    SSL: true
+# external
+HttpClient: {}
+Auth:
+  Settings:
+    Issuer: https://fz8y9h.logto.app/oidc
+    Audience: https://api.zinc.alcohol.raichu
+    Domain: fz8y9h.logto.app/oidc

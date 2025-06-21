@@ -1,0 +1,43 @@
+$schema: ./schema.json
+# Native
+App:
+  Landscape: pichu
+  EnableSwagger: true
+  GenerateConfig: false
+Swagger:
+  Title: Pichu Alcohol Zinc API
+# OTEL
+Logs:
+  Exporter:
+    Console:
+      Enabled: false
+    Otlp:
+      Enabled: true
+Trace:
+  Exporter:
+    Otlp:
+      Enabled: true
+
+Metrics:
+  Exporter:
+    Otlp:
+      Enabled: true
+
+# Infra-based
+Database:
+  MAIN:
+    AutoMigrate: false
+
+Cache:
+  MAIN:
+    SSL: true
+  STREAM:
+    SSL: false
+
+# external
+HttpClient: {}
+Auth:
+  Settings:
+    Issuer: https://im3flr.logto.app/oidc
+    Audience: https://api.zinc.alcohol.pichu
+    Domain: im3flr.logto.app/oidc

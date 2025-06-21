@@ -1,0 +1,42 @@
+$schema: ./schema.json
+# Native
+App:
+  Landscape: pikachu
+  EnableSwagger: true
+  GenerateConfig: false
+Swagger:
+  Title: Pikachu Alcohol Zinc API
+# OTEL
+Logs:
+  Exporter:
+    Console:
+      Enabled: false
+    Otlp:
+      Enabled: true
+Trace:
+  Exporter:
+    Otlp:
+      Enabled: true
+
+Metrics:
+  Exporter:
+    Otlp:
+      Enabled: true
+
+# Infra-based
+Database:
+  MAIN:
+    AutoMigrate: false
+
+Cache:
+  MAIN:
+    SSL: true
+  STREAM:
+    SSL: false
+# external
+HttpClient: {}
+Auth:
+  Settings:
+    Issuer: https://favybm.logto.app/oidc
+    Audience: https://api.zinc.alcohol.pikachu
+    Domain: favybm.logto.app/oidc
