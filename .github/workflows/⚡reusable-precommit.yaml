@@ -20,7 +20,7 @@ jobs:
     steps:
       # Setup
       - uses: AtomiCloud/actions.setup-nix@v2
-      - uses: AtomiCloud/actions.cache-go@v1.0.1
+      - uses: AtomiCloud/actions.cache-go@v1.1.0
 
       # Pre Commit
       - name: Run pre-commit
