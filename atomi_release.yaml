@@ -29,7 +29,7 @@ plugins:
   - module: '@semantic-release/git'
     version: 10.0.1
     config:
-      message: "release: ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
+      message: "release: ${nextRelease.version}\n\n${nextRelease.notes}"
       assets:
         - Changelog.md
         - CommitConventions.md
