@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.0.0...v1.0.1) (2025-06-21)
+
+
+### 🐛 Bug Fixes 🐛
+
+* **ci:** sg shouldn't skip ci ([aa01267](https://github.com/AtomiCloud/alcohol.zinc/commit/aa012673d7309f9e8111870f73ef61471c0379ef))
+
 ## 1.0.0 (2025-06-21)
 
 
