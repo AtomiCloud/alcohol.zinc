@@ -26,10 +26,6 @@ plugins:
     version: 6.0.3
     config:
       changelogFile: Changelog.md
-  - module: '@semantic-release/exec'
-    version: 6.0.3
-    config:
-      prepareCmd: scripts/ci/publish.sh ${nextRelease.version}
   - module: '@semantic-release/git'
     version: 10.0.1
     config:
