@@ -1,3 +1,10 @@
+## [1.0.2](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.0.1...v1.0.2) (2025-06-24)
+
+
+### 🐛 Bug Fixes 🐛
+
+* incorrect chart publishing ([897ffc7](https://github.com/AtomiCloud/alcohol.zinc/commit/897ffc7364a9e28d7fc2be5410bef72c0b6caf5e))
+
 ## [1.0.1](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.0.0...v1.0.1) (2025-06-21)
 
 
