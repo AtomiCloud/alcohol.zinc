@@ -31,6 +31,17 @@ echo "📝 Generating Image tags..."
 echo "📝 Helm version: ${HELM_VERSION}"
 echo "📝 Image version: ${IMAGE_VERSION}"
 
+echo "📝 Updating Chart.yaml..."
+
+find . -name "Chart.yaml" | while read -r file; do
+  echo "📝 Updating AppVersion: $file"
+  yq eval ".appVersion = \"${IMAGE_VERSION}\"" "$file" >"${file}.tmp"
+  mv "${file}.tmp" "$file"
+  echo "✅ Updated AppVersion: $file"
+done
+
+echo "✅ Updated Chart.yaml"
+
 onExit() {
   rc="$?"
   rm -rf ./uploads
