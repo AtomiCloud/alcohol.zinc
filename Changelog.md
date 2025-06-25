@@ -1,3 +1,10 @@
+## [1.0.4](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.0.3...v1.0.4) (2025-06-25)
+
+
+### 🐛 Bug Fixes 🐛
+
+* allow us to cache nix shells ([2ff12f9](https://github.com/AtomiCloud/alcohol.zinc/commit/2ff12f9d7e7fc08974090de064228b25ee2d574f))
+
 ## [1.0.3](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.0.2...v1.0.3) (2025-06-25)
 
 
