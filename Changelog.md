@@ -1,3 +1,10 @@
+## [1.0.3](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.0.2...v1.0.3) (2025-06-25)
+
+
+### 🐛 Bug Fixes 🐛
+
+* incorrect stream configuraiton ([41b5887](https://github.com/AtomiCloud/alcohol.zinc/commit/41b58876a702d99e0da9c46ec1dfb8b959900a2a))
+
 ## [1.0.2](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.0.1...v1.0.2) (2025-06-24)
 
 
