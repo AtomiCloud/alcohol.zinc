@@ -1,3 +1,4 @@
+using App.Modules.Configuration.Data;
 using App.Modules.Users.Data;
 using App.StartUp.Options;
 using App.StartUp.Services;
@@ -14,6 +15,11 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
 
 
   public DbSet<UserData> Users { get; set; }
+  public DbSet<ConfigurationData> Configurations { get; set; }
+  // public DbSet<TaskData> Tasks { get; set; }
+  // public DbSet<CompletionData> Completions { get; set; }
+  // public DbSet<StatsData> Stats { get; set; }
+  // public DbSet<CharityData> Charities { get; set; }
 
   protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
   {
