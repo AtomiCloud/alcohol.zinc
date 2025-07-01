@@ -1,5 +1,5 @@
 using App.Modules.Charities.Data;
-using App.Modules.Configuration.Data;
+using App.Modules.Configurations.Data;
 using App.Modules.Users.Data;
 using App.StartUp.Options;
 using App.StartUp.Services;

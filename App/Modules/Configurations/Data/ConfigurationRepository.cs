@@ -3,7 +3,7 @@ using CSharp_Result;
 using Domain.Configuration;
 using Microsoft.EntityFrameworkCore;
 
-namespace App.Modules.Configuration.Data
+namespace App.Modules.Configurations.Data
 {
     public class ConfigurationRepository(MainDbContext db, ILogger<ConfigurationRepository> logger) : IConfigurationRepository
     {

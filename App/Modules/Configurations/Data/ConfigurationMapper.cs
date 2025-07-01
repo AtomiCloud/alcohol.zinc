@@ -1,6 +1,6 @@
 using Domain.Configuration;
 
-namespace App.Modules.Configuration.Data
+namespace App.Modules.Configurations.Data
 {
     public static class ConfigurationMapper
     {

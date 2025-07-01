@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace App.Modules.Configuration.Data
+namespace App.Modules.Configurations.Data
 {
     public class ConfigurationData
     {
