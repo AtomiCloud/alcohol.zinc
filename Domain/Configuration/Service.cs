@@ -4,7 +4,7 @@ namespace Domain.Configuration
 {
     public class ConfigurationService(IConfigurationRepository repository) : IConfigurationService
     {
-        public Task<Result<ConfigurationModel>> Get(string sub)
+        public Task<Result<ConfigurationModel?>> Get(string sub)
         {
             return repository.Get(sub);
         }
