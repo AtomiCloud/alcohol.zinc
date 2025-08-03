@@ -19,6 +19,12 @@
           "Microsoft.Extensions.Options": "8.0.0"
         }
       },
+      "NodaMoney": {
+        "type": "Direct",
+        "requested": "[2.2.1, )",
+        "resolved": "2.2.1",
+        "contentHash": "Z0pVYENfwwo7ARrc1ijpc/rcJYYTN5d7U8eWS10fex7gdygh/eUVX6Pftt1mjsfu8ZxhzGPt9wAlCcpHyXhCWg=="
+      },
       "Microsoft.Extensions.DependencyInjection": {
         "type": "Transitive",
         "resolved": "8.0.0",

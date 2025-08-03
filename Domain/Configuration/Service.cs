@@ -13,5 +13,15 @@ namespace Domain.Configuration
         {
             return repository.Update(model);
         }
+
+        public Task<Result<ConfigurationModel>> Create(ConfigurationModel model)
+        {
+            return repository.Create(model);
+        }
+
+        public Task<Result<Unit?>> Delete(string sub)
+        {
+            return repository.Delete(sub);
+        }
     }
 }

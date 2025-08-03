@@ -9,6 +9,7 @@
     <ItemGroup>
       <PackageReference Include="CSharp-Result" Version="0.2.0" />
       <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />
+      <PackageReference Include="NodaMoney" Version="2.2.1" />
     </ItemGroup>
 
 </Project>
