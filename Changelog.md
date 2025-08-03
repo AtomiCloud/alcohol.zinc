@@ -1,3 +1,11 @@
+## [1.0.5](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.0.4...v1.0.5) (2025-08-03)
+
+
+### 🐛 Bug Fixes 🐛
+
+* upgrade ESO to v1 ([d00ccfd](https://github.com/AtomiCloud/alcohol.zinc/commit/d00ccfd748eb7d664bb977c539b29338c76fe23e))
+* upgrade ESO to v1 ([c0a2dc8](https://github.com/AtomiCloud/alcohol.zinc/commit/c0a2dc8ba824184b20019d10b600216181374969))
+
 ## [1.0.4](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.0.3...v1.0.4) (2025-06-25)
 
 
