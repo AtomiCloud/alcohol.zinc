@@ -12,6 +12,8 @@ includes:
 
 env:
   DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: '0'
+  SOS_PROJECT_ID: '1cffa31e-7653-4c0d-9a18-9914a2dbc30b'
+
 tasks:
   migration:create:
     desc: Creates a migration

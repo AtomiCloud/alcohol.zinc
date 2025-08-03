@@ -56,35 +56,47 @@ kubectl --context "k3d-$input" -n external-secrets wait --for=jsonpath=.status.r
 echo "✅ Installed external-secrets operator!"
 
 # create doppler secret
-#echo "🛠 Creating doppler secret..."
-#root_token="$(doppler secrets get SULFOXIDE_SOS -p "sulfoxide-sos" -c "$input" --plain | base64)"
-#
-#kubectl --context "k3d-$input" -n external-secrets apply -f - <<EOF
-#apiVersion: v1
-#kind: Secret
-#metadata:
-#  name: root-token
-#type: Opaque
-#data:
-#  "ROOT_TOKEN": "$root_token"
-#EOF
-#echo "✅ Created doppler secret!"
-#
-## create doppler cluster secret store
-#echo "🛠 Creating doppler cluster secret store..."
-#kubectl --context "k3d-$input" -n external-secrets apply -f - <<EOF
-#apiVersion: external-secrets.io/v1beta1
-#kind: ClusterSecretStore
-#metadata:
-#  name: doppler
-#spec:
-#  provider:
-#    doppler:
-#      auth:
-#        secretRef:
-#          dopplerToken:
-#            name: root-token
-#            key: ROOT_TOKEN
-#            namespace: external-secrets
-#EOF
-#echo "✅ Created doppler cluster secret store!"
+echo "🛠 Creating infisical secret..."
+root_client_id="$(infisical secrets get "--projectId=$SOS_PROJECT_ID" "--env=$input" SULFOXIDE_SOS_CLIENT_ID --plain | base64 -w 0)"
+root_client_secret="$(infisical secrets get "--projectId=$SOS_PROJECT_ID" "--env=$input" SULFOXIDE_SOS_CLIENT_SECRET --plain | base64 -w 0)"
+
+kubectl --context "k3d-$input" -n external-secrets apply -f - <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: root-token
+type: Opaque
+data:
+  "CLIENT_ID": "$root_client_id"
+  "CLIENT_SECRET": "$root_client_secret"
+EOF
+echo "✅ Created infisical secret!"
+
+# create doppler cluster secret store
+echo "🛠 Creating infisical cluster secret store..."
+kubectl --context "k3d-$input" -n external-secrets apply -f - <<EOF
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: infisical
+spec:
+  provider:
+    infisical:
+      auth:
+        universalAuthCredentials:
+          clientId:
+            key: CLIENT_ID
+            name: root-token
+            namespace: external-secrets
+          clientSecret:
+            key: CLIENT_SECRET
+            name: root-token
+            namespace: external-secrets
+      hostAPI: https://secrets.atomi.cloud
+      secretsScope:
+        environmentSlug: "$input"
+        projectSlug: sulfoxide-sos
+        recursive: false
+        secretsPath: /
+EOF
+echo "✅ Created infisical cluster secret store!"
