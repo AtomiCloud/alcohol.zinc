@@ -17,7 +17,8 @@ namespace Domain.Habit
     public record HabitPrincipal
     {
         public required Guid Id { get; init; }
-         public required Guid HabitId { get; init; }
+        // PlanId + Version = Id
+        public required Guid PlanId { get; init; }
         public required Guid CharityId { get; init; }
         public required string UserId { get; init; }
         public ushort Version { get; init; }
