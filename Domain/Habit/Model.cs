@@ -12,15 +12,15 @@ namespace Domain.Habit
         public decimal Ratio { get; init; }
         public DateOnly StartDate { get; init; }
         public DateOnly EndDate { get; init; }
-        public int Version { get; init; }
     }
 
     public record HabitPrincipal
     {
         public required Guid Id { get; init; }
+         public required Guid HabitId { get; init; }
+        public required Guid CharityId { get; init; }
         public required string UserId { get; init; }
-        public required Guid HabitId { get; init; }
-        public int? CharityId { get; init; }
+        public ushort Version { get; init; }
         public required HabitRecord Record { get; init; }
     }
 
@@ -28,6 +28,6 @@ namespace Domain.Habit
     {
         public required HabitPrincipal Principal { get; init; }
         public required UserPrincipal User { get; init; }
-        public CharityModel? Charity { get; init; }
+        public CharityPrincipal? Charity { get; init; }
     }
 }
