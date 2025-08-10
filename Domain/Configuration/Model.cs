@@ -1,12 +1,25 @@
+using Domain.Charity;
+
 namespace Domain.Configuration
 
 {
-    public record ConfigurationModel
+    public record ConfigurationRecord
     {
-        public required string Sub { get; set; }
-        public required string Timezone { get; set; }
-        public TimeOnly EndOfDay { get; set; }
-        public int? DefaultCharityId { get; set; }
+      public required string Timezone { get; init; }
+      public TimeOnly EndOfDay { get; init; }
+      public Guid DefaultCharityId { get; init; }
+    }
+    
+    public record ConfigurationPrincipal
+    {
+      public required Guid Id { get; init; }
+      public required string UserId { get; init; }
+      public required ConfigurationRecord Record { get; init; }
+    }
+    
+    public record Configuration
+    {
+      public required ConfigurationPrincipal  Principal { get; init; }
+      public CharityPrincipal? Charity { get; init; }
     }
 }
-
