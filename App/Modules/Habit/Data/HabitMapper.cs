@@ -1,6 +1,7 @@
-using Domain.Habit;
 using Domain.Charity;
+using Domain.Habit;
 using Domain.User;
+using NodaMoney;
 
 namespace App.Modules.Habit.Data
 {
@@ -14,16 +15,16 @@ namespace App.Modules.Habit.Data
                 UserId = data.UserId,
                 HabitId = data.HabitId,
                 CharityId = data.CharityId,
+                Version = data.Version,
                 Record = new HabitRecord
                 {
                     Task = data.Task,
                     DayOfWeek = data.DayOfWeek,
                     NotificationTime = data.NotificationTime,
-                    Stake = new NodaMoney.Money(data.StakeCents, NodaMoney.Currency.FromCode("USD")),
+                    Stake = new Money(data.StakeCents, Currency.FromCode("USD")),
                     Ratio = data.RatioBasisPoints / 1000m,
                     StartDate = data.StartDate,
                     EndDate = data.EndDate,
-                    Version = data.Version
                 }
             };
         }
@@ -41,19 +42,20 @@ namespace App.Modules.Habit.Data
                 StartDate = principal.Record.StartDate,
                 EndDate = principal.Record.EndDate,
                 CharityId = principal.CharityId,
-                Version = principal.Record.Version,
+                Version = principal.Version,
                 HabitId = principal.HabitId,
                 UserId = principal.UserId
             };
         }
 
-        public static Domain.Habit.Habit ToHabit(this HabitPrincipal principal, UserPrincipal user, CharityModel? charity = null)
+        public static Domain.Habit.Habit ToHabit(this HabitPrincipal habitPrincipal, UserPrincipal userPrincipal, 
+          CharityPrincipal charityPrincipal)
         {
             return new Domain.Habit.Habit
             {
-                Principal = principal,
-                User = user,
-                Charity = charity
+                Principal = habitPrincipal,
+                User = userPrincipal,
+                Charity = charityPrincipal
             };
         }
     }

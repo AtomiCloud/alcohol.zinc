@@ -1,6 +1,7 @@
+using System.Globalization;
 using App.Utility;
 using Domain.Habit;
-using System.Globalization;
+using NodaMoney;
 
 namespace App.Modules.Habit.API.V1;
 
@@ -17,7 +18,7 @@ public static class HabitMapper
             h.Record.StartDate.ToStandardDateFormat(),
             h.Record.EndDate.ToStandardDateFormat(),
             h.CharityId,
-            h.Record.Version,
+            h.Version,
             h.UserId,
             h.HabitId.ToString()
         );
@@ -28,11 +29,10 @@ public static class HabitMapper
             Task = req.Task,
             DayOfWeek = req.DayOfWeek,
             NotificationTime = req.NotificationTime.ToTime(),
-            Stake = new NodaMoney.Money(decimal.Parse(req.Stake, CultureInfo.InvariantCulture), NodaMoney.Currency.FromCode("SGD")),
+            Stake = new Money(decimal.Parse(req.Stake, CultureInfo.InvariantCulture), Currency.FromCode("SGD")),
             Ratio = decimal.Parse(req.Ratio, CultureInfo.InvariantCulture) / 100m,
             StartDate = req.StartDate.ToDate(),
             EndDate = req.EndDate.ToDate(),
-            Version = req.Version
         };
 
     public static HabitPrincipal ToPrincipal(this UpdateHabitReq req, Guid id) =>
@@ -42,16 +42,16 @@ public static class HabitMapper
             UserId = req.UserId,
             HabitId = req.HabitId,
             CharityId = req.CharityId,
+            Version = req.Version,
             Record = new HabitRecord
             {
                 Task = req.Task,
                 DayOfWeek = req.DayOfWeek,
                 NotificationTime = req.NotificationTime.ToTime(),
-                Stake = new NodaMoney.Money(decimal.Parse(req.Stake, CultureInfo.InvariantCulture), NodaMoney.Currency.FromCode("SGD")),
+                Stake = new Money(decimal.Parse(req.Stake, CultureInfo.InvariantCulture), Currency.FromCode("SGD")),
                 Ratio = decimal.Parse(req.Ratio, CultureInfo.InvariantCulture) / 100m,
                 StartDate = req.StartDate.ToDate(),
                 EndDate = req.EndDate.ToDate(),
-                Version = req.Version
             }
         };
 }

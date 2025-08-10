@@ -1,14 +1,14 @@
 using System.Net.Mime;
 using App.Error.V1;
 using App.Modules.Common;
-using App.StartUp.Services.Auth;
 using App.StartUp.Registry;
+using App.StartUp.Services.Auth;
 using App.Utility;
+using Asp.Versioning;
 using CSharp_Result;
 using Domain.Habit;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Asp.Versioning;
 
 namespace App.Modules.Habit.API.V1;
 

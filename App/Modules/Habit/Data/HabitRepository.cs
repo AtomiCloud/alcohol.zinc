@@ -1,11 +1,9 @@
+using App.Modules.Charities.Data;
+using App.Modules.Users.Data;
 using App.StartUp.Database;
 using CSharp_Result;
 using Domain.Habit;
-using Domain.User;
-using Domain.Charity;
 using Microsoft.EntityFrameworkCore;
-using App.Modules.Users.Data;
-using App.Modules.Charities.Data;
 
 namespace App.Modules.Habit.Data
 {
@@ -47,7 +45,7 @@ namespace App.Modules.Habit.Data
             }
         }
 
-        public async Task<Result<Habit?>> GetWithRelations(string userId, Guid id)
+        public async Task<Result<Domain.Habit.Habit?>> GetWithRelations(string userId, Guid id)
         {
             try
             {
@@ -56,18 +54,18 @@ namespace App.Modules.Habit.Data
                 if (habitData == null)
                 {
                     logger.LogWarning("Habit not found for Id: {Id}, UserId: {UserId}", id, userId);
-                    return (Habit?)null;
+                    return (Domain.Habit.Habit?)null;
                 }
 
                 var userData = await db.Users.FirstOrDefaultAsync(x => x.Id == userId);
                 if (userData == null)
                 {
                     logger.LogWarning("User not found for UserId: {UserId}", userId);
-                    return (Habit?)null;
+                    return (Domain.Habit.Habit?)null;
                 }
 
-                var charityData = habitData.CharityId.HasValue 
-                    ? await db.Charities.FirstOrDefaultAsync(x => x.Id == habitData.CharityId.Value)
+                var charityData = habitData.CharityId != Guid.Empty 
+                    ? await db.Charities.FirstOrDefaultAsync(x => x.Id == habitData.CharityId)
                     : null;
 
                 var habitPrincipal = habitData.ToPrincipal();
@@ -121,7 +119,7 @@ namespace App.Modules.Habit.Data
                 data.StartDate = principal.Record.StartDate;
                 data.EndDate = principal.Record.EndDate;
                 data.CharityId = principal.CharityId;
-                data.Version = principal.Record.Version;
+                data.Version = principal.Version;
                 data.HabitId = principal.HabitId;
 
                 var updated = db.Habits.Update(data);

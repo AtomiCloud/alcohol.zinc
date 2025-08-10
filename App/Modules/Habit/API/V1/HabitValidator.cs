@@ -1,6 +1,6 @@
+using System.Globalization;
 using App.Utility;
 using FluentValidation;
-using System.Globalization;
 
 namespace App.Modules.Habit.API.V1;
 
