@@ -1,7 +1,9 @@
+using App.Modules.Charities.Data;
 using App.Modules.System;
 using App.Modules.Users.Data;
 using App.StartUp.Services;
 using Domain;
+using Domain.Charity;
 using Domain.User;
 
 namespace App.Modules;
@@ -17,6 +19,12 @@ public static class DomainServices
     s.AddScoped<IUserRepository, UserRepository>()
       .AutoTrace<IUserRepository>();
 
+    // CHARITY
+    s.AddScoped<ICharityService, CharityService>()
+      .AutoTrace<ICharityService>();
+
+    s.AddScoped<ICharityRepository, CharityRepository>()
+      .AutoTrace<ICharityRepository>();
 
     // Transaction Manager
     s.AddScoped<ITransactionManager, TransactionManager>()
