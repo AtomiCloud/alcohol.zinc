@@ -5,15 +5,15 @@ namespace App.Modules.Charities.Data
     public class CharityData
     {
         [Key]
-        public Guid Id { get; set; }
+        public Guid Id { get; init; }
         
         [MaxLength(256)]
-        public string Name { get; set; }
+        public required string Name { get; set; }
 
         [MaxLength(256)] 
-        public string Email { get; set; }
+        public required string Email { get; set; }
 
         [MaxLength(512)] 
-        public string? Address { get; set; } = null;
+        public string? Address { get; set; }
     }
 }

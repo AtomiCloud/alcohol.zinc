@@ -7,7 +7,7 @@ namespace App.Modules.Charities.Data
 {
     public class CharityRepository(MainDbContext db, ILogger<CharityRepository> logger) : ICharityRepository
     {
-        public async Task<Result<CharityModel?>> Get(int id)
+        public async Task<Result<Charity?>> Get(Guid id)
         {
             try
             {
@@ -21,7 +21,7 @@ namespace App.Modules.Charities.Data
                 {
                     logger.LogWarning("Charity not found for Id: {Id}", id);
 
-                    return (CharityModel?)null;
+                    return (Charity?)null;
                 }
                 return data.ToDomain();
             }
@@ -33,14 +33,14 @@ namespace App.Modules.Charities.Data
             }
         }
 
-        public async Task<Result<List<CharityModel>>> GetAll()
+        public async Task<Result<IEnumerable<CharityPrincipal>>> GetAll()
         {
             try
             {
                 logger.LogInformation("Retrieving all Charities");
 
                 var data = await db.Charities.ToListAsync();
-                return data.Select(x => x.ToDomain()).ToList();
+                return data.Select(x => x.ToPrincipal()).ToList();
             }
             catch (Exception e)
             {
@@ -50,7 +50,7 @@ namespace App.Modules.Charities.Data
             }
         }
 
-        public async Task<Result<CharityModel>> Create(CharityModel model)
+        public async Task<Result<CharityPrincipal>> Create(CharityRecord model)
         {
             try
             {
@@ -62,7 +62,7 @@ namespace App.Modules.Charities.Data
 
                 logger.LogInformation("Charity added with Id: {Id}", data.Id);
 
-                return r.Entity.ToDomain();
+                return r.Entity.ToPrincipal();
             }
             catch (Exception e)
             {
@@ -72,39 +72,40 @@ namespace App.Modules.Charities.Data
             }
         }
 
-        public async Task<Result<CharityModel?>> Update(CharityModel model)
+        public async Task<Result<CharityPrincipal?>> Update(CharityPrincipal principal)
         {
             try
             {
-                logger.LogInformation("Updating Charity Id: {Id}", model.Id);
+                logger.LogInformation("Updating Charity Id: {Id}", principal.Id);
 
                 var data = await db
                     .Charities
-                    .Where(x => x.Id == model.Id)
+                    .Where(x => x.Id == principal.Id)
                     .FirstOrDefaultAsync();
                 if (data == null)
                 {
-                    logger.LogWarning("Charity not found for update, Id: {Id}", model.Id);
+                    logger.LogWarning("Charity not found for update, Id: {Id}", principal.Id);
 
-                    return (CharityModel?)null;
+                    return (CharityPrincipal?)null;
                 }
-                data.Name = model.Name;
-                data.Email = model.Email;
+                data.Name = principal.Record.Name;
+                data.Email = principal.Record.Email;
+                data.Address = principal.Record.Address;
                 var updated = db.Charities.Update(data);
                 await db.SaveChangesAsync();
 
-                logger.LogInformation("Charity updated for Id: {Id}", model.Id);
+                logger.LogInformation("Charity updated for Id: {Id}", principal.Id);
 
-                return updated.Entity.ToDomain();
+                return updated.Entity.ToPrincipal();
             }
             catch (Exception e)
             {
-                logger.LogError(e, "Failed to update Charity Id: {Id}", model.Id);
+                logger.LogError(e, "Failed to update Charity Id: {Id}", principal.Id);
                 return e;
             }
         }
 
-        public async Task<Result<Unit?>> Delete(int id)
+        public async Task<Result<Unit?>> Delete(Guid id)
         {
             try
             {
