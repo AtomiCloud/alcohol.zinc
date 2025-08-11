@@ -4,10 +4,10 @@ namespace Domain.Charity
 {
     public interface ICharityRepository
     {
-        Task<Result<CharityModel?>> Get(int id);
-        Task<Result<List<CharityModel>>> GetAll();
-        Task<Result<CharityModel>> Create(CharityModel model);
-        Task<Result<CharityModel?>> Update(CharityModel model);
-        Task<Result<Unit?>> Delete(int id);
+        Task<Result<Charity?>> Get(Guid id);
+        Task<Result<IEnumerable<CharityPrincipal>>> GetAll();
+        Task<Result<CharityPrincipal>> Create(CharityRecord model);
+        Task<Result<CharityPrincipal?>> Update(CharityPrincipal model);
+        Task<Result<Unit?>> Delete(Guid id);
     }
 }
