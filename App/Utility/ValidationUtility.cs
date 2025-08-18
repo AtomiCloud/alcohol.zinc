@@ -58,42 +58,6 @@ public static class ValidationUtility
       .WithMessage("Gender must be 'M' or 'F'");
   }
 
-  public static IRuleBuilderOptions<T, string?> DiscountTypeValid<T>(
-    this IRuleBuilder<T, string?> ruleBuilder)
-  {
-    string[] dt = ["Flat", "Percentage"];
-    return ruleBuilder
-      .Must(x => x is null || dt.Contains(x))
-      .WithMessage($"DiscountType must be {dt.Humanize("or")}");
-  }
-
-  public static IRuleBuilderOptions<T, string?> DiscountMatchModeValid<T>(
-    this IRuleBuilder<T, string?> ruleBuilder)
-  {
-    string[] dt = ["All", "Any", "None"];
-    return ruleBuilder
-      .Must(x => x is null || dt.Contains(x))
-      .WithMessage($"DiscountMatchMode must be {dt.Humanize("or")}");
-  }
-
-  public static IRuleBuilderOptions<T, string?> DiscountMatchTypeValid<T>(
-    this IRuleBuilder<T, string?> ruleBuilder)
-  {
-    string[] dt = ["UserId", "Role"];
-    return ruleBuilder
-      .Must(x => x is null || dt.Contains(x))
-      .WithMessage($"DiscountMatchType must be {dt.Humanize("or")}");
-  }
-
-  public static IRuleBuilderOptions<T, string?> TrainDirectionValid<T>(
-    this IRuleBuilder<T, string> ruleBuilder)
-  {
-    return ruleBuilder
-      .Must(x => x is "JToW" or "WToJ" or null)
-      .WithMessage("TrainDirection must be 'JToW' or 'WToJ'");
-  }
-
-
   public static IRuleBuilderOptions<T, string> DateValid<T>(
     this IRuleBuilder<T, string> ruleBuilder)
   {
@@ -127,14 +91,6 @@ public static class ValidationUtility
       .WithMessage($"TimeOnly must be in the format of {Utils.StandardTimeFormat}");
   }
 
-  public static IRuleBuilderOptions<T, string> TagValid<T>(this IRuleBuilder<T, string> ruleBuilder)
-  {
-    return ruleBuilder
-      .Length(1, 32)
-      .WithMessage("Docker tag must be between 1 and 32 characters")
-      .Matches(@"^[a-z0-9](\-?[a-z0-9]+)*$")
-      .WithMessage("Docker tag can only contain alphanumeric characters and dashes, and cannot star or end with dash");
-  }
 
   public static IRuleBuilderOptions<T, string> UsernameValid<T>(
     this IRuleBuilder<T, string> ruleBuilder)
@@ -155,14 +111,6 @@ public static class ValidationUtility
       .WithMessage("SHA can only have hexadecimal characters and exactly 64");
   }
 
-  public static IRuleBuilderOptions<T, string> DockerReferenceValid<T>(
-    this IRuleBuilder<T, string> ruleBuilder)
-  {
-    return ruleBuilder
-      .Matches(@"^((\w(-?\w+)*)(\.\w(-?\w+)*)*(:\d+)?/)?\w(-?\w+)*(/\w(-?\w+)*)*$")
-      .WithMessage("Invalid Docker reference");
-  }
-
 
   public static IRuleBuilderOptions<T, string> NameValid<T>(
     this IRuleBuilder<T, string> ruleBuilder)
@@ -172,13 +120,6 @@ public static class ValidationUtility
       .WithMessage("Name has to be between 1 to 256 characters");
   }
 
-  public static IRuleBuilderOptions<T, string> TransactionDescriptionValid<T>(
-    this IRuleBuilder<T, string> ruleBuilder)
-  {
-    return ruleBuilder
-      .Length(2, 4096)
-      .WithMessage("Description has to be between 2 to 4096 characters");
-  }
 
   public static IRuleBuilderOptions<T, string> DescriptionValid<T>(
     this IRuleBuilder<T, string> ruleBuilder)
