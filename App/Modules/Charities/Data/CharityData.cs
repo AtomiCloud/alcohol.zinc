@@ -5,7 +5,7 @@ namespace App.Modules.Charities.Data
     public class CharityData
     {
         [Key]
-        public Guid Id { get; init; }
+        public Guid Id { get; set; }
         
         [MaxLength(256)]
         public required string Name { get; set; }
