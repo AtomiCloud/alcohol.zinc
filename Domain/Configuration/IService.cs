@@ -1,12 +1,11 @@
 using CSharp_Result;
 
-namespace Domain.Configuration
+namespace Domain.Configuration;
+
+public interface IConfigurationService
 {
-    public interface IConfigurationService
-    {
-        Task<Result<ConfigurationModel?>> Get(string sub);
-        Task<Result<ConfigurationModel?>> Update(ConfigurationModel model);
-        Task<Result<ConfigurationModel>> Create(ConfigurationModel model);
-        Task<Result<Unit?>> Delete(string sub);
-    }
+  Task<Result<Configuration?>> GetByUserId(string userId);
+  Task<Result<ConfigurationPrincipal>> Create(string userId, ConfigurationRecord record);
+  Task<Result<ConfigurationPrincipal?>> Update(Guid id, string userId, ConfigurationRecord record);
+  Task<Result<Unit?>> Delete(string userId);
 }
