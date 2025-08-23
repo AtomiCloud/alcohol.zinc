@@ -7,20 +7,46 @@ namespace App.Modules.Configurations.Data
 {
     public class ConfigurationRepository(MainDbContext db, ILogger<ConfigurationRepository> logger) : IConfigurationRepository
     {
-        public async Task<Result<Configuration?>> Get(string userId)
+        public async Task<Result<Configuration?>> Get(Guid id)
         {
             try
             {
-                logger.LogInformation("Retrieving Configuration by UserId: {UserId}", userId);
+                logger.LogInformation("Retrieving Configuration by Id: {Id}", id);
 
                 var data = await db.Configurations
-                    .Where(x => x.UserId == userId)
+                    .Where(x => x.Id == id)
                     .Include(x => x.Charity)
                     .FirstOrDefaultAsync();
                 
                 if (data == null)
                 {
-                    logger.LogWarning("Configuration not found for UserId: {UserId}", userId);
+                    logger.LogWarning("Configuration not found for Id: {Id}", id);
+                    return (Configuration?)null;
+                }
+                
+                return data.ToDomain();
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Failed retrieving Configuration by Id: {Id}", id);
+                return e;
+            }
+        }
+
+        public async Task<Result<Configuration?>> Get(Guid id, string userId)
+        {
+            try
+            {
+                logger.LogInformation("Retrieving Configuration by Id: {Id} and UserId: {UserId}", id, userId);
+
+                var data = await db.Configurations
+                    .Where(x => x.Id == id && x.UserId == userId)
+                    .Include(x => x.Charity)
+                    .FirstOrDefaultAsync();
+                
+                if (data == null)
+                {
+                    logger.LogWarning("Configuration not found for Id: {Id} and UserId: {UserId}", id, userId);
                     return (Configuration?)null;
                 }
                 

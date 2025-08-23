@@ -4,9 +4,14 @@ namespace Domain.Configuration;
 
 public class ConfigurationService(IConfigurationRepository repo) : IConfigurationService
 {
-  public Task<Result<Configuration?>> GetByUserId(string userId)
+  public Task<Result<Configuration?>> GetById(Guid id)
   {
-    return repo.Get(userId);
+    return repo.Get(id);
+  }
+
+  public Task<Result<Configuration?>> GetById(Guid id, string userId)
+  {
+    return repo.Get(id, userId);
   }
 
   public Task<Result<ConfigurationPrincipal>> Create(string userId, ConfigurationRecord record)
