@@ -1,28 +1,65 @@
+using App.Modules.Charities.Data;
 using Domain.Configuration;
 
 namespace App.Modules.Configurations.Data
 {
     public static class ConfigurationMapper
     {
-        public static ConfigurationModel ToDomain(this ConfigurationData data)
+        public static Configuration ToDomain(this ConfigurationData data)
         {
-            return new ConfigurationModel
+            return new Configuration
             {
-                Sub = data.Sub,
-                Timezone = data.Timezone,
-                EndOfDay = data.EndOfDay,
-                DefaultCharityId = data.DefaultCharityId
+                Principal = new ConfigurationPrincipal
+                {
+                    Id = data.Id,
+                    UserId = data.UserId,
+                    Record = new ConfigurationRecord
+                    {
+                        Timezone = data.Timezone,
+                        EndOfDay = data.EndOfDay,
+                        DefaultCharityId = data.DefaultCharityId
+                    }
+                },
+                Charity = data.Charity?.ToPrincipal()
             };
         }
 
-        public static ConfigurationData ToData(this ConfigurationModel model)
+        public static ConfigurationData ToData(this ConfigurationPrincipal principal)
         {
             return new ConfigurationData
             {
-                Sub = model.Sub,
-                Timezone = model.Timezone,
-                EndOfDay = model.EndOfDay,
-                DefaultCharityId = model.DefaultCharityId
+                Id = principal.Id,
+                UserId = principal.UserId,
+                Timezone = principal.Record.Timezone,
+                EndOfDay = principal.Record.EndOfDay,
+                DefaultCharityId = principal.Record.DefaultCharityId
+            };
+        }
+
+        public static ConfigurationPrincipal ToPrincipal(this ConfigurationData data)
+        {
+            return new ConfigurationPrincipal
+            {
+                Id = data.Id,
+                UserId = data.UserId,
+                Record = new ConfigurationRecord
+                {
+                    Timezone = data.Timezone,
+                    EndOfDay = data.EndOfDay,
+                    DefaultCharityId = data.DefaultCharityId
+                }
+            };
+        }
+
+        public static ConfigurationData ToData(this ConfigurationRecord record, Guid id, string userId)
+        {
+            return new ConfigurationData
+            {
+                Id = id,
+                UserId = userId,
+                Timezone = record.Timezone,
+                EndOfDay = record.EndOfDay,
+                DefaultCharityId = record.DefaultCharityId
             };
         }
     }
