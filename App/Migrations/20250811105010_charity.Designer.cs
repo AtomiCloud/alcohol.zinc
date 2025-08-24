@@ -3,6 +3,7 @@ using System;
 using App.StartUp.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace App.Migrations
 {
     [DbContext(typeof(MainDbContext))]
-    partial class MainDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250811105010_charity")]
+    partial class charity
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -47,35 +50,6 @@ namespace App.Migrations
                     b.ToTable("Charities");
                 });
 
-            modelBuilder.Entity("App.Modules.Configurations.Data.ConfigurationData", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("DefaultCharityId")
-                        .HasColumnType("uuid");
-
-                    b.Property<TimeOnly>("EndOfDay")
-                        .HasColumnType("time without time zone");
-
-                    b.Property<string>("Timezone")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DefaultCharityId");
-
-                    b.ToTable("Configurations");
-                });
-
             modelBuilder.Entity("App.Modules.Users.Data.UserData", b =>
                 {
                     b.Property<string>("Id")
@@ -93,17 +67,6 @@ namespace App.Migrations
                         .IsUnique();
 
                     b.ToTable("Users");
-                });
-
-            modelBuilder.Entity("App.Modules.Configurations.Data.ConfigurationData", b =>
-                {
-                    b.HasOne("App.Modules.Charities.Data.CharityData", "Charity")
-                        .WithMany()
-                        .HasForeignKey("DefaultCharityId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Charity");
                 });
 #pragma warning restore 612, 618
         }
