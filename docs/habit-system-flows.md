@@ -22,8 +22,6 @@ sequenceDiagram
     participant CS as ConfigService
     participant CR as ConfigRepository
     participant HER as HabitExecutionRepository
-    participant PS as PaymentService
-    participant CharityAPI as Charity Payment API
     participant DB as Database
     participant Job as Hourly Job
 
