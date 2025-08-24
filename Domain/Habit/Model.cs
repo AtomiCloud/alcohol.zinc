@@ -3,6 +3,7 @@ using Domain.User;
 
 namespace Domain.Habit
 {
+    // Habit Blueprint Models (Versioned Templates)
     public record HabitRecord
     {
         public required string Task { get; init; }
@@ -16,12 +17,11 @@ namespace Domain.Habit
 
     public record HabitPrincipal
     {
-        public required Guid Id { get; init; }
-        // PlanId + Version = Id
-        public required Guid PlanId { get; init; }
+        public required Guid Id { get; init; }           // Unique per version
+        public required Guid PlanId { get; init; }       // Same across versions
         public required Guid CharityId { get; init; }
         public required string UserId { get; init; }
-        public ushort Version { get; init; }
+        public required ushort Version { get; init; }    // Version number
         public required HabitRecord Record { get; init; }
     }
 
@@ -29,6 +29,7 @@ namespace Domain.Habit
     {
         public required HabitPrincipal Principal { get; init; }
         public required UserPrincipal User { get; init; }
-        public CharityPrincipal? Charity { get; init; }
+        public required CharityPrincipal Charity { get; init; }
     }
+
 }
