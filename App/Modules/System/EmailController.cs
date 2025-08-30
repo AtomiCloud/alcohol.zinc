@@ -6,6 +6,7 @@ using App.StartUp.Services.Auth;
 using App.StartUp.Smtp;
 using Asp.Versioning;
 using CSharp_Result;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace App.Modules.System;
@@ -16,8 +17,9 @@ namespace App.Modules.System;
 [Route("api/v{version:apiVersion}/[controller]")]
 public class EmailController(IEmailRenderer renderer, ISmtpClientFactory factory, IAuthHelper h): AtomiControllerBase(h)
 {
-  [HttpPost]
-  public async Task<ActionResult<object>> TestEmail()
+  [HttpPost("{to}")]
+  [Authorize(Policy = AuthPolicies.OnlyAdmin)]
+  public async Task<ActionResult<object>> TestEmail(string to)
   {
     var smtp = factory.Get(SmtpProviders.Transactional);
     var email = await renderer.RenderEmail("member-thank-you", new
@@ -33,10 +35,9 @@ public class EmailController(IEmailRenderer renderer, ISmtpClientFactory factory
     })
     .ThenAwait(async x => await smtp.SendAsync(new SmtpEmailMessage
     {
-      To = "kirinnee97@gmail.com",
-      Subject = "Yalahbah",
+      To = to,
+      Subject = "Welcome To LazyTax Club!",
       Body = x,
-      FromEmail = "noreply@lazytax.club",
       FromName = "LazyTax club",
       IsHtml = true,
     }));

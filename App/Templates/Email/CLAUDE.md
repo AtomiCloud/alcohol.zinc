@@ -75,12 +75,14 @@ interface TemplateProps {
   baseUrl: string;
   userName: string;
   userEmail: string;
+  supportEmail: string;
   // ... other props
 }
 
 export const TemplateEmail = ({
   baseUrl = '{{ baseUrl }}', // Handlebars placeholders for C# rendering
   userName = '{{ userName }}',
+  supportEmail = '{{ supportEmail }}',
   // ... defaults
 }: TemplateProps) => {
   return (
@@ -94,6 +96,7 @@ export const TemplateEmail = ({
 TemplateEmail.PreviewProps = {
   baseUrl: 'https://example.com',
   userName: 'John Doe',
+  supportEmail: 'support@example.com',
   // ... sample data
 } as TemplateProps;
 ```

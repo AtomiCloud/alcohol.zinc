@@ -20,7 +20,10 @@ public class NativeSmtpClient(
       using var client = new SmtpClient(config.Host, config.Port);
       client.EnableSsl = config.EnableSsl;
       client.UseDefaultCredentials = config.UseDefaultCredentials;
-      client.Credentials = new NetworkCredential(config.Username, config.Password);
+      
+      if (!config.UseDefaultCredentials && !string.IsNullOrEmpty(config.Username))
+        client.Credentials = new NetworkCredential(config.Username, config.Password);
+      
       client.Timeout = config.Timeout;
 
       var fromEmail = !string.IsNullOrWhiteSpace(email.FromEmail) ? email.FromEmail : config.FromEmail;
@@ -34,7 +37,7 @@ public class NativeSmtpClient(
 
       message.To.Add(email.To);
       
-      logger.LogInformation("Sending email via {Mailbox} to {To} with subject '{Subject}' and config {@Config}", this.Mailbox, email.To, email.Subject, config.ToJson());
+      logger.LogInformation("Sending email via {Mailbox} to {To} with subject '{Subject}'", this.Mailbox, email.To, email.Subject);
       await client.SendMailAsync(message, cancellationToken);
       logger.LogInformation("Email sent successfully via {Mailbox} to {To}", this.Mailbox, email.To);
       
@@ -42,7 +45,7 @@ public class NativeSmtpClient(
     }
     catch (Exception ex)
     {
-      logger.LogError(ex, "Failed to send email via {Mailbox} to {To} with subject '{Subject}' and config {@Config}", this.Mailbox, email.To, email.Subject, config.ToJson());
+      logger.LogError(ex, "Failed to send email via {Mailbox} to {To} with subject '{Subject}'", this.Mailbox, email.To, email.Subject);
       throw;
     }
   }
