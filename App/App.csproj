@@ -75,9 +75,6 @@
     <Content Include="..\flake.nix">
       <Link>flake.nix</Link>
     </Content>
-    <Content Include="..\infra\api_chart\.DS_Store">
-      <Link>infra\api_chart\.DS_Store</Link>
-    </Content>
     <Content Include="..\infra\api_chart\.helmignore">
       <Link>infra\api_chart\.helmignore</Link>
     </Content>
@@ -155,9 +152,6 @@
     </Content>
     <Content Include="..\infra\migrate.Dockerfile">
       <Link>infra\migrate.Dockerfile</Link>
-    </Content>
-    <Content Include="..\infra\migration_chart\.DS_Store">
-      <Link>infra\migration_chart\.DS_Store</Link>
     </Content>
     <Content Include="..\infra\migration_chart\.helmignore">
       <Link>infra\migration_chart\.helmignore</Link>
@@ -266,9 +260,6 @@
     </Content>
     <Content Include="..\README.MD">
       <Link>README.MD</Link>
-    </Content>
-    <Content Include="..\scripts\.DS_Store">
-      <Link>scripts\.DS_Store</Link>
     </Content>
     <Content Include="..\scripts\ci\ci-docker.sh">
       <Link>scripts\ci\ci-docker.sh</Link>

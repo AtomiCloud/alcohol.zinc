@@ -25,8 +25,8 @@ public class EmailController(IEmailRenderer renderer, ISmtpClientFactory factory
     var email = await renderer.RenderEmail("member-thank-you", new
     {
       BaseUrl = "http://localhost:5000",
-      UserName = "test",
-      UserEmail = "kirinnee97@gmail.com",
+      UserName = to.Split("@")[0],
+      UserEmail = to,
       SupportEmail = "support@lazytax.club",
       WhatsappUrl = "https://wa.me/6281234567890",
       TelegramUrl = "https://t.me/lazytax",
@@ -38,7 +38,6 @@ public class EmailController(IEmailRenderer renderer, ISmtpClientFactory factory
       To = to,
       Subject = "Welcome To LazyTax Club!",
       Body = x,
-      FromName = "LazyTax club",
       IsHtml = true,
     }));
     return this.ReturnUnitResult(email);
