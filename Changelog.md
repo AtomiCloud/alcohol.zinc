@@ -1,3 +1,10 @@
+## [1.2.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.1.0...v1.2.0) (2025-08-30)
+
+
+### ✨ Features ✨
+
+* remove cache shells ([be0e2ad](https://github.com/AtomiCloud/alcohol.zinc/commit/be0e2ad3d74a81e92900868ae5624f4c52763307))
+
 ## [1.1.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.0.5...v1.1.0) (2025-08-30)
 
 
