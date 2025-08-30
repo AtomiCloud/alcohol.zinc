@@ -38,6 +38,13 @@ public static class OptionsExtensions
     .Where(x => x is { Length: > 0 })
     .Select(x => x!)
     .ToArray();
+  
+  private static readonly string[] SmtpProviders = typeof(SmtpProviders)
+    .GetFields()
+    .Select(x => x.GetValue(null)?.ToString())
+    .Where(x => x is { Length: > 0 })
+    .Select(x => x!)
+    .ToArray();
 
   private static readonly string[] AuthPolicies = typeof(AuthPolicies)
     .GetFields()
@@ -115,6 +122,14 @@ public static class OptionsExtensions
     // Encryption Configurations
     services.RegisterOption<EncryptionOption>(EncryptionOption.Key);
 
+    // Register SMTP Options
+    services
+      .RegisterOption<Dictionary<string, SmtpOption>>(SmtpOption.Key)
+      .Validate(
+        c => c.All(x => SmtpProviders.Any(d => d == x.Key)),
+        "Smtp.Key (Config File) must be in SmtpProviders (Class)"
+      );
+    
     return services;
   }
 }

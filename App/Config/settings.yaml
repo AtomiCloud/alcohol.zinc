@@ -6,8 +6,6 @@ Kestrel:
   Endpoints:
     Http:
       Url: http://+:9003
-Domain:
-  RefundPercentage: 50
 Logging:
   LogLevel:
     Default: Information
@@ -15,13 +13,9 @@ Logging:
   #    LogLevel:
   #      Default: Debug
   OpenTelemetry:
-    IncludeFormattedMessage: false
-    IncludeScopes: false
+    IncludeFormattedMessage: true
+    IncludeScopes: true
     ParseStateValues: false
-CountSyncer:
-  StreamName: cdc
-  StreamLength: 50
-
 # Domain
 App:
   Landscape: lapras
@@ -161,7 +155,17 @@ BlockStorage:
     Policy: Private
     UseSSL: true
     EnsureBucketCreation: false
-
+Smtp:
+  TRANSACTIONAL:
+    Host: email-smtp.ap-southeast-1.amazonaws.com
+    Port: 2587
+    Username: transactional-user
+    Password: transactional-secret
+    FromEmail: noreply@notifications.lazytax.club
+    FromName: LazyTax Notifications
+    EnableSsl: true
+    UseDefaultCredentials: false
+    Timeout: 5000
 # external
 HttpClient: {}
 Auth:
