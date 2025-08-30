@@ -1,3 +1,17 @@
+## [1.1.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.0.5...v1.1.0) (2025-08-30)
+
+
+### ✨ Features ✨
+
+* initial email engine ([bcc7e1b](https://github.com/AtomiCloud/alcohol.zinc/commit/bcc7e1bbbfbcc9520e9b29c8ec2a344343ce5cca))
+
+
+### 🐛 Bug Fixes 🐛
+
+* embed incorrect folder ([662b323](https://github.com/AtomiCloud/alcohol.zinc/commit/662b3239f8ef23aaa90c24c51aed3644960c861f))
+* review comments ([f69b0d4](https://github.com/AtomiCloud/alcohol.zinc/commit/f69b0d411c7d6aab66adb2d4f4be5aae6f952ece))
+* review comments ([cacebfc](https://github.com/AtomiCloud/alcohol.zinc/commit/cacebfce10bd7a7cd49649659d6d8cbe08be6bcd))
+
 ## [1.0.5](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.0.4...v1.0.5) (2025-08-03)
 
 
