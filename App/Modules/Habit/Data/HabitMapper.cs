@@ -1,7 +1,5 @@
-using Domain.Charity;
 using Domain.Habit;
 using Domain.User;
-using NodaMoney;
 
 namespace App.Modules.Habit.Data
 {
@@ -11,20 +9,11 @@ namespace App.Modules.Habit.Data
         {
             return new HabitPrincipal
             {
-                Id = data.Id ?? Guid.NewGuid(),
+                Id = data.Id,
                 UserId = data.UserId,
-                HabitId = data.HabitId,
-                CharityId = data.CharityId,
-                Version = data.Version,
                 Record = new HabitRecord
                 {
-                    Task = data.Task,
-                    DayOfWeek = data.DayOfWeek,
-                    NotificationTime = data.NotificationTime,
-                    Stake = new Money(data.StakeCents, Currency.FromCode("USD")),
-                    Ratio = data.RatioBasisPoints / 1000m,
-                    StartDate = data.StartDate,
-                    EndDate = data.EndDate,
+                    Version = data.Version
                 }
             };
         }
@@ -34,28 +23,17 @@ namespace App.Modules.Habit.Data
             return new HabitData
             {
                 Id = principal.Id,
-                Task = principal.Record.Task,
-                DayOfWeek = principal.Record.DayOfWeek,
-                NotificationTime = principal.Record.NotificationTime,
-                StakeCents = (int)(principal.Record.Stake.Amount / principal.Record.Stake.Currency.MinimalAmount),
-                RatioBasisPoints = (int)(principal.Record.Ratio * 1000m),
-                StartDate = principal.Record.StartDate,
-                EndDate = principal.Record.EndDate,
-                CharityId = principal.CharityId,
-                Version = principal.Version,
-                HabitId = principal.HabitId,
-                UserId = principal.UserId
+                UserId = principal.UserId,
+                Version = principal.Record.Version
             };
         }
 
-        public static Domain.Habit.Habit ToHabit(this HabitPrincipal habitPrincipal, UserPrincipal userPrincipal, 
-          CharityPrincipal charityPrincipal)
+        public static Domain.Habit.Habit ToDomain(this HabitData data, UserPrincipal userPrincipal)
         {
             return new Domain.Habit.Habit
             {
-                Principal = habitPrincipal,
-                User = userPrincipal,
-                Charity = charityPrincipal
+                Principal = data.ToPrincipal(),
+                User = userPrincipal
             };
         }
     }

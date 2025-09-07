@@ -9,49 +9,62 @@ public static class HabitMapper
 {
     public static HabitRes ToRes(this HabitPrincipal h) =>
         new (
-            h.Id.ToString(),
-            h.Record.Task,
-            h.Record.DayOfWeek,
-            h.Record.NotificationTime.ToStandardTimeFormat(),
-            h.Record.Stake.Amount.ToString("F2", CultureInfo.InvariantCulture),
-            (h.Record.Ratio * 100m).ToString("F1", CultureInfo.InvariantCulture),
-            h.Record.StartDate.ToStandardDateFormat(),
-            h.Record.EndDate.ToStandardDateFormat(),
-            h.CharityId,
-            h.Version,
-            h.UserId,
-            h.HabitId.ToString()
+            h.Id,
+            h.Record.Version,
+            h.UserId
         );
 
-    public static HabitRecord ToRecord(this CreateHabitReq req) =>
+    public static HabitVersionRes ToRes(this HabitVersionPrincipal hv) =>
+        new (
+            hv.Id,
+            hv.HabitId,
+            hv.Record.Version,
+            hv.Record.Task,
+            hv.Record.DayOfWeek,
+            hv.Record.NotificationTime.ToStandardTimeFormat(),
+            hv.Record.Stake.Amount.ToString("F2", CultureInfo.InvariantCulture),
+            (hv.Record.Ratio * 100m).ToString("F1", CultureInfo.InvariantCulture),
+            hv.Record.StartDate.ToStandardDateFormat(),
+            hv.Record.EndDate.ToStandardDateFormat(),
+            hv.Record.CharityId
+        );
+
+    public static HabitVersionRecord ToVersionRecord(this CreateHabitReq req) =>
         new ()
         {
+            CharityId = req.CharityId,
             Task = req.Task,
             DayOfWeek = req.DayOfWeek,
             NotificationTime = req.NotificationTime.ToTime(),
-            Stake = new Money(decimal.Parse(req.Stake, CultureInfo.InvariantCulture), Currency.FromCode("SGD")),
+            Stake = new Money(decimal.Parse(req.Stake, CultureInfo.InvariantCulture), Currency.FromCode("USD")),
             Ratio = decimal.Parse(req.Ratio, CultureInfo.InvariantCulture) / 100m,
             StartDate = req.StartDate.ToDate(),
             EndDate = req.EndDate.ToDate(),
+            Version = 1  // First version
         };
 
-    public static HabitPrincipal ToPrincipal(this UpdateHabitReq req, Guid id) =>
+    public static HabitVersionRecord ToVersionRecord(this UpdateHabitReq req, ushort version) =>
         new ()
         {
-            Id = id,
-            UserId = req.UserId,
-            HabitId = req.HabitId,
             CharityId = req.CharityId,
-            Version = req.Version,
-            Record = new HabitRecord
-            {
-                Task = req.Task,
-                DayOfWeek = req.DayOfWeek,
-                NotificationTime = req.NotificationTime.ToTime(),
-                Stake = new Money(decimal.Parse(req.Stake, CultureInfo.InvariantCulture), Currency.FromCode("SGD")),
-                Ratio = decimal.Parse(req.Ratio, CultureInfo.InvariantCulture) / 100m,
-                StartDate = req.StartDate.ToDate(),
-                EndDate = req.EndDate.ToDate(),
-            }
+            Task = req.Task,
+            DayOfWeek = req.DayOfWeek,
+            NotificationTime = req.NotificationTime.ToTime(),
+            Stake = new Money(decimal.Parse(req.Stake, CultureInfo.InvariantCulture), Currency.FromCode("USD")),
+            Ratio = decimal.Parse(req.Ratio, CultureInfo.InvariantCulture) / 100m,
+            StartDate = req.StartDate.ToDate(),
+            EndDate = req.EndDate.ToDate(),
+            Version = version  // Will be set by repository
         };
+
+    public static HabitExecutionRes ToRes(this HabitExecutionPrincipal he) =>
+        new (
+            he.Id,
+            he.HabitVersionId,
+            he.Record.Date.ToStandardDateFormat(),
+            he.Record.Status.ToString(),
+            he.Record.CompletedAt?.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
+            he.Record.Notes,
+            false  // PaymentProcessed - not exposed in domain model yet
+        );
 }

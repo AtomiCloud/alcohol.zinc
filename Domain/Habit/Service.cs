@@ -4,43 +4,52 @@ namespace Domain.Habit;
 
 public class HabitService(IHabitRepository repo) : IHabitService
 {
-    public Task<Result<List<HabitPrincipal>>> List(string userId)
+    public Task<Result<List<HabitVersionPrincipal>>> ListActiveHabits(string userId, DateOnly date)
     {
-        return repo.List(userId);
+        return repo.GetActiveHabitVersions(userId, date);
     }
 
-    public Task<Result<HabitPrincipal?>> Get(string userId, Guid id)
+    public async Task<Result<HabitVersionPrincipal?>> GetCurrentHabitVersion(string userId, Guid habitId)
     {
-        return repo.Get(userId, id);
+        return await repo.GetCurrentVersion(userId, habitId);
     }
 
-    public Task<Result<Habit?>> GetWithRelations(string userId, Guid id)
+    public Task<Result<HabitPrincipal>> Create(string userId, HabitVersionRecord versionRecord)
     {
-        return repo.GetWithRelations(userId, id);
+        return repo.Create(userId, versionRecord);
     }
 
-    public Task<Result<HabitPrincipal>> Create(string userId, HabitRecord habitRecord, int? charityId)
+    public async Task<Result<HabitPrincipal?>> Update(string userId, Guid habitId, HabitVersionRecord versionRecord)
     {
-        // Create HabitPrincipal from HabitRecord
-        var habitPrincipal = new HabitPrincipal
-        {
-            Id = Guid.NewGuid(),
-            UserId = userId,
-            HabitId = Guid.NewGuid(), // Generate unique Guid for HabitId
-            CharityId = charityId,
-            Record = habitRecord
-        };
+        // First verify the habit belongs to the user
+        var habitResult = await repo.GetHabit(habitId);
+        HabitPrincipal? habit = habitResult;
         
-        return repo.Create(habitPrincipal);
+        if (habit == null || habit.UserId != userId)
+        {
+            return (HabitPrincipal?)null;
+        }
+
+        return await repo.Update(habitId, versionRecord);
     }
 
-    public Task<Result<HabitPrincipal?>> Update(HabitPrincipal habitPrincipal)
+    public Task<Result<Unit?>> Delete(Guid habitId, string userId)
     {
-        return repo.Update(habitPrincipal);
+        return repo.Delete(habitId, userId);
     }
 
-    public Task<Result<Unit?>> Delete(Guid id, string userId)
+    public Task<Result<int>> MarkDailyFailures(List<string> userIds, DateOnly date)
     {
-        return repo.Delete(id, userId);
+        return repo.CreateFailedExecutions(userIds, date);
+    }
+
+    public Task<Result<HabitExecutionPrincipal>> CompleteHabit(string userId, Guid habitId, DateOnly date, string? notes)
+    {
+        return repo.CompleteHabit(userId, habitId, date, notes);
+    }
+
+    public Task<Result<List<HabitExecutionPrincipal>>> GetDailyExecutions(string userId, DateOnly date)
+    {
+        return repo.GetDailyExecutions(userId, date);
     }
 }
