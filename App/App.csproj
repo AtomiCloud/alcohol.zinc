@@ -331,5 +331,9 @@
     <EmbeddedResource Include="Templates\Email\templates\*.html"/>
   </ItemGroup>
 
+    <ItemGroup>
+      <None Remove="Modules\Habit\API\V1\HabitController.cs.bak" />
+    </ItemGroup>
+
 
 </Project>

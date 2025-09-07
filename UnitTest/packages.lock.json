@@ -1257,6 +1257,11 @@
         "resolved": "11.0.0",
         "contentHash": "kbUrZfspa+Y5Kz0OaRbLQxLtVydWFvkY1CpwfKmravZXG2icphuYHR58EwBZuCQWJb/BL81PGP4FjpDNBFnn6Q=="
       },
+      "NodaMoney": {
+        "type": "Transitive",
+        "resolved": "2.2.1",
+        "contentHash": "Z0pVYENfwwo7ARrc1ijpc/rcJYYTN5d7U8eWS10fex7gdygh/eUVX6Pftt1mjsfu8ZxhzGPt9wAlCcpHyXhCWg=="
+      },
       "Npgsql": {
         "type": "Transitive",
         "resolved": "8.0.2",
@@ -2049,7 +2054,8 @@
         "type": "Project",
         "dependencies": {
           "CSharp-Result": "[0.2.0, )",
-          "Microsoft.Extensions.Logging": "[8.0.0, )"
+          "Microsoft.Extensions.Logging": "[8.0.0, )",
+          "NodaMoney": "[2.2.1, )"
         }
       }
     }
