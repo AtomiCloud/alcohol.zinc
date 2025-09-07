@@ -49,7 +49,7 @@ public class HabitController(
     }
 
     [Authorize, HttpPost]
-    public async Task<ActionResult<HabitRes>> Create([FromBody] CreateHabitReq req)
+    public async Task<ActionResult<HabitVersionRes>> Create([FromBody] CreateHabitReq req)
     {
         var userId = this.Sub();
         if (userId == null) return Unauthorized();
@@ -62,7 +62,7 @@ public class HabitController(
     }
 
     [Authorize, HttpPut("{id:guid}")]
-    public async Task<ActionResult<HabitRes>> Update(Guid id, [FromBody] UpdateHabitReq req)
+    public async Task<ActionResult<HabitVersionRes>> Update(Guid id, [FromBody] UpdateHabitReq req)
     {
         var userId = this.Sub();
         if (userId == null) return Unauthorized();
@@ -72,7 +72,7 @@ public class HabitController(
             .ThenAwait(x => service.Update(userId, id, x.ToVersionRecord(0))) // Version will be set by repository
             .Then(h => h?.ToRes(), Errors.MapAll);
         return this.ReturnNullableResult(result, new EntityNotFound(
-            "Habit Not Found", typeof(HabitPrincipal), id.ToString()));
+            "Habit Not Found", typeof(HabitVersionPrincipal), id.ToString()));
     }
 
     [Authorize, HttpDelete("{id:guid}")]

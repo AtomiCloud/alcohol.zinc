@@ -14,12 +14,12 @@ public class HabitService(IHabitRepository repo) : IHabitService
         return await repo.GetCurrentVersion(userId, habitId);
     }
 
-    public Task<Result<HabitPrincipal>> Create(string userId, HabitVersionRecord versionRecord)
+    public Task<Result<HabitVersionPrincipal>> Create(string userId, HabitVersionRecord versionRecord)
     {
         return repo.Create(userId, versionRecord);
     }
 
-    public async Task<Result<HabitPrincipal?>> Update(string userId, Guid habitId, HabitVersionRecord versionRecord)
+    public async Task<Result<HabitVersionPrincipal?>> Update(string userId, Guid habitId, HabitVersionRecord versionRecord)
     {
         // First verify the habit belongs to the user
         var habitResult = await repo.GetHabit(habitId);
@@ -27,7 +27,7 @@ public class HabitService(IHabitRepository repo) : IHabitService
         
         if (habit == null || habit.UserId != userId)
         {
-            return (HabitPrincipal?)null;
+            return (HabitVersionPrincipal?)null;
         }
 
         return await repo.Update(habitId, versionRecord);

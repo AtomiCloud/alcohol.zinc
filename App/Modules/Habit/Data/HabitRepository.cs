@@ -88,7 +88,7 @@ namespace App.Modules.Habit.Data
             }
         }
 
-        public async Task<Result<HabitPrincipal>> Create(string userId, HabitVersionRecord versionRecord)
+        public async Task<Result<HabitVersionPrincipal>> Create(string userId, HabitVersionRecord versionRecord)
         {
             await using var transaction = await db.Database.BeginTransactionAsync();
             try
@@ -112,7 +112,7 @@ namespace App.Modules.Habit.Data
                 
                 logger.LogInformation("Habit created with Id: {Id}, Version: {Version}", 
                     habitData.Id, habitData.Version);
-                return habitResult.Entity.ToPrincipal();
+                return versionData.ToPrincipal();
             }
             catch (Exception e)
             {
@@ -122,7 +122,7 @@ namespace App.Modules.Habit.Data
             }
         }
 
-        public async Task<Result<HabitPrincipal?>> Update(Guid habitId, HabitVersionRecord versionRecord)
+        public async Task<Result<HabitVersionPrincipal?>> Update(Guid habitId, HabitVersionRecord versionRecord)
         {
             await using var transaction = await db.Database.BeginTransactionAsync();
             try
@@ -137,7 +137,7 @@ namespace App.Modules.Habit.Data
                 {
                     logger.LogWarning("No habit found or already deleted for HabitId: {HabitId}", habitId);
                     await transaction.RollbackAsync();
-                    return (HabitPrincipal?)null;
+                    return (HabitVersionPrincipal?)null;
                 }
 
                 // Get the updated version number
@@ -148,7 +148,7 @@ namespace App.Modules.Habit.Data
                 if (updatedHabit == null)
                 {
                     await transaction.RollbackAsync();
-                    return (HabitPrincipal?)null;
+                    return (HabitVersionPrincipal?)null;
                 }
 
                 // Create new version record using mapper
@@ -160,7 +160,7 @@ namespace App.Modules.Habit.Data
                 
                 logger.LogInformation("Habit version updated to {Version} for HabitId: {HabitId}", 
                     updatedHabit.Version, habitId);
-                return updatedHabit.ToPrincipal();
+                return versionData.ToPrincipal();
             }
             catch (Exception e)
             {
