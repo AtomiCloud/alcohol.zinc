@@ -10,7 +10,7 @@ Root Chart to a single Service
 |------------|------|---------|
 | file://../api_chart | api(dotnet-chart) | 0.1.0 |
 | file://../migration_chart | migration(dotnet-migration) | 0.1.0 |
-| oci://ghcr.io/atomicloud/sulfoxide.bromine | bromine(sulfoxide-bromine) | 1.6.0 |
+| oci://ghcr.io/atomicloud/sulfoxide.bromine | bromine(sulfoxide-bromine) | 1.8.0 |
 | oci://ghcr.io/dragonflydb/dragonfly/helm | maincache(dragonfly) | v1.20.1 |
 | oci://registry-1.docker.io/bitnamicharts | mainstorage(minio) | 14.6.20 |
 | oci://registry-1.docker.io/bitnamicharts | maindb(postgresql) | 15.5.16 |
