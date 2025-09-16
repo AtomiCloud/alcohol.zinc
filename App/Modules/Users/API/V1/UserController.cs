@@ -1,4 +1,5 @@
 using System.Net.Mime;
+using App.Error;
 using App.Error.V1;
 using App.Modules.Common;
 using App.StartUp.Registry;
@@ -98,6 +99,10 @@ public class UserController(
     var user = await createUserReqValidator
       .ValidateAsyncResult(req, "Invalid CreateUserReq")
       .ThenAwait(x => tokenDataExtractor.ExtractFromToken(x.IdToken, x.AccessToken))
+      .Then<UserToken, UserToken>(x => x.Sub == id
+        ? x
+        : new DomainProblemException(new InvalidUserToken("Sub of tokens do not match auth token", "ID/Access", []))
+      )
       .ThenAwait(x =>
         service.Create(id, x.ToRecord(), () => authManagement.SetClaim(id, LogtoClaims.ZincUpdated, "true")))
       .Then(x => x.ToRes(), Errors.MapAll);
@@ -110,6 +115,10 @@ public class UserController(
     var user = await this.GuardAsync(id)
       .ThenAwait(_ => updateUserReqValidator.ValidateAsyncResult(req, "Invalid UpdateUserReq"))
       .ThenAwait(x => tokenDataExtractor.ExtractFromToken(x.IdToken, x.AccessToken))
+      .Then<UserToken, UserToken>(x => x.Sub == id
+        ? x
+        : new DomainProblemException(new InvalidUserToken("Sub of tokens do not match auth token", "ID/Access", []))
+      )
       .ThenAwait(x => service.Update(id, x.ToRecord(), null))
       .Then(x => (x?.ToRes()).ToResult());
 

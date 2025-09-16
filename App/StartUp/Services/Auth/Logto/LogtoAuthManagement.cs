@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Text;
 using App.StartUp.Registry;
 using App.Utility;
 using CSharp_Result;
@@ -26,13 +27,11 @@ public class LogtoAuthManagement(
             Method = HttpMethod.Post,
             RequestUri = new Uri($"api/users/{userId}/roles", UriKind.Relative),
             Headers = { Authorization = new AuthenticationHeaderValue("Bearer", bearer), },
-            Content = new StringContent(new LogtoAssignRoleReq { RoleIds = [roleId] }.ToJson())
-            {
-              Headers = { ContentType = new MediaTypeHeaderValue("application/json") }
-            }
+            Content = new StringContent(new LogtoAssignRoleReq { RoleIds = [roleId] }.ToJson(),
+              Encoding.UTF8, "application/json")
           };
-          using (var response = await this.HttpClient.SendAsync(request))
-            response.EnsureSuccessStatusCode();
+          using var response = await this.HttpClient.SendAsync(request);
+          response.EnsureSuccessStatusCode();
           logger.LogInformation("Role {RoleId} assigned to user {UserId}", roleId, userId);
           return new Unit();
         }
@@ -58,8 +57,8 @@ public class LogtoAuthManagement(
             RequestUri = new Uri($"api/users/{userId}/roles/{roleId}", UriKind.Relative),
             Headers = { Authorization = new AuthenticationHeaderValue("Bearer", bearer), },
           };
-          using (var response = await this.HttpClient.SendAsync(request))
-            response.EnsureSuccessStatusCode();
+          using var response = await this.HttpClient.SendAsync(request);
+          response.EnsureSuccessStatusCode();
           logger.LogInformation("Role {RoleId} removed from user {UserId}", roleId, userId);
           return new Unit();
         }
@@ -84,13 +83,12 @@ public class LogtoAuthManagement(
             Method = HttpMethod.Patch,
             RequestUri = new Uri($"api/users/{userId}/custom-data", UriKind.Relative),
             Headers = { Authorization = new AuthenticationHeaderValue("Bearer", bearer), },
-            Content = new StringContent(new ClaimsPatchReq
-            {
-              CustomData = new Dictionary<string, string?> { { claimKey, claimValue } }
-            }.ToJson()) { Headers = { ContentType = new MediaTypeHeaderValue("application/json") } }
+            Content = new StringContent(
+              new ClaimsPatchReq { CustomData = new Dictionary<string, string?> { { claimKey, claimValue } } }.ToJson(),
+              Encoding.UTF8, "application/json"),
           };
-          using (var response = await this.HttpClient.SendAsync(request))
-            response.EnsureSuccessStatusCode();
+          using var response = await this.HttpClient.SendAsync(request);
+          response.EnsureSuccessStatusCode();
           logger.LogInformation("Successfully set claim {ClaimKey} to {ClaimValue} for user {UserId}", claimKey,
             claimValue, userId);
           return new Unit();
@@ -122,8 +120,8 @@ public class LogtoAuthManagement(
               CustomData = new Dictionary<string, string?> { { claimKey, null } }
             }.ToJson()) { Headers = { ContentType = new MediaTypeHeaderValue("application/json") } }
           };
-          using (var response = await this.HttpClient.SendAsync(request))
-            response.EnsureSuccessStatusCode();
+          using var response = await this.HttpClient.SendAsync(request);
+          response.EnsureSuccessStatusCode();
           logger.LogInformation("Successfully set claim {ClaimKey} for user {UserId}", claimKey, userId);
           return new Unit();
         }

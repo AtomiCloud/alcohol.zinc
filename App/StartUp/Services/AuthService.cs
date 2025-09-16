@@ -17,6 +17,46 @@ public static class AuthService
     return app;
   }
 
+  public static JwtBearerOptions ConfigureJwtBearerOptions(this JwtBearerOptions options, AuthOption o)
+  {
+    var s = o.Settings!;
+    // Use the Issuer as the Authority for OIDC discovery
+    options.Authority = s.Issuer;
+    options.Audience = s.Audience;
+
+    // Let the JWT Bearer authentication automatically discover and retrieve signing keys
+    // from the OIDC discovery endpoint at {Authority}/.well-known/openid-configuration
+    options.RequireHttpsMetadata = s.Issuer.StartsWith("https://");
+
+    if (s.TokenValidation is { } to)
+    {
+      options.TokenValidationParameters = new TokenValidationParameters
+      {
+        ValidAudience = s.Audience,
+        ValidIssuer = s.Issuer,
+        NameClaimType = ClaimTypes.NameIdentifier,
+        ValidateIssuer = to.ValidateIssuer,
+        ValidateAudience = to.ValidateAudience,
+        ClockSkew = TimeSpan.FromSeconds(to.ClockSkew),
+        ValidateIssuerSigningKey = to.ValidateIssuerSigningKey,
+        ValidateLifetime = to.ValidateLifetime,
+        // IssuerSigningKeys will be automatically populated from the OIDC discovery endpoint
+      };
+    }
+    else
+    {
+      options.TokenValidationParameters =
+        new TokenValidationParameters
+        {
+          NameClaimType = ClaimTypes.NameIdentifier,
+          ValidateIssuerSigningKey = true,
+          // IssuerSigningKeys will be automatically populated from the OIDC discovery endpoint
+        };
+    }
+
+    return options;
+  }
+
   public static IServiceCollection AddAuthService(this IServiceCollection services, AuthOption o)
   {
     if (o.Settings is null) throw new ApplicationException("Auth is enabled but Domain or Audience is null");
@@ -32,41 +72,18 @@ public static class AuthService
 
     services.AddScoped<IAuthManagement, LogtoAuthManagement>()
       .AutoTrace<IAuthManagement>();
-    
+
     services.AddScoped<ILogtoAuthenticator, LogtoAuthenticator>()
       .AutoTrace<ILogtoAuthenticator>();
 
     var s = o.Settings!;
-    var domain = $"https://{s.Domain}";
     services
       .AddAuthentication(options =>
       {
         options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
         options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
       })
-      .AddJwtBearer(options =>
-      {
-        options.Authority = domain;
-        options.Audience = s.Audience;
-        if (s.TokenValidation is { } to)
-        {
-          options.TokenValidationParameters = new TokenValidationParameters
-          {
-            ValidIssuer = s.Issuer,
-            NameClaimType = ClaimTypes.NameIdentifier,
-            ValidateIssuer = to.ValidateIssuer,
-            ValidateAudience = to.ValidateAudience,
-            ClockSkew = TimeSpan.FromSeconds(to.ClockSkew),
-            ValidateIssuerSigningKey = to.ValidateIssuerSigningKey,
-            ValidateLifetime = to.ValidateLifetime,
-          };
-        }
-        else
-        {
-          options.TokenValidationParameters =
-            new TokenValidationParameters { NameClaimType = ClaimTypes.NameIdentifier };
-        }
-      });
+      .AddJwtBearer(options => options.ConfigureJwtBearerOptions(o));
 
     var p = s.Policies ?? [];
 

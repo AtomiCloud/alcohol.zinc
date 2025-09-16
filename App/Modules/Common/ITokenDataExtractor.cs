@@ -2,7 +2,7 @@ using CSharp_Result;
 
 namespace App.Modules.Common;
 
-public record UserToken(string Username, string Email, bool EmailVerified, string[] Scopes);
+public record UserToken(string Sub, string Username, string Email, bool EmailVerified, string[] Scopes);
 
 public interface ITokenDataExtractor
 {

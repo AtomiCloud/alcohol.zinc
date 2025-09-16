@@ -186,6 +186,11 @@ Auth:
           - admin
         Type: 'All'
         Field: 'scopes'
+      Registered:
+        Target:
+          - 'true'
+        Type: 'All'
+        Field: 'alcohol_zinc'
     Issuer: https://xzc47u.logto.app/oidc
     Audience: https://api.zinc.alcohol.lapras
     Domain: xzc47u.logto.app/oidc

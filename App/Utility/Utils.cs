@@ -101,6 +101,6 @@ public static class Utils
 
   public static string ToBase64(this string code)
   {
-    return Convert.ToBase64String(Encoding.ASCII.GetBytes(code));
+    return Convert.ToBase64String(Encoding.UTF8.GetBytes(code));
   }
 }
