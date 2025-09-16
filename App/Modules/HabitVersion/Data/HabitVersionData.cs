@@ -20,8 +20,6 @@ namespace App.Modules.HabitVersion.Data
         public int StakeCents { get; set; }              // Stake stored as cents
         public string StakeCurrency { get; set; } = "SGD";
         public int RatioBasisPoints { get; set; }        // Ratio stored as basis points
-        public DateOnly StartDate { get; set; }
-        public DateOnly EndDate { get; set; }
 
         // Navigation properties
         public virtual HabitData? Habit { get; set; }

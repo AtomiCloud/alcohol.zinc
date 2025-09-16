@@ -11,7 +11,8 @@ public static class HabitMapper
         new (
             h.Id,
             h.Record.Version,
-            h.UserId
+            h.UserId,
+            h.Record.Enabled
         );
 
     public static HabitVersionRes ToRes(this HabitVersionPrincipal hv) =>
@@ -24,8 +25,6 @@ public static class HabitMapper
             hv.Record.NotificationTime.ToStandardTimeFormat(),
             hv.Record.Stake.Amount.ToString("F2", CultureInfo.InvariantCulture),
             (hv.Record.Ratio * 100m).ToString("F1", CultureInfo.InvariantCulture),
-            hv.Record.StartDate.ToStandardDateFormat(),
-            hv.Record.EndDate.ToStandardDateFormat(),
             hv.Record.CharityId
         );
 
@@ -37,9 +36,7 @@ public static class HabitMapper
             DayOfWeek = req.DayOfWeek,
             NotificationTime = req.NotificationTime.ToTime(),
             Stake = new Money(decimal.Parse(req.Stake, CultureInfo.InvariantCulture), Currency.FromCode("USD")),
-            Ratio = decimal.Parse(req.Ratio, CultureInfo.InvariantCulture) / 100m,
-            StartDate = req.StartDate.ToDate(),
-            EndDate = req.EndDate.ToDate(),
+            Ratio = 1.0m,  // Fixed at 100% - all stake goes to charity
             Version = 1  // First version
         };
 
@@ -51,9 +48,7 @@ public static class HabitMapper
             DayOfWeek = req.DayOfWeek,
             NotificationTime = req.NotificationTime.ToTime(),
             Stake = new Money(decimal.Parse(req.Stake, CultureInfo.InvariantCulture), Currency.FromCode("USD")),
-            Ratio = decimal.Parse(req.Ratio, CultureInfo.InvariantCulture) / 100m,
-            StartDate = req.StartDate.ToDate(),
-            EndDate = req.EndDate.ToDate(),
+            Ratio = 1.0m,  // Fixed at 100% - all stake goes to charity
             Version = version  // Will be set by repository
         };
 

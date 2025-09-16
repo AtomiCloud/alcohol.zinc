@@ -69,7 +69,7 @@ public class HabitController(
 
         var result = await updateHabitReqValidator
             .ValidateAsyncResult(req, "Invalid UpdateHabitReq")
-            .ThenAwait(x => service.Update(userId, id, x.ToVersionRecord(0))) // Version will be set by repository
+            .ThenAwait(x => service.Update(userId, id, x.ToVersionRecord(0), req.Enabled)) // Version will be set by repository, pass enabled status
             .Then(h => h?.ToRes(), Errors.MapAll);
         return this.ReturnNullableResult(result, new EntityNotFound(
             "Habit Not Found", typeof(HabitVersionPrincipal), id.ToString()));
@@ -93,8 +93,7 @@ public class HabitController(
         var userId = this.Sub();
         if (userId == null) return Unauthorized();
 
-        var targetDate = req.Date.ToDate();
-        var result = await service.CompleteHabit(userId, id, targetDate, req.Notes)
+        var result = await service.CompleteHabit(userId, id, req.Notes)
             .Then(execution => execution.ToRes().ToResult());
         return this.ReturnResult(result);
     }
@@ -114,6 +113,7 @@ public class HabitController(
     [Authorize(Policy = AuthPolicies.OnlyAdmin), HttpPost("executions/mark-daily-failures")]
     public async Task<ActionResult<int>> MarkDailyFailures([FromBody] MarkDailyFailuresReq req)
     {
+      //todo change input from userid to list of habit id
         var targetDate = req.Date.ToDate();
         var result = await service.MarkDailyFailures(req.UserIds, targetDate);
         return this.ReturnResult(result);

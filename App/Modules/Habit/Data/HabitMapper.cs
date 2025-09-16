@@ -13,7 +13,8 @@ namespace App.Modules.Habit.Data
                 UserId = data.UserId,
                 Record = new HabitRecord
                 {
-                    Version = data.Version
+                    Version = data.Version,
+                    Enabled = data.Enabled
                 }
             };
         }
@@ -24,7 +25,8 @@ namespace App.Modules.Habit.Data
             {
                 Id = principal.Id,
                 UserId = principal.UserId,
-                Version = principal.Record.Version
+                Version = principal.Record.Version,
+                Enabled = principal.Record.Enabled
             };
         }
 

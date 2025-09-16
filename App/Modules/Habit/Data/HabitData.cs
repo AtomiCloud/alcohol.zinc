@@ -9,7 +9,8 @@ namespace App.Modules.Habit.Data
         public Guid Id { get; set; }
         public required string UserId { get; set; }
         public required ushort Version { get; set; }     // Current version pointer
-        
+        public required bool Enabled { get; set; } = true;  // User can enable/disable habit
+
         // Soft delete
         public DateTime? DeletedAt { get; set; }
 

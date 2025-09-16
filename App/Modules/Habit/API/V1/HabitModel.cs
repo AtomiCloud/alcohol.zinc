@@ -3,9 +3,6 @@ public record CreateHabitReq(
     string DayOfWeek,
     string NotificationTime, // string (e.g. "HH:mm")
     string Stake,            // string decimal (e.g. "10.50")
-    string Ratio,            // string decimal (e.g. "0.25" for 25%)
-    string StartDate,        // string (e.g. "2024-01-01")
-    string EndDate,          // string (e.g. "2024-12-31")
     Guid CharityId
 );
 
@@ -14,16 +11,15 @@ public record UpdateHabitReq(
     string DayOfWeek,
     string NotificationTime,
     string Stake,
-    string Ratio,
-    string StartDate,
-    string EndDate,
-    Guid CharityId
+    Guid CharityId,
+    bool Enabled
 );
 
 public record HabitRes(
     Guid Id,                 // Habit ID (main entity)
     ushort Version,          // Current version number
-    string UserId
+    string UserId,
+    bool Enabled             // Whether habit is enabled
 );
 
 public record HabitVersionRes(
@@ -35,18 +31,15 @@ public record HabitVersionRes(
     string NotificationTime,
     string Stake,
     string Ratio,
-    string StartDate,
-    string EndDate,
     Guid CharityId
 );
 
 public record MarkDailyFailuresReq(
-    string Date,             // string (e.g. "31-08-2025") 
+    string Date,             // string (e.g. "31-08-2025")
     List<string> UserIds     // List of user IDs to process
 );
 
 public record CompleteHabitReq(
-    string Date,             // string (e.g. "31-08-2025")
     string? Notes            // Optional notes
 );
 

@@ -2,6 +2,7 @@ using App.Modules.HabitExecution.Data;
 using App.Modules.HabitVersion.Data;
 using App.StartUp.Database;
 using CSharp_Result;
+using Domain.Exceptions;
 using Domain.Habit;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,17 +15,21 @@ namespace App.Modules.Habit.Data
             try
             {
                 logger.LogInformation("Retrieving active habits for UserId: {UserId}, Date: {Date}", userId, date);
-                
-                // Join habit with current version to get active habits with details
+
+                // Get day of week from the provided date
+                var dayOfWeek = date.DayOfWeek.ToString();
+                logger.LogInformation("Filtering habits for day: {DayOfWeek}", dayOfWeek);
+
+                // Join habit with current version to get enabled habits scheduled for this day
                 var data = await (from h in db.Habits
                                  join hv in db.HabitVersions on new { h.Id, h.Version } equals new { Id = hv.HabitId, hv.Version }
-                                 where h.UserId == userId && 
+                                 where h.UserId == userId &&
                                        h.DeletedAt == null &&
-                                       hv.StartDate <= date && 
-                                       hv.EndDate >= date
+                                       h.Enabled == true &&
+                                       hv.DayOfWeek == dayOfWeek
                                  select hv).AsNoTracking().ToListAsync();
                 
-                logger.LogInformation("Retrieved {Count} active habits for UserId: {UserId}", data.Count, userId);
+                logger.LogInformation("Retrieved {Count} active habits for UserId: {UserId} on {DayOfWeek}", data.Count, userId, dayOfWeek);
                 return data.Select(x => x.ToPrincipal()).ToList();
             }
             catch (Exception e)
@@ -99,7 +104,8 @@ namespace App.Modules.Habit.Data
                 var habitData = new HabitData
                 {
                     UserId = userId,
-                    Version = 1
+                    Version = 1,
+                    Enabled = true  // New habits are enabled by default
                 };
                 var habitResult = db.Habits.Add(habitData);
                 
@@ -122,16 +128,16 @@ namespace App.Modules.Habit.Data
             }
         }
 
-        public async Task<Result<HabitVersionPrincipal?>> Update(Guid habitId, HabitVersionRecord versionRecord)
+        public async Task<Result<HabitVersionPrincipal?>> Update(Guid habitId, HabitVersionRecord versionRecord, bool enabled)
         {
             await using var transaction = await db.Database.BeginTransactionAsync();
             try
             {
-                logger.LogInformation("Updating habit version for HabitId: {HabitId}", habitId);
-                
-                // Lock the habit row and atomically increment version
+                logger.LogInformation("Updating habit version and enabled status for HabitId: {HabitId}, Enabled: {Enabled}", habitId, enabled);
+
+                // Lock the habit row and atomically increment version + update enabled status
                 var affectedRows = await db.Database.ExecuteSqlAsync(
-                    $"UPDATE \"Habits\" SET \"Version\" = \"Version\" + 1 WHERE \"Id\" = {habitId} AND \"DeletedAt\" IS NULL");
+                    $"UPDATE \"Habits\" SET \"Version\" = \"Version\" + 1, \"Enabled\" = {enabled} WHERE \"Id\" = {habitId} AND \"DeletedAt\" IS NULL");
                 
                 if (affectedRows == 0)
                 {
@@ -200,7 +206,11 @@ namespace App.Modules.Habit.Data
             try
             {
                 logger.LogInformation("Creating failed executions for {UserCount} users on date: {Date}", userIds.Count, date);
-                
+
+                // Get day of week from the provided date
+                var dayOfWeek = date.DayOfWeek.ToString();
+                logger.LogInformation("Creating failures for habits scheduled on: {DayOfWeek}", dayOfWeek);
+
                 // Single atomic INSERT ... SELECT with LEFT JOIN to prevent race conditions
                 var affectedRows = await db.Database.ExecuteSqlAsync($@"
                     INSERT INTO ""HabitExecutions"" (""Id"", ""HabitVersionId"", ""Date"", ""Status"", ""PaymentProcessed"")
@@ -208,14 +218,14 @@ namespace App.Modules.Habit.Data
                     FROM ""Habits"" h
                     JOIN ""HabitVersions"" hv ON h.""Id"" = hv.""HabitId"" AND h.""Version"" = hv.""Version""
                     LEFT JOIN ""HabitExecutions"" he ON he.""HabitVersionId"" = hv.""Id"" AND he.""Date"" = {date}
-                    WHERE h.""UserId"" = ANY({userIds}) 
-                      AND h.""DeletedAt"" IS NULL 
-                      AND hv.""StartDate"" <= {date}
-                      AND hv.""EndDate"" >= {date}
+                    WHERE h.""UserId"" = ANY({userIds})
+                      AND h.""DeletedAt"" IS NULL
+                      AND h.""Enabled"" = true
+                      AND hv.""DayOfWeek"" = {dayOfWeek}
                       AND he.""Id"" IS NULL
                 ");
 
-                logger.LogInformation("Created {Count} failed executions for date: {Date}", affectedRows, date);
+                logger.LogInformation("Created {Count} failed executions for date: {Date} ({DayOfWeek})", affectedRows, date, dayOfWeek);
                 return affectedRows;
             }
             catch (Exception e)
@@ -225,12 +235,49 @@ namespace App.Modules.Habit.Data
             }
         }
 
+        public async Task<Result<DateOnly>> GetUserCurrentDate(string userId)
+        {
+            try
+            {
+                logger.LogInformation("Getting current date for UserId: {UserId}", userId);
+
+                // Get user's timezone from their configuration
+                var userConfig = await (from c in db.Configurations
+                                      where c.UserId == userId
+                                      select c.Timezone).AsNoTracking().FirstOrDefaultAsync();
+
+                if (string.IsNullOrEmpty(userConfig))
+                {
+                    logger.LogWarning("No configuration found for UserId: {UserId}, using UTC", userId);
+                    return DateOnly.FromDateTime(DateTime.UtcNow);
+                }
+
+                // Convert UTC now to user's timezone
+                var userTimeZone = TimeZoneInfo.FindSystemTimeZoneById(userConfig);
+                var userDateTime = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, userTimeZone);
+                var userDate = DateOnly.FromDateTime(userDateTime);
+
+                logger.LogInformation("Current date for UserId: {UserId} in timezone {Timezone} is {Date}",
+                    userId, userConfig, userDate);
+                return userDate;
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Failed to get current date for UserId: {UserId}", userId);
+                return e;
+            }
+        }
+
         public async Task<Result<HabitExecutionPrincipal>> CompleteHabit(string userId, Guid habitId, DateOnly date, string? notes)
         {
             try
             {
                 logger.LogInformation("Completing habit for UserId: {UserId}, HabitId: {HabitId}, Date: {Date}", userId, habitId, date);
-                
+
+                // Get day of week from the provided date
+                var dayOfWeek = date.DayOfWeek.ToString();
+                logger.LogInformation("Validating habit is scheduled for: {DayOfWeek}", dayOfWeek);
+
                 // Atomic INSERT ... SELECT to get current version and create execution
                 var affectedRows = await db.Database.ExecuteSqlAsync($@"
                     INSERT INTO ""HabitExecutions"" (""Id"", ""HabitVersionId"", ""Date"", ""Status"", ""CompletedAt"", ""Notes"", ""PaymentProcessed"")
@@ -239,19 +286,21 @@ namespace App.Modules.Habit.Data
                     JOIN ""HabitVersions"" hv ON h.""Id"" = hv.""HabitId"" AND h.""Version"" = hv.""Version""
                     WHERE h.""Id"" = {habitId}
                       AND h.""UserId"" = {userId}
-                      AND h.""DeletedAt"" IS NULL 
-                      AND hv.""StartDate"" <= {date}
-                      AND hv.""EndDate"" >= {date}
+                      AND h.""DeletedAt"" IS NULL
+                      AND h.""Enabled"" = true
+                      AND hv.""DayOfWeek"" = {dayOfWeek}
                       AND NOT EXISTS (
-                          SELECT 1 FROM ""HabitExecutions"" he 
+                          SELECT 1 FROM ""HabitExecutions"" he
                           WHERE he.""HabitVersionId"" = hv.""Id"" AND he.""Date"" = {date}
                       )
                 ");
 
                 if (affectedRows == 0)
                 {
-                    logger.LogWarning("No habit execution created - habit not found, not active, or already completed for HabitId: {HabitId}, Date: {Date}", habitId, date);
-                    throw new InvalidOperationException("Habit not found, not active for this date, or already completed");
+                    logger.LogWarning("No habit execution created - habit not found, not enabled, not scheduled for {DayOfWeek}, or already completed " +
+                                      "for HabitId: {HabitId}, Date: {Date}", dayOfWeek, habitId, date);
+                    return new NotFoundException("Habit not found, not enabled, not scheduled for this day, or already completed",
+                      typeof(HabitExecutionPrincipal), habitId.ToString());
                 }
 
                 // Get the created execution to return
