@@ -172,9 +172,9 @@ Auth:
         Target:
           - admin
         Type: 'All'
-        Field: 'roles'
+        Field: 'scope'
     Issuer: https://xzc47u.logto.app/oidc
-    Audience: https://api.zinc.alcohol.larpas
+    Audience: https://api.zinc.alcohol.lapras
     Domain: xzc47u.logto.app/oidc
     TokenValidation:
       ValidateAudience: true
