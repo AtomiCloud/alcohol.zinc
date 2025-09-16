@@ -22,6 +22,12 @@ public class UserRepository(MainDbContext db, ILogger<UserRepository> logger) : 
         query = query.Where(x => EF.Functions.ILike(x.Username, $"%{search.Username}%"));
       if (!string.IsNullOrWhiteSpace(search.Id))
         query = query.Where(x => EF.Functions.ILike(x.Id.ToString(), $"%{search.Id}%"));
+      if (!string.IsNullOrEmpty(search.Email))
+        query = query.Where(x => EF.Functions.ILike(x.Email, $"%{search.Email}%"));
+      if (search.EmailVerified != null)
+        query = query.Where(x => x.EmailVerified == search.EmailVerified);
+      if (search.Active != null)
+        query = query.Where(x => x.Active == search.Active);
 
       var result = await query
         .Skip(search.Skip)
@@ -73,19 +79,6 @@ public class UserRepository(MainDbContext db, ILogger<UserRepository> logger) : 
     {
       logger
         .LogError(e, "Failed retrieving User by Username: {Username}", username);
-      throw;
-    }
-  }
-
-  public async Task<Result<bool>> Exists(string username)
-  {
-    try
-    {
-      return await db.Users.AnyAsync(x => x.Username == username);
-    }
-    catch (Exception e)
-    {
-      logger.LogError(e, "Failed to check username exist {Username}", username);
       throw;
     }
   }

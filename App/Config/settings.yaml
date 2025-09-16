@@ -167,18 +167,27 @@ Smtp:
     UseDefaultCredentials: false
     Timeout: 5000
 # external
-HttpClient: {}
+HttpClient:
+  Logto:
+    BaseAddress: https://xzc47u.logto.app
+    Timeout: 60
 Auth:
   Enabled: true
+  Management:
+    Endpoint: https://xzc47u.logto.app
+    Id: r0lqrwbrp3ao2d5wb8pv9
+    Secret: supersecret
+    Resource: https://xzc47u.logto.app/api
+    Scope: all
   Settings:
     Policies:
       OnlyAdmin:
         Target:
           - admin
         Type: 'All'
-        Field: 'roles'
+        Field: 'scopes'
     Issuer: https://xzc47u.logto.app/oidc
-    Audience: https://api.zinc.alcohol.larpas
+    Audience: https://api.zinc.alcohol.lapras
     Domain: xzc47u.logto.app/oidc
     TokenValidation:
       ValidateAudience: true

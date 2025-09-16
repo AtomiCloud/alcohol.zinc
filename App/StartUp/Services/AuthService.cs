@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using App.StartUp.Options.Auth;
 using App.StartUp.Services.Auth;
+using App.StartUp.Services.Auth.Logto;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
@@ -28,6 +29,12 @@ public static class AuthService
 
     services.AddSingleton<IAuthHelper, AuthHelper>()
       .AutoTrace<IAuthHelper>();
+
+    services.AddScoped<IAuthManagement, LogtoAuthManagement>()
+      .AutoTrace<IAuthManagement>();
+    
+    services.AddScoped<ILogtoAuthenticator, LogtoAuthenticator>()
+      .AutoTrace<ILogtoAuthenticator>();
 
     var s = o.Settings!;
     var domain = $"https://{s.Domain}";
@@ -64,26 +71,26 @@ public static class AuthService
     var p = s.Policies ?? [];
 
     services.AddAuthorization(opt =>
-    {
-      foreach (var (k, v) in p)
       {
-        opt.AddPolicy(k, pb =>
+        foreach (var (k, v) in p)
         {
-          switch (v)
+          opt.AddPolicy(k, pb =>
           {
-            case { Type: "Any" }:
-              pb.Requirements.AddAnyScope(s.Issuer, v.Field, v.Target);
-              break;
-            case { Type: "All" }:
-              pb.Requirements.AddAllScope(s.Issuer, v.Field, v.Target);
-              break;
-            default:
-              throw new ApplicationException($"Auth Policy Type is not supported: {v.Type}");
-          }
-        });
-      }
-    })
-    .AddSingleton<IAuthorizationMiddlewareResultHandler, AuthorizationResultTransformer>();
+            switch (v)
+            {
+              case { Type: "Any" }:
+                pb.Requirements.AddAnyScope(s.Issuer, v.Field, v.Target);
+                break;
+              case { Type: "All" }:
+                pb.Requirements.AddAllScope(s.Issuer, v.Field, v.Target);
+                break;
+              default:
+                throw new ApplicationException($"Auth Policy Type is not supported: {v.Type}");
+            }
+          });
+        }
+      })
+      .AddSingleton<IAuthorizationMiddlewareResultHandler, AuthorizationResultTransformer>();
 
     return services;
   }

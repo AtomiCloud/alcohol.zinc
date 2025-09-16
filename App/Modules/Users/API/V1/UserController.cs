@@ -18,9 +18,11 @@ namespace App.Modules.Users.API.V1;
 [Route("api/v{version:apiVersion}/[controller]")]
 public class UserController(
   IUserService service,
+  IAuthManagement authManagement,
   CreateUserReqValidator createUserReqValidator,
   UpdateUserReqValidator updateUserReqValidator,
   UserSearchQueryValidator userSearchQueryValidator,
+  ITokenDataExtractor tokenDataExtractor,
   IAuthHelper h
 ) : AtomiControllerBase(h)
 {
@@ -35,6 +37,7 @@ public class UserController(
   }
 
   [Authorize, HttpGet("Me")]
+  [Produces("text/plain")]
   public string Me()
   {
     return this.Sub() ?? "none";
@@ -80,14 +83,6 @@ public class UserController(
       "User Not Found", typeof(User), username));
   }
 
-  [Authorize, HttpGet("exist/{username}")]
-  public async Task<ActionResult<UserExistRes>> Exist(string username)
-  {
-    var exist = await service.Exists(username)
-      .Then(x => new UserExistRes(x), Errors.MapAll);
-    return this.ReturnResult(exist);
-  }
-
   [Authorize, HttpPost]
   public async Task<ActionResult<UserPrincipalRes>> Create([FromBody] CreateUserReq req)
   {
@@ -102,7 +97,9 @@ public class UserController(
 
     var user = await createUserReqValidator
       .ValidateAsyncResult(req, "Invalid CreateUserReq")
-      .ThenAwait(x => service.Create(id, x.ToRecord()))
+      .ThenAwait(x => tokenDataExtractor.ExtractFromToken(x.IdToken, x.AccessToken))
+      .ThenAwait(x =>
+        service.Create(id, x.ToRecord(), () => authManagement.SetClaim(id, LogtoClaims.ZincUpdated, "true")))
       .Then(x => x.ToRes(), Errors.MapAll);
     return this.ReturnResult(user);
   }
@@ -112,7 +109,8 @@ public class UserController(
   {
     var user = await this.GuardAsync(id)
       .ThenAwait(_ => updateUserReqValidator.ValidateAsyncResult(req, "Invalid UpdateUserReq"))
-      .ThenAwait(x => service.Update(id, x.ToRecord()))
+      .ThenAwait(x => tokenDataExtractor.ExtractFromToken(x.IdToken, x.AccessToken))
+      .ThenAwait(x => service.Update(id, x.ToRecord(), null))
       .Then(x => (x?.ToRes()).ToResult());
 
     return this.ReturnNullableResult(user, new EntityNotFound(
