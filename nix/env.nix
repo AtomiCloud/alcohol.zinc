@@ -17,6 +17,7 @@ with packages;
   main = [
     dotnet
     infisical
+    k6
   ];
 
   lint = [

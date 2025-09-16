@@ -23,6 +23,7 @@ let
         inherit
           infisical
           git
+          k6
 
           # linter
           treefmt
