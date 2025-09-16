@@ -1,3 +1,16 @@
+## [1.3.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.2.0...v1.3.0) (2025-09-16)
+
+
+### ✨ Features ✨
+
+* allow claims to be updated when user is created ([4493fae](https://github.com/AtomiCloud/alcohol.zinc/commit/4493fae1ae18854ac3188b6c92e7289e809f0cb8))
+
+
+### 🐛 Bug Fixes 🐛
+
+* allow some skew ([bf2594b](https://github.com/AtomiCloud/alcohol.zinc/commit/bf2594b07811fa603375686e383b4ee0d4a7a666))
+* PR comments ([e28e641](https://github.com/AtomiCloud/alcohol.zinc/commit/e28e641dad9b3ea14baf5ac3b792fce3198309c3))
+
 ## [1.2.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.1.0...v1.2.0) (2025-08-30)
 
 
