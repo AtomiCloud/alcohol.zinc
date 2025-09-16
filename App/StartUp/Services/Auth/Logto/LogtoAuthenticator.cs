@@ -53,7 +53,7 @@ public class LogtoAuthenticator(
       var body = await response.Content.ReadAsStringAsync();
       var r = body.ToObj<LogtoTokenRes>();
       logger.LogTrace("Received Access Token from Logto");
-      var expiry = start.AddSeconds(r.ExpiresIn);
+      var expiry = start.AddSeconds(r.ExpiresIn - 10);
       logger.LogTrace("Access Token expires at {Expiry}", expiry);
       return (r.AccessToken, expiry);
     }
@@ -95,7 +95,7 @@ public class LogtoAuthenticator(
   private async Task<Result<Unit>> Remember(string token, DateTime expiry)
   {
     logger.LogTrace("Updating local and Redis cached Access Token");
-    logger.LogTrace("Local cached Access Token will expire at {Expiry}", expiry);
+    logger.LogTrace("Local cached Access Token will expire at {Expiry} (UTC)", expiry);
     logger.LogTrace("Encrypting Access Token before storage");
     var tokenCipher = encryptor.Encrypt(token);
     logger.LogTrace("Access Token encrypted");
