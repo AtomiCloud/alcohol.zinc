@@ -16,7 +16,6 @@ namespace App.Modules.Configurations.Data
                     Record = new ConfigurationRecord
                     {
                         Timezone = data.Timezone,
-                        EndOfDay = data.EndOfDay,
                         DefaultCharityId = data.DefaultCharityId
                     }
                 },
@@ -31,7 +30,7 @@ namespace App.Modules.Configurations.Data
                 Id = principal.Id,
                 UserId = principal.UserId,
                 Timezone = principal.Record.Timezone,
-                EndOfDay = principal.Record.EndOfDay,
+                EndOfDay = new TimeOnly(23, 59),
                 DefaultCharityId = principal.Record.DefaultCharityId
             };
         }
@@ -45,7 +44,6 @@ namespace App.Modules.Configurations.Data
                 Record = new ConfigurationRecord
                 {
                     Timezone = data.Timezone,
-                    EndOfDay = data.EndOfDay,
                     DefaultCharityId = data.DefaultCharityId
                 }
             };
@@ -58,7 +56,7 @@ namespace App.Modules.Configurations.Data
                 Id = id,
                 UserId = userId,
                 Timezone = record.Timezone,
-                EndOfDay = record.EndOfDay,
+                EndOfDay = new TimeOnly(23, 59),
                 DefaultCharityId = record.DefaultCharityId
             };
         }

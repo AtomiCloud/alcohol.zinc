@@ -12,7 +12,6 @@ public static class ConfigurationMapper
         configPrincipal.Id.ToString(),
         configPrincipal.UserId,
         configPrincipal.Record.Timezone,
-        configPrincipal.Record.EndOfDay.ToStandardTimeFormat(),
         configPrincipal.Record.DefaultCharityId.ToString()
       );
 
@@ -27,7 +26,6 @@ public static class ConfigurationMapper
     new()
     {
       Timezone = req.Timezone,
-      EndOfDay = req.EndOfDay.ToTime(),
       DefaultCharityId = Guid.Parse(req.DefaultCharityId)
     };
 
@@ -35,7 +33,6 @@ public static class ConfigurationMapper
     new()
     {
       Timezone = req.Timezone,
-      EndOfDay = req.EndOfDay.ToTime(),
       DefaultCharityId = Guid.Parse(req.DefaultCharityId)
     };
 }

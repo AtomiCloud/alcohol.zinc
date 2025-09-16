@@ -97,7 +97,7 @@ namespace App.Modules.Configurations.Data
                 }
 
                 data.Timezone = principal.Record.Timezone;
-                data.EndOfDay = principal.Record.EndOfDay;
+                data.EndOfDay = new TimeOnly(23, 59);
                 data.DefaultCharityId = principal.Record.DefaultCharityId;
                 var updated = db.Configurations.Update(data);
                 await db.SaveChangesAsync();
