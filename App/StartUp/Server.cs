@@ -21,13 +21,16 @@ using Utils = App.Utility.Utils;
 
 namespace App.StartUp;
 
-public class Server(IOptionsMonitor<List<CorsOption>> cors,
+public class Server(
+  IOptionsMonitor<List<CorsOption>> cors,
   IOptionsMonitor<AppOption> app,
   IOptionsMonitor<MetricOption> metrics,
   IOptionsMonitor<LogsOption> logs,
-  IOptionsMonitor<TraceOption> trace, IOptionsMonitor<ErrorPortalOption> errorPortal,
+  IOptionsMonitor<TraceOption> trace,
+  IOptionsMonitor<ErrorPortalOption> errorPortal,
   IOptionsMonitor<Dictionary<string, BlockStorageOption>> store,
-  IOptionsMonitor<Dictionary<string, HttpClientOption>> http, IOptionsMonitor<AuthOption> auth,
+  IOptionsMonitor<Dictionary<string, HttpClientOption>> http,
+  IOptionsMonitor<AuthOption> auth,
   IOptionsMonitor<Dictionary<string, CacheOption>> cache,
   IOptionsMonitor<Dictionary<string, SmtpOption>> smtp
 )
@@ -62,14 +65,13 @@ public class Server(IOptionsMonitor<List<CorsOption>> cors,
       .AddEnvironmentVariables(prefix: "Atomi_");
 
     // builder.Logging.ClearProviders();
-    builder.Logging.AddOpenTelemetry(
-      o =>
-      {
-        var b = ResourceBuilder.CreateDefault();
-        this.ConfigureResourceBuilder(b);
-        o.SetResourceBuilder(b);
-        o.AddLogsService(logs);
-      });
+    builder.Logging.AddOpenTelemetry(o =>
+    {
+      var b = ResourceBuilder.CreateDefault();
+      this.ConfigureResourceBuilder(b);
+      o.SetResourceBuilder(b);
+      o.AddLogsService(logs);
+    });
 
     var services = builder.Services;
 
@@ -138,7 +140,11 @@ public class Server(IOptionsMonitor<List<CorsOption>> cors,
 
     // Auth Service Configuration
     if (auth.CurrentValue.Enabled)
+    {
       services.AddAuthService(auth.CurrentValue);
+      services.AddScoped<ITokenDataExtractor, TokenDataExtractor>();
+    }
+
 
     services.AddDomainServices();
     /*----------------------------------------*/

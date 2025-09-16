@@ -2,7 +2,10 @@ using CSharp_Result;
 
 namespace Domain.User;
 
-public class UserService(IUserRepository repo) : IUserService
+public class UserService(
+  IUserRepository repo,
+  ITransactionManager tm
+) : IUserService
 {
   public Task<Result<IEnumerable<UserPrincipal>>> Search(UserSearch search)
   {
@@ -19,19 +22,19 @@ public class UserService(IUserRepository repo) : IUserService
     return repo.GetByUsername(username);
   }
 
-  public Task<Result<bool>> Exists(string username)
+  public Task<Result<UserPrincipal>> Create(string id, UserRecord record, Func<Task<Result<Unit>>>? sync)
   {
-    return repo.Exists(username);
+    return tm.Start(() =>
+      repo.Create(id, record)
+        .DoAwait(DoType.MapErrors, _ => sync?.Invoke() ?? new Unit().ToAsyncResult())
+    );
   }
 
-  public Task<Result<UserPrincipal>> Create(string id, UserRecord record)
+  public Task<Result<UserPrincipal?>> Update(string id, UserRecord record, Func<Task<Result<Unit>>>? sync)
   {
-    return repo.Create(id, record);
-  }
-
-  public Task<Result<UserPrincipal?>> Update(string id, UserRecord record)
-  {
-    return repo.Update(id, record);
+    return tm.Start(() => repo.Update(id, record)
+      .DoAwait(DoType.MapErrors, _ => sync?.Invoke() ?? new Unit().ToAsyncResult())
+    );
   }
 
   public Task<Result<Unit?>> Delete(string id)

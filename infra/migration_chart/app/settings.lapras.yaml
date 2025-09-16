@@ -49,8 +49,5 @@ BlockStorage:
     Policy: Private
     UseSSL: false
     EnsureBucketCreation: true
-
-Encryption:
-  Secret: supersecret
 # external
 HttpClient: {}

@@ -4,12 +4,16 @@ public class AuthPolicies
 {
   public const string OnlyAdmin = "OnlyAdmin";
 
-  public const string AdminOrTin = "AdminOrTin";
+  public const string Registered = "Registered";
 }
 
 public class AuthRoles
 {
   public const string Field = "roles";
   public const string Admin = "admin";
-  public const string Tin = "tin";
+}
+
+public class LogtoClaims
+{
+  public const string ZincUpdated = "alcohol_zinc";
 }

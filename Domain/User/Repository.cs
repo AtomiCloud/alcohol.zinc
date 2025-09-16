@@ -10,8 +10,6 @@ public interface IUserRepository
 
   Task<Result<User?>> GetByUsername(string username);
 
-  Task<Result<bool>> Exists(string username);
-
   Task<Result<UserPrincipal>> Create(string id, UserRecord record);
 
   Task<Result<UserPrincipal?>> Update(string id, UserRecord record);
