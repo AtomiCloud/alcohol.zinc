@@ -75,19 +75,4 @@ public class ConfigurationController(
     return this.ReturnNullableResult(result, new EntityNotFound("Configuration Not Found", typeof(ConfigurationPrincipal), id.ToString()));
   }
 
-  [Authorize, HttpDelete]
-  public async Task<ActionResult<Unit>> Delete()
-  {
-    var userId = this.Sub();
-    if (userId == null)
-    {
-      Result<Unit> error = new Unauthenticated("You are not authenticated").ToException();
-      return this.ReturnResult(error);
-    }
-
-    var result = await service.Delete(userId)
-      .Then(unit => unit != null ? new Unit().ToResult() : 
-        new EntityNotFound("Configuration Not Found", typeof(Configuration), userId).ToException());
-    return this.ReturnNullableResult(result, new EntityNotFound("Configuration Not Found", typeof(Configuration), userId));
-  }
 }

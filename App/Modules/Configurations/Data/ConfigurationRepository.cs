@@ -95,7 +95,7 @@ namespace App.Modules.Configurations.Data
                     logger.LogWarning("Configuration not found for update, Id: {Id}", principal.Id);
                     return (ConfigurationPrincipal?)null;
                 }
-                
+
                 data.Timezone = principal.Record.Timezone;
                 data.EndOfDay = principal.Record.EndOfDay;
                 data.DefaultCharityId = principal.Record.DefaultCharityId;
@@ -109,32 +109,6 @@ namespace App.Modules.Configurations.Data
             catch (Exception e)
             {
                 logger.LogError(e, "Failed to update Configuration Id: {Id}", principal.Id);
-                return e;
-            }
-        }
-
-        public async Task<Result<Unit?>> Delete(string userId)
-        {
-            try
-            {
-                logger.LogInformation("Deleting Configuration for UserId: {UserId}", userId);
-
-                var data = await db.Configurations.FirstOrDefaultAsync(x => x.UserId == userId);
-                if (data == null)
-                {
-                    logger.LogWarning("Configuration not found for delete, UserId: {UserId}", userId);
-                    return (Unit?)null;
-                }
-                db.Configurations.Remove(data);
-                await db.SaveChangesAsync();
-
-                logger.LogInformation("Configuration deleted for UserId: {UserId}", userId);
-
-                return new Unit();
-            }
-            catch (Exception e)
-            {
-                logger.LogError(e, "Failed to delete Configuration for UserId: {UserId}", userId);
                 return e;
             }
         }

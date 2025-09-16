@@ -29,9 +29,4 @@ public class ConfigurationService(IConfigurationRepository repo) : IConfiguratio
     };
     return repo.Update(principal);
   }
-
-  public Task<Result<Unit?>> Delete(string userId)
-  {
-    return repo.Delete(userId);
-  }
 }
