@@ -6,7 +6,6 @@ namespace Domain.Configuration
     public record ConfigurationRecord
     {
       public required string Timezone { get; init; }
-      public TimeOnly EndOfDay { get; init; }
       public Guid DefaultCharityId { get; init; }
     }
     
