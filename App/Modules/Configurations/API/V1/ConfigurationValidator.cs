@@ -11,11 +11,7 @@ public class CreateConfigurationReqValidator : AbstractValidator<CreateConfigura
       .NotNull()
       .MaximumLength(64)
       .WithMessage("Timezone must be between 1 and 64 characters");
-      
-    this.RuleFor(x => x.EndOfDay)
-      .NotNull()
-      .TimeValid();
-      
+    
     this.RuleFor(x => x.DefaultCharityId)
       .NotNull()
       .Must(x => Guid.TryParse(x, out _))
@@ -31,10 +27,6 @@ public class UpdateConfigurationReqValidator : AbstractValidator<UpdateConfigura
       .NotNull()
       .MaximumLength(64)
       .WithMessage("Timezone must be between 1 and 64 characters");
-      
-    this.RuleFor(x => x.EndOfDay)
-      .NotNull()
-      .TimeValid();
       
     this.RuleFor(x => x.DefaultCharityId)
       .NotNull()
