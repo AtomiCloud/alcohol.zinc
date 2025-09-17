@@ -10,6 +10,7 @@ public interface IHabitService
   Task<Result<HabitVersionPrincipal?>> Update(string userId, Guid habitId, HabitVersionRecord versionRecord, bool enabled);
   Task<Result<Unit?>> Delete(Guid habitId, string userId);
   Task<Result<int>> MarkDailyFailures(List<string> userIds, DateOnly date);
+  Task<Result<DateOnly>> GetUserCurrentDate(string userId);
   Task<Result<HabitExecutionPrincipal>> CompleteHabit(string userId, Guid habitId, string? notes);
   Task<Result<List<HabitExecutionPrincipal>>> GetDailyExecutions(string userId, DateOnly date);
 }

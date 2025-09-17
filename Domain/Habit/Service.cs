@@ -43,6 +43,11 @@ public class HabitService(IHabitRepository repo) : IHabitService
         return repo.CreateFailedExecutions(userIds, date);
     }
 
+    public Task<Result<DateOnly>> GetUserCurrentDate(string userId)
+    {
+        return repo.GetUserCurrentDate(userId);
+    }
+
     public async Task<Result<HabitExecutionPrincipal>> CompleteHabit(string userId, Guid habitId, string? notes)
     {
         // Get user's timezone from configuration to determine today's date

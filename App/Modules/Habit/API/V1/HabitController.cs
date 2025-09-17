@@ -24,14 +24,16 @@ public class HabitController(
 ) : AtomiControllerBase(authHelper)
 {
     [Authorize, HttpGet("")]
-    public async Task<ActionResult<List<HabitVersionRes>>> ListActiveHabits([FromQuery] string? date = null)
+    public async Task<ActionResult<List<HabitVersionRes>>> ListActiveHabits()
     {
         var userId = this.Sub();
         if (userId == null) return Unauthorized();
 
-        var targetDate = string.IsNullOrEmpty(date) ? DateOnly.FromDateTime(DateTime.Today) : DateOnly.Parse(date);
-        
-        var result = await service.ListActiveHabits(userId, targetDate)
+        // Get user's current date based on their timezone configuration
+        var currentDateResult = await service.GetUserCurrentDate(userId);
+        if (currentDateResult.IsFailure())
+            return this.ReturnResult<List<HabitVersionRes>>(currentDateResult.FailureOrDefault());
+        var result = await service.ListActiveHabits(userId, currentDateResult.SuccessOrDefault())
             .Then(habits => habits.Select(h => h.ToRes()).ToList().ToResult());
         return this.ReturnResult(result);
     }
@@ -104,7 +106,19 @@ public class HabitController(
         var userId = this.Sub();
         if (userId == null) return Unauthorized();
 
-        var targetDate = string.IsNullOrEmpty(date) ? DateOnly.FromDateTime(DateTime.Today) : DateOnly.Parse(date);
+        DateOnly targetDate;
+        if (string.IsNullOrEmpty(date))
+        {
+            targetDate = DateOnly.FromDateTime(DateTime.Today);
+        }
+        else
+        {
+            if (!DateOnly.TryParse(date, out targetDate))
+            {
+                return BadRequest($"Invalid date format: {date}. Expected format: YYYY-MM-DD");
+            }
+        }
+
         var result = await service.GetDailyExecutions(userId, targetDate)
             .Then(executions => executions.Select(e => e.ToRes()).ToList().ToResult());
         return this.ReturnResult(result);
@@ -114,8 +128,15 @@ public class HabitController(
     public async Task<ActionResult<int>> MarkDailyFailures([FromBody] MarkDailyFailuresReq req)
     {
       //todo change input from userid to list of habit id
-        var targetDate = req.Date.ToDate();
-        var result = await service.MarkDailyFailures(req.UserIds, targetDate);
-        return this.ReturnResult(result);
+        try
+        {
+            var targetDate = req.Date.ToDate();
+            var result = await service.MarkDailyFailures(req.UserIds, targetDate);
+            return this.ReturnResult(result);
+        }
+        catch (FormatException)
+        {
+            return BadRequest($"Invalid date format: {req.Date}. Expected format: DD-MM-YYYY");
+        }
     }
 }
