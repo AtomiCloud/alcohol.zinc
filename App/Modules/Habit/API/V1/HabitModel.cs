@@ -1,6 +1,6 @@
 public record CreateHabitReq(
     string Task,
-    string DayOfWeek,
+    string[] DaysOfWeek,
     string NotificationTime, // string (e.g. "HH:mm")
     string Stake,            // string decimal (e.g. "10.50")
     Guid CharityId
@@ -8,7 +8,7 @@ public record CreateHabitReq(
 
 public record UpdateHabitReq(
     string Task,
-    string DayOfWeek,
+    string[] DaysOfWeek,
     string NotificationTime,
     string Stake,
     Guid CharityId,
@@ -27,7 +27,7 @@ public record HabitVersionRes(
     Guid HabitId,            // References main habit
     ushort Version,
     string Task,
-    string DayOfWeek,
+    string[] DaysOfWeek,
     string NotificationTime,
     string Stake,
     string Ratio,

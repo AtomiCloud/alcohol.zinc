@@ -12,10 +12,10 @@ public class CreateHabitReqValidator : AbstractValidator<CreateHabitReq>
             .NotEmpty()
             .MaximumLength(256);
 
-        RuleFor(x => x.DayOfWeek)
+        RuleFor(x => x.DaysOfWeek)
             .NotEmpty()
-            .Must(BeAValidDayOfWeek)
-            .WithMessage("DayOfWeek must be a valid day name (e.g., Monday).");
+            .Must(BeValidDaysOfWeek)
+            .WithMessage("DaysOfWeek must contain valid day names (e.g., Monday, Tuesday).");
 
         RuleFor(x => x.NotificationTime)
             .NotNull()
@@ -33,9 +33,9 @@ public class CreateHabitReqValidator : AbstractValidator<CreateHabitReq>
             .NotEmpty();
     }
 
-    private static bool BeAValidDayOfWeek(string day)
+    private static bool BeValidDaysOfWeek(string[] days)
     {
-        return Enum.TryParse(typeof(DayOfWeek), day, true, out _);
+        return days.All(day => Enum.TryParse(typeof(DayOfWeek), day, true, out _));
     }
 
     private static bool BeAValidDecimal(string value)
@@ -59,10 +59,10 @@ public class UpdateHabitReqValidator : AbstractValidator<UpdateHabitReq>
             .NotEmpty()
             .MaximumLength(256);
 
-        RuleFor(x => x.DayOfWeek)
+        RuleFor(x => x.DaysOfWeek)
             .NotEmpty()
-            .Must(BeAValidDayOfWeek)
-            .WithMessage("DayOfWeek must be a valid day name (e.g., Monday).");
+            .Must(BeValidDaysOfWeek)
+            .WithMessage("DaysOfWeek must contain valid day names (e.g., Monday, Tuesday).");
 
         RuleFor(x => x.NotificationTime)
             .NotNull()
@@ -80,9 +80,9 @@ public class UpdateHabitReqValidator : AbstractValidator<UpdateHabitReq>
             .NotEmpty();
     }
 
-    private static bool BeAValidDayOfWeek(string day)
+    private static bool BeValidDaysOfWeek(string[] days)
     {
-        return Enum.TryParse(typeof(DayOfWeek), day, true, out _);
+        return days.All(day => Enum.TryParse(typeof(DayOfWeek), day, true, out _));
     }
 
     private static bool BeAValidDecimal(string value)

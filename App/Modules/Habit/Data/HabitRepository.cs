@@ -21,13 +21,17 @@ namespace App.Modules.Habit.Data
                 logger.LogInformation("Filtering habits for day: {DayOfWeek}", dayOfWeek);
 
                 // Join habit with current version to get enabled habits scheduled for this day
-                var data = await (from h in db.Habits
-                                 join hv in db.HabitVersions on new { h.Id, h.Version } equals new { Id = hv.HabitId, hv.Version }
-                                 where h.UserId == userId &&
-                                       h.DeletedAt == null &&
-                                       h.Enabled == true &&
-                                       hv.DayOfWeek == dayOfWeek
-                                 select hv).AsNoTracking().ToListAsync();
+                // Using PostgreSQL array contains operator (@>) for DaysOfWeek array
+                var data = await db.HabitVersions
+                    .FromSqlRaw(@"
+                        SELECT hv.* FROM ""HabitVersions"" hv
+                        JOIN ""Habits"" h ON h.""Id"" = hv.""HabitId"" AND h.""Version"" = hv.""Version""
+                        WHERE h.""UserId"" = {0}
+                          AND h.""DeletedAt"" IS NULL
+                          AND h.""Enabled"" = true
+                          AND hv.""DaysOfWeek"" @> ARRAY[{1}]", userId, dayOfWeek)
+                    .AsNoTracking()
+                    .ToListAsync();
                 
                 logger.LogInformation("Retrieved {Count} active habits for UserId: {UserId} on {DayOfWeek}", data.Count, userId, dayOfWeek);
                 return data.Select(x => x.ToPrincipal()).ToList();
@@ -212,6 +216,7 @@ namespace App.Modules.Habit.Data
                 logger.LogInformation("Creating failures for habits scheduled on: {DayOfWeek}", dayOfWeek);
 
                 // Single atomic INSERT ... SELECT with LEFT JOIN to prevent race conditions
+                // Using PostgreSQL array contains operator (@>) for DaysOfWeek array
                 var affectedRows = await db.Database.ExecuteSqlAsync($@"
                     INSERT INTO ""HabitExecutions"" (""Id"", ""HabitVersionId"", ""Date"", ""Status"", ""PaymentProcessed"")
                     SELECT gen_random_uuid(), hv.""Id"", {date}, {(int)ExecutionStatus.Failed}, false
@@ -221,7 +226,7 @@ namespace App.Modules.Habit.Data
                     WHERE h.""UserId"" = ANY({userIds})
                       AND h.""DeletedAt"" IS NULL
                       AND h.""Enabled"" = true
-                      AND hv.""DayOfWeek"" = {dayOfWeek}
+                      AND hv.""DaysOfWeek"" @> ARRAY[{dayOfWeek}]
                       AND he.""Id"" IS NULL
                 ");
 
@@ -288,7 +293,7 @@ namespace App.Modules.Habit.Data
                       AND h.""UserId"" = {userId}
                       AND h.""DeletedAt"" IS NULL
                       AND h.""Enabled"" = true
-                      AND hv.""DayOfWeek"" = {dayOfWeek}
+                      AND hv.""DaysOfWeek"" @> ARRAY[{dayOfWeek}]
                       AND NOT EXISTS (
                           SELECT 1 FROM ""HabitExecutions"" he
                           WHERE he.""HabitVersionId"" = hv.""Id"" AND he.""Date"" = {date}

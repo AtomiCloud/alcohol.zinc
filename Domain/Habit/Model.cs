@@ -29,7 +29,7 @@ namespace Domain.Habit
     {
         public required Guid CharityId { get; init; }
         public required string Task { get; init; }
-        public required string DayOfWeek { get; init; }
+        public required string[] DaysOfWeek { get; init; }
         public required TimeOnly NotificationTime { get; init; }
         public required Money Stake { get; init; }
         public required decimal Ratio { get; init; }

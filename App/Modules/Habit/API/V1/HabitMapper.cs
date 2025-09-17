@@ -21,7 +21,7 @@ public static class HabitMapper
             hv.HabitId,
             hv.Record.Version,
             hv.Record.Task,
-            hv.Record.DayOfWeek,
+            hv.Record.DaysOfWeek,
             hv.Record.NotificationTime.ToStandardTimeFormat(),
             hv.Record.Stake.Amount.ToString("F2", CultureInfo.InvariantCulture),
             (hv.Record.Ratio * 100m).ToString("F1", CultureInfo.InvariantCulture),
@@ -33,7 +33,7 @@ public static class HabitMapper
         {
             CharityId = req.CharityId,
             Task = req.Task,
-            DayOfWeek = req.DayOfWeek,
+            DaysOfWeek = req.DaysOfWeek,
             NotificationTime = req.NotificationTime.ToTime(),
             Stake = new Money(decimal.Parse(req.Stake, CultureInfo.InvariantCulture), Currency.FromCode("USD")),
             Ratio = 1.0m,  // Fixed at 100% - all stake goes to charity
@@ -45,7 +45,7 @@ public static class HabitMapper
         {
             CharityId = req.CharityId,
             Task = req.Task,
-            DayOfWeek = req.DayOfWeek,
+            DaysOfWeek = req.DaysOfWeek,
             NotificationTime = req.NotificationTime.ToTime(),
             Stake = new Money(decimal.Parse(req.Stake, CultureInfo.InvariantCulture), Currency.FromCode("USD")),
             Ratio = 1.0m,  // Fixed at 100% - all stake goes to charity

@@ -15,7 +15,7 @@ namespace App.Modules.HabitVersion.Data
         
         // Habit blueprint data
         public required string Task { get; set; }
-        public required string DayOfWeek { get; set; }
+        public required string[] DaysOfWeek { get; set; }
         public TimeOnly NotificationTime { get; set; }
         public int StakeCents { get; set; }              // Stake stored as cents
         public string StakeCurrency { get; set; } = "SGD";

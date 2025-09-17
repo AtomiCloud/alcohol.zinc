@@ -15,7 +15,7 @@ namespace App.Modules.HabitVersion.Data
                 {
                     CharityId = data.CharityId,
                     Task = data.Task,
-                    DayOfWeek = data.DayOfWeek,
+                    DaysOfWeek = data.DaysOfWeek,
                     NotificationTime = data.NotificationTime,
                     Stake = new Money(data.StakeCents / 100m, Currency.FromCode(data.StakeCurrency)),
                     Ratio = data.RatioBasisPoints / 10000m,  // Basis points to decimal
@@ -33,7 +33,7 @@ namespace App.Modules.HabitVersion.Data
                 CharityId = principal.Record.CharityId,
                 Version = principal.Record.Version,
                 Task = principal.Record.Task,
-                DayOfWeek = principal.Record.DayOfWeek,
+                DaysOfWeek = principal.Record.DaysOfWeek,
                 NotificationTime = principal.Record.NotificationTime,
                 StakeCents = (int)(principal.Record.Stake.Amount * 100),  // Convert to cents
                 StakeCurrency = principal.Record.Stake.Currency.Code,
@@ -50,7 +50,7 @@ namespace App.Modules.HabitVersion.Data
                 CharityId = record.CharityId,
                 Version = version,
                 Task = record.Task,
-                DayOfWeek = record.DayOfWeek,
+                DaysOfWeek = record.DaysOfWeek,
                 NotificationTime = record.NotificationTime,
                 StakeCents = (int)(record.Stake.Amount * 100),  // Convert to cents
                 StakeCurrency = record.Stake.Currency.Code,
