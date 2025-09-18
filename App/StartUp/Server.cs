@@ -145,6 +145,9 @@ public class Server(
       services.AddScoped<ITokenDataExtractor, TokenDataExtractor>();
     }
 
+    // CRM Service Configuration
+    services.AddCrmService();
+
 
     services.AddDomainServices();
     /*----------------------------------------*/

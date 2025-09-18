@@ -169,6 +169,15 @@ HttpClient:
     BaseAddress: http://alcohol-analytics:9050
     Timeout: 30
     BearerAuth: supersecret
+  HubSpot:
+    BaseAddress: https://api.hubapi.com
+    Timeout: 60
+    BearerAuth: YOUR_HUBSPOT_TOKEN
+
+HubSpot:
+  SubscriptionTypeId: 42
+  LegalBasis: CONSENT_WITH_NOTICE
+  LegalBasisExplanation: User opted in at signup
 
 Auth:
   Enabled: true

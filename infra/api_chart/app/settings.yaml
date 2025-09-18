@@ -171,6 +171,12 @@ HttpClient:
   Logto:
     BaseAddress: https://xzc47u.logto.app
     Timeout: 60
+  HubSpot:
+    BaseAddress: https://api.hubapi.com
+    Timeout: 60
+    # Supply your HubSpot Private App Access Token (no 'Bearer ' prefix needed)
+    # e.g. 'pat-na1-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+    BearerAuth: ''
 Auth:
   Enabled: true
   Management:
@@ -200,3 +206,9 @@ Auth:
       ClockSkew: 0
       ValidateLifetime: true
       ValidateIssuerSigningKey: true
+HubSpot:
+  # Required: the specific subscription type to manage (Marketing, etc.)
+  SubscriptionTypeId: 0
+  # Optional: GDPR legal basis information; include when your HubSpot has GDPR enabled
+  LegalBasis: ''
+  LegalBasisExplanation: ''

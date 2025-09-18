@@ -3,6 +3,6 @@ namespace App.StartUp.Registry;
 public static class HttpClients
 {
   public const string Main = "Main";
-  
   public const string Logto = "Logto";
+  public const string HubSpot = "HubSpot";
 }

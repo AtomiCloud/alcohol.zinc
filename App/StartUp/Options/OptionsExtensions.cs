@@ -130,6 +130,9 @@ public static class OptionsExtensions
         "Smtp.Key (Config File) must be in SmtpProviders (Class)"
       );
     
+    // Register HubSpot Options (for CRM implementation)
+    services.RegisterOption<HubSpotOption>(HubSpotOption.Key);
+    
     return services;
   }
 }

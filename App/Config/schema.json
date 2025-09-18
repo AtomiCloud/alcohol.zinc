@@ -42,6 +42,9 @@
     },
     "Smtp": {
       "$ref": "#/definitions/Smtp"
+    },
+    "HubSpot": {
+      "$ref": "#/definitions/HubSpot"
     }
   },
   "definitions": {
@@ -1137,6 +1140,23 @@
               "format": "int32"
             }
           }
+        }
+      }
+    },
+    "HubSpot": {
+      "title": "HubSpotOption",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "SubscriptionTypeId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "LegalBasis": {
+          "type": ["null", "string"]
+        },
+        "LegalBasisExplanation": {
+          "type": ["null", "string"]
         }
       }
     }
