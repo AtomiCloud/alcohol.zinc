@@ -18,6 +18,7 @@ with packages;
     bun
     dotnet
     infisical
+    k6
   ];
 
   lint = [
