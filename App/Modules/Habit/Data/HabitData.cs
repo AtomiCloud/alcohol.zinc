@@ -7,6 +7,7 @@ namespace App.Modules.Habit.Data
     {
         [Key]
         public Guid Id { get; set; }
+        [MaxLength(128)]
         public required string UserId { get; set; }
         public required ushort Version { get; set; }     // Current version pointer
         public required bool Enabled { get; set; } = true;  // User can enable/disable habit

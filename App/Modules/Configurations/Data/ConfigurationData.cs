@@ -9,7 +9,7 @@ namespace App.Modules.Configurations.Data
         [Key]
         public Guid Id { get; init; }
         
-        [MaxLength(256)]
+        [MaxLength(128)]
         public required string UserId { get; set; }
         
         [MaxLength(64)]
