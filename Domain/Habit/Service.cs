@@ -14,10 +14,8 @@ public class HabitService(IHabitRepository repo) : IHabitService
         return repo.GetAllUserHabits(userId);
     }
 
-    public async Task<Result<HabitVersionPrincipal?>> GetCurrentHabitVersion(string userId, Guid habitId)
-    {
-        return await repo.GetCurrentVersion(userId, habitId);
-    }
+    public Task<Result<HabitVersionPrincipal?>> GetCurrentHabitVersion(string userId, Guid habitId)
+      => repo.GetCurrentVersion(userId, habitId);
 
     public Task<Result<HabitVersionPrincipal>> Create(string userId, HabitVersionRecord versionRecord)
     {
@@ -35,7 +33,7 @@ public class HabitService(IHabitRepository repo) : IHabitService
             return (HabitVersionPrincipal?)null;
         }
 
-        return await repo.Update(habitId, versionRecord, enabled);
+        return await repo.Update(habitId, userId, versionRecord, enabled);
     }
 
     public Task<Result<Unit?>> Delete(Guid habitId, string userId)
@@ -53,11 +51,11 @@ public class HabitService(IHabitRepository repo) : IHabitService
         return repo.GetUserCurrentDate(userId);
     }
 
-    public async Task<Result<HabitExecutionPrincipal>> CompleteHabit(string userId, Guid habitId, string? notes)
+    public Task<Result<HabitExecutionPrincipal>> CompleteHabit(string userId, Guid habitId, string? notes)
     {
-        // Get user's timezone from configuration to determine today's date
-        var currentDate = await repo.GetUserCurrentDate(userId);
-        return await repo.CompleteHabit(userId, habitId, currentDate, notes);
+        return repo
+          .GetUserCurrentDate(userId)
+          .ThenAwait(date => repo.CompleteHabit(userId, habitId, date, notes));
     }
 
     public Task<Result<List<HabitExecutionPrincipal>>> GetDailyExecutions(string userId, DateOnly date)

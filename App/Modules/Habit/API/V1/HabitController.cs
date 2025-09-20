@@ -20,7 +20,8 @@ public class HabitController(
     IHabitService service,
     IAuthHelper authHelper,
     CreateHabitReqValidator createHabitReqValidator,
-    UpdateHabitReqValidator updateHabitReqValidator
+    UpdateHabitReqValidator updateHabitReqValidator,
+    MarkDailyFailuresReqValidator markDailyFailuresReqValidator
 ) : AtomiControllerBase(authHelper)
 {
     [Authorize, HttpGet("")]
@@ -124,15 +125,9 @@ public class HabitController(
     public async Task<ActionResult<int>> MarkDailyFailures([FromBody] MarkDailyFailuresReq req)
     {
       //todo change input from userid to list of habit id
-        try
-        {
-            var targetDate = req.Date.ToDate();
-            var result = await service.MarkDailyFailures(req.UserIds, targetDate);
-            return this.ReturnResult(result);
-        }
-        catch (FormatException)
-        {
-            return BadRequest($"Invalid date format: {req.Date}. Expected format: DD-MM-YYYY");
-        }
+        var result = await markDailyFailuresReqValidator
+            .ValidateAsyncResult(req, "Invalid MarkDailyFailuresReq")
+            .ThenAwait(x => service.MarkDailyFailures(x.UserIds, x.Date.ToDate()));
+        return this.ReturnResult(result);
     }
 }

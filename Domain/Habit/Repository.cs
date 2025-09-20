@@ -9,8 +9,10 @@ namespace Domain.Habit
         Task<Result<List<HabitVersionPrincipal>>> GetAllUserHabits(string userId);
         Task<Result<HabitPrincipal?>> GetHabit(Guid habitId);
         Task<Result<HabitVersionPrincipal?>> GetCurrentVersion(string userId, Guid habitId);
-        Task<Result<HabitVersionPrincipal>> Create(string userId, HabitVersionRecord versionRecord);  // Creates habit + first version
-        Task<Result<HabitVersionPrincipal?>> Update(Guid habitId, HabitVersionRecord versionRecord, bool enabled);  // Creates new version + updates enabled status
+        // Creates habit + first version
+        Task<Result<HabitVersionPrincipal>> Create(string userId, HabitVersionRecord versionRecord);
+        // Creates new version + updates enabled status
+        Task<Result<HabitVersionPrincipal?>> Update(Guid habitId, string userId, HabitVersionRecord versionRecord, bool enabled);
         Task<Result<Unit?>> Delete(Guid habitId, string userId);                              // Soft delete habit
         Task<Result<int>> CreateFailedExecutions(List<string> userIds, DateOnly date);        // Batch create failed executions
 

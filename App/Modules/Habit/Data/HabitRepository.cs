@@ -133,7 +133,7 @@ namespace App.Modules.Habit.Data
                     Version = 1,
                     Enabled = true  // New habits are enabled by default
                 };
-                var habitResult = db.Habits.Add(habitData);
+                db.Habits.Add(habitData);
                 
                 // Create first version record using mapper
                 var versionData = versionRecord.ToData(habitData.Id, 1);
@@ -154,16 +154,19 @@ namespace App.Modules.Habit.Data
             }
         }
 
-        public async Task<Result<HabitVersionPrincipal?>> Update(Guid habitId, HabitVersionRecord versionRecord, bool enabled)
+        public async Task<Result<HabitVersionPrincipal?>> Update(Guid habitId, string userId, HabitVersionRecord versionRecord, bool enabled)
         {
             await using var transaction = await db.Database.BeginTransactionAsync();
             try
             {
                 logger.LogInformation("Updating habit version and enabled status for HabitId: {HabitId}, Enabled: {Enabled}", habitId, enabled);
 
-                // Lock the habit row and atomically increment version + update enabled status
-                var affectedRows = await db.Database.ExecuteSqlAsync(
-                    $"UPDATE \"Habits\" SET \"Version\" = \"Version\" + 1, \"Enabled\" = {enabled} WHERE \"Id\" = {habitId} AND \"DeletedAt\" IS NULL");
+                // Atomically increment version and update enabled status using EF Core bulk update
+                var affectedRows = await db.Habits
+                    .Where(h => h.Id == habitId && h.UserId == userId && h.DeletedAt == null)
+                    .ExecuteUpdateAsync(h => h
+                        .SetProperty(x => x.Version, x => x.Version + 1)
+                        .SetProperty(x => x.Enabled, enabled));
                 
                 if (affectedRows == 0)
                 {
@@ -172,26 +175,22 @@ namespace App.Modules.Habit.Data
                     return (HabitVersionPrincipal?)null;
                 }
 
-                // Get the updated version number
-                var updatedHabit = await db.Habits
+                // Get the current version to calculate the new version number
+                var currentVersion = await db.Habits
                     .AsNoTracking()
-                    .FirstOrDefaultAsync(x => x.Id == habitId);
-                
-                if (updatedHabit == null)
-                {
-                    await transaction.RollbackAsync();
-                    return (HabitVersionPrincipal?)null;
-                }
+                    .Where(x => x.Id == habitId)
+                    .Select(x => x.Version)
+                    .FirstAsync();
 
                 // Create new version record using mapper
-                var versionData = versionRecord.ToData(habitId, updatedHabit.Version);
+                var versionData = versionRecord.ToData(habitId, currentVersion);
                 db.HabitVersions.Add(versionData);
                 
                 await db.SaveChangesAsync();
                 await transaction.CommitAsync();
                 
-                logger.LogInformation("Habit version updated to {Version} for HabitId: {HabitId}", 
-                    updatedHabit.Version, habitId);
+                logger.LogInformation("Habit version updated to {Version} for HabitId: {HabitId}",
+                    currentVersion, habitId);
                 return versionData.ToPrincipal();
             }
             catch (Exception e)

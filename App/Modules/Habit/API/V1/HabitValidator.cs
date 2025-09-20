@@ -51,6 +51,24 @@ public class CreateHabitReqValidator : AbstractValidator<CreateHabitReq>
 
 }
 
+public class MarkDailyFailuresReqValidator : AbstractValidator<MarkDailyFailuresReq>
+{
+    public MarkDailyFailuresReqValidator()
+    {
+        RuleFor(x => x.Date)
+            .NotEmpty()
+            .DateValid();
+
+        RuleFor(x => x.UserIds)
+            .NotEmpty()
+            .WithMessage("UserIds list cannot be empty.");
+
+        RuleForEach(x => x.UserIds)
+            .NotEmpty()
+            .WithMessage("UserIds cannot contain empty values.");
+    }
+}
+
 public class UpdateHabitReqValidator : AbstractValidator<UpdateHabitReq>
 {
     public UpdateHabitReqValidator()
