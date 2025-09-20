@@ -189,6 +189,21 @@ namespace App.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
+                    b.Property<bool>("Active")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<bool>("EmailVerified")
+                        .HasColumnType("boolean");
+
+                    b.Property<string[]>("Scopes")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
                     b.Property<string>("Username")
                         .IsRequired()
                         .HasMaxLength(256)

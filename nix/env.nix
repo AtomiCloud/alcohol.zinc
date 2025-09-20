@@ -15,6 +15,7 @@ with packages;
   ];
 
   main = [
+    bun
     dotnet
     infisical
     k6

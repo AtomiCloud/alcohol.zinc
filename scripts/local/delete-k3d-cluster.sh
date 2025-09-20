@@ -31,4 +31,4 @@ mkdir -p "$HOME/.kube/k3dconfigs"
 rm "$HOME/.kube/k3dconfigs/k3d-$input" || true
 KUBECONFIG=$(cd ~/.kube/configs && find "$(pwd)"/* | awk 'ORS=":"')$(cd ~/.kube/k3dconfigs && find "$(pwd)"/* | awk 'ORS=":"')$(cd ~/.kube/atomiconfigs && find "$(pwd)"/* | awk 'ORS=":"') kubectl config view --flatten >~/.kube/config
 chmod 600 ~/.kube/config
-echo "✅ Config is cleared!"
+echo "✅ Generated kube config file"

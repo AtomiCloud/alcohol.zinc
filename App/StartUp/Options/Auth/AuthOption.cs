@@ -9,4 +9,6 @@ public class AuthOption
   [Required] public bool Enabled { get; set; } = false;
 
   public AuthSettingsOption? Settings { get; set; } = null;
+
+  public AuthManagementOption? Management { get; set; } = null;
 }

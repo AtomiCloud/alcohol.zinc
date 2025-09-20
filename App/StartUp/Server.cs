@@ -3,6 +3,7 @@ using App.Modules;
 using App.Modules.Common;
 using App.StartUp.BlockStorage;
 using App.StartUp.Database;
+using App.StartUp.Email;
 using App.StartUp.Migrator;
 using App.StartUp.Options;
 using App.StartUp.Options.Auth;
@@ -20,14 +21,19 @@ using Utils = App.Utility.Utils;
 
 namespace App.StartUp;
 
-public class Server(IOptionsMonitor<List<CorsOption>> cors,
+public class Server(
+  IOptionsMonitor<List<CorsOption>> cors,
   IOptionsMonitor<AppOption> app,
   IOptionsMonitor<MetricOption> metrics,
   IOptionsMonitor<LogsOption> logs,
-  IOptionsMonitor<TraceOption> trace, IOptionsMonitor<ErrorPortalOption> errorPortal,
+  IOptionsMonitor<TraceOption> trace,
+  IOptionsMonitor<ErrorPortalOption> errorPortal,
   IOptionsMonitor<Dictionary<string, BlockStorageOption>> store,
-  IOptionsMonitor<Dictionary<string, HttpClientOption>> http, IOptionsMonitor<AuthOption> auth,
-  IOptionsMonitor<Dictionary<string, CacheOption>> cache)
+  IOptionsMonitor<Dictionary<string, HttpClientOption>> http,
+  IOptionsMonitor<AuthOption> auth,
+  IOptionsMonitor<Dictionary<string, CacheOption>> cache,
+  IOptionsMonitor<Dictionary<string, SmtpOption>> smtp
+)
 {
   private void ConfigureResourceBuilder(ResourceBuilder r)
   {
@@ -59,14 +65,13 @@ public class Server(IOptionsMonitor<List<CorsOption>> cors,
       .AddEnvironmentVariables(prefix: "Atomi_");
 
     // builder.Logging.ClearProviders();
-    builder.Logging.AddOpenTelemetry(
-      o =>
-      {
-        var b = ResourceBuilder.CreateDefault();
-        this.ConfigureResourceBuilder(b);
-        o.SetResourceBuilder(b);
-        o.AddLogsService(logs);
-      });
+    builder.Logging.AddOpenTelemetry(o =>
+    {
+      var b = ResourceBuilder.CreateDefault();
+      this.ConfigureResourceBuilder(b);
+      o.SetResourceBuilder(b);
+      o.AddLogsService(logs);
+    });
 
     var services = builder.Services;
 
@@ -128,9 +133,18 @@ public class Server(IOptionsMonitor<List<CorsOption>> cors,
       .AddTransient<IFileRepository, FileRepository>()
       .AutoTrace<IFileRepository>();
 
+    // SMTP Configuration
+    services.AddSmtp(smtp.CurrentValue);
+    services.AddSingleton<IEmailRenderer, EmailRenderer>()
+      .AutoTrace<IEmailRenderer>();
+
     // Auth Service Configuration
     if (auth.CurrentValue.Enabled)
+    {
       services.AddAuthService(auth.CurrentValue);
+      services.AddScoped<ITokenDataExtractor, TokenDataExtractor>();
+    }
+
 
     services.AddDomainServices();
     /*----------------------------------------*/

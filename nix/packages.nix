@@ -21,6 +21,8 @@ let
       {
         dotnet = dotnet-sdk;
         inherit
+          bun
+
           infisical
           git
           k6

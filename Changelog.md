@@ -1,3 +1,57 @@
+## [1.4.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.3.0...v1.4.0) (2025-09-20)
+
+
+### ✨ Features ✨
+
+* enable optionally instally secrets ([3b40c12](https://github.com/AtomiCloud/alcohol.zinc/commit/3b40c1289e0c752d0f7e0518fcfb0ce284b903a7))
+
+
+### 🐛 Bug Fixes 🐛
+
+* allow installation of CRD ([6ca5f05](https://github.com/AtomiCloud/alcohol.zinc/commit/6ca5f05bc309ee9a0d9a7956344326d9e7bb9006))
+
+## [1.3.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.2.0...v1.3.0) (2025-09-16)
+
+
+### ✨ Features ✨
+
+* allow claims to be updated when user is created ([4493fae](https://github.com/AtomiCloud/alcohol.zinc/commit/4493fae1ae18854ac3188b6c92e7289e809f0cb8))
+
+
+### 🐛 Bug Fixes 🐛
+
+* allow some skew ([bf2594b](https://github.com/AtomiCloud/alcohol.zinc/commit/bf2594b07811fa603375686e383b4ee0d4a7a666))
+* PR comments ([e28e641](https://github.com/AtomiCloud/alcohol.zinc/commit/e28e641dad9b3ea14baf5ac3b792fce3198309c3))
+
+## [1.2.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.1.0...v1.2.0) (2025-08-30)
+
+
+### ✨ Features ✨
+
+* remove cache shells ([be0e2ad](https://github.com/AtomiCloud/alcohol.zinc/commit/be0e2ad3d74a81e92900868ae5624f4c52763307))
+
+## [1.1.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.0.5...v1.1.0) (2025-08-30)
+
+
+### ✨ Features ✨
+
+* initial email engine ([bcc7e1b](https://github.com/AtomiCloud/alcohol.zinc/commit/bcc7e1bbbfbcc9520e9b29c8ec2a344343ce5cca))
+
+
+### 🐛 Bug Fixes 🐛
+
+* embed incorrect folder ([662b323](https://github.com/AtomiCloud/alcohol.zinc/commit/662b3239f8ef23aaa90c24c51aed3644960c861f))
+* review comments ([f69b0d4](https://github.com/AtomiCloud/alcohol.zinc/commit/f69b0d411c7d6aab66adb2d4f4be5aae6f952ece))
+* review comments ([cacebfc](https://github.com/AtomiCloud/alcohol.zinc/commit/cacebfce10bd7a7cd49649659d6d8cbe08be6bcd))
+
+## [1.0.5](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.0.4...v1.0.5) (2025-08-03)
+
+
+### 🐛 Bug Fixes 🐛
+
+* upgrade ESO to v1 ([d00ccfd](https://github.com/AtomiCloud/alcohol.zinc/commit/d00ccfd748eb7d664bb977c539b29338c76fe23e))
+* upgrade ESO to v1 ([c0a2dc8](https://github.com/AtomiCloud/alcohol.zinc/commit/c0a2dc8ba824184b20019d10b600216181374969))
+
 ## [1.0.4](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.0.3...v1.0.4) (2025-06-25)
 
 

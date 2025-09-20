@@ -12,7 +12,19 @@ includes:
 
 env:
   DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: '0'
+  SOS_PROJECT_ID: '1cffa31e-7653-4c0d-9a18-9914a2dbc30b'
+
 tasks:
+  email:dev:
+    desc: Preview Emails
+    dir: App/Templates/Email
+    cmds:
+      - bun run dev
+  email:build:
+    desc: Build Emails
+    dir: App/Templates/Email
+    cmds:
+      - bun run email export -p --outDir templates
   migration:create:
     desc: Creates a migration
     env:
@@ -31,6 +43,7 @@ tasks:
       - dotnet restore --use-lock-file
       - dotnet tool restore
       - ./scripts/local/secrets.sh
+      - bun install --cwd=./App/Templates/Email
   build:
     desc: Builds application
     cmds:

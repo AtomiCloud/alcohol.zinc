@@ -39,6 +39,9 @@
     },
     "Encryption": {
       "$ref": "#/definitions/Encryption"
+    },
+    "Smtp": {
+      "$ref": "#/definitions/Smtp"
     }
   },
   "definitions": {
@@ -953,6 +956,16 @@
               "$ref": "#/definitions/Auth/definitions/AuthSettingsOption"
             }
           ]
+        },
+        "Management": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/definitions/Auth/definitions/AuthManagementOption"
+            }
+          ]
         }
       },
       "definitions": {
@@ -1032,6 +1045,33 @@
               }
             }
           }
+        },
+        "AuthManagementOption": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "Endpoint": {
+              "type": "string",
+              "format": "uri",
+              "minLength": 1
+            },
+            "Id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "Secret": {
+              "type": "string",
+              "minLength": 1
+            },
+            "Resource": {
+              "type": "string",
+              "format": "uri",
+              "minLength": 1
+            },
+            "Scope": {
+              "type": "string"
+            }
+          }
         }
       }
     },
@@ -1044,6 +1084,59 @@
         "Secret": {
           "type": "string",
           "minLength": 1
+        }
+      }
+    },
+    "Smtp": {
+      "title": "DictionaryOfStringAndSmtpOption",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/Smtp/definitions/SmtpOption"
+      },
+      "definitions": {
+        "SmtpOption": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["Host", "Port", "Username", "Password", "FromEmail", "FromName"],
+          "properties": {
+            "Host": {
+              "type": "string",
+              "minLength": 1
+            },
+            "Port": {
+              "type": "integer",
+              "format": "int32",
+              "maximum": 65535.0,
+              "minimum": 1.0
+            },
+            "Username": {
+              "type": "string",
+              "minLength": 1
+            },
+            "Password": {
+              "type": "string",
+              "minLength": 1
+            },
+            "FromEmail": {
+              "type": "string",
+              "format": "email",
+              "minLength": 1
+            },
+            "FromName": {
+              "type": "string",
+              "minLength": 1
+            },
+            "EnableSsl": {
+              "type": "boolean"
+            },
+            "UseDefaultCredentials": {
+              "type": "boolean"
+            },
+            "Timeout": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
         }
       }
     }

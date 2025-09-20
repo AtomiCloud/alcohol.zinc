@@ -1,8 +1,10 @@
+using System.Text;
 using System.Text.Json;
 using App.Error;
 using CSharp_Result;
 using Microsoft.Extensions.Options;
 using NJsonSchema;
+using static System.Text.ASCIIEncoding;
 
 namespace App.Utility;
 
@@ -12,7 +14,6 @@ public static class Utils
   public const string StandardTimeFormat = "HH:mm:ss";
 
   public static JsonSchema OptionSchema = JsonSchema.CreateAnySchema();
-
 
 
   public static Result<T?> ToNullableResultOr<T>(T? obj, Func<T, Result<T>> act)
@@ -96,5 +97,10 @@ public static class Utils
       .BindConfiguration(key)
       .ValidateDataAnnotations()
       .ValidateOnStart();
+  }
+
+  public static string ToBase64(this string code)
+  {
+    return Convert.ToBase64String(Encoding.UTF8.GetBytes(code));
   }
 }

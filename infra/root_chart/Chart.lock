@@ -18,4 +18,4 @@ dependencies:
   repository: oci://ghcr.io/dragonflydb/dragonfly/helm
   version: v1.20.1
 digest: sha256:70d2eb9f3f6036823fc8a83bb5581e3d9342d24a2a5d146b4fa9306d6e72b84b
-generated: "2025-08-03T15:08:39.255456+08:00"
+generated: "2025-08-04T01:14:38.207594+08:00"

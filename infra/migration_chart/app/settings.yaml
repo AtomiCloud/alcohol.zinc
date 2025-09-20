@@ -6,8 +6,6 @@ Kestrel:
   Endpoints:
     Http:
       Url: http://+:9003
-Domain:
-  RefundPercentage: 50
 Logging:
   LogLevel:
     Default: Information
@@ -15,13 +13,9 @@ Logging:
   #    LogLevel:
   #      Default: Debug
   OpenTelemetry:
-    IncludeFormattedMessage: false
-    IncludeScopes: false
+    IncludeFormattedMessage: true
+    IncludeScopes: true
     ParseStateValues: false
-CountSyncer:
-  StreamName: cdc
-  StreamLength: 50
-
 # Domain
 App:
   Landscape: lapras
@@ -161,18 +155,42 @@ BlockStorage:
     Policy: Private
     UseSSL: true
     EnsureBucketCreation: false
-
+Smtp:
+  TRANSACTIONAL:
+    Host: email-smtp.ap-southeast-1.amazonaws.com
+    Port: 2587
+    Username: transactional-user
+    Password: transactional-secret
+    FromEmail: noreply@notifications.lazytax.club
+    FromName: LazyTax Notifications
+    EnableSsl: true
+    UseDefaultCredentials: false
+    Timeout: 5000
 # external
-HttpClient: {}
+HttpClient:
+  Logto:
+    BaseAddress: https://xzc47u.logto.app
+    Timeout: 60
 Auth:
   Enabled: true
+  Management:
+    Endpoint: https://xzc47u.logto.app
+    Id: r0lqrwbrp3ao2d5wb8pv9
+    Secret: supersecret
+    Resource: https://xzc47u.logto.app/api
+    Scope: all
   Settings:
     Policies:
       OnlyAdmin:
         Target:
           - admin
         Type: 'All'
-        Field: 'scope'
+        Field: 'scopes'
+      Registered:
+        Target:
+          - 'true'
+        Type: 'All'
+        Field: 'alcohol_zinc'
     Issuer: https://xzc47u.logto.app/oidc
     Audience: https://api.zinc.alcohol.lapras
     Domain: xzc47u.logto.app/oidc

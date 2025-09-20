@@ -4,9 +4,18 @@ using App.StartUp.Services.Auth;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
-using StackExchange.Redis.Extensions.Core.Abstractions;
 
 namespace App.Modules.System;
+
+public record Info(
+  string Landscape,
+  string Platform,
+  string Service,
+  string Module,
+  string Version,
+  string Status,
+  DateTime TimeStamp
+);
 
 [ApiVersionNeutral]
 [ApiController]
@@ -15,18 +24,18 @@ public class SystemController(IOptionsSnapshot<AppOption> app, IAuthHelper h)
   : AtomiControllerBase(h)
 {
   [HttpGet]
-  public ActionResult<object> SystemInfo()
+  public ActionResult<Info> SystemInfo()
   {
     var v = app.Value;
-    return this.Ok(new
-    {
-      v.Landscape,
-      v.Platform,
-      v.Service,
-      v.Module,
-      v.Version,
-      Status = "OK",
-      TimeStamp = DateTime.UtcNow,
-    });
+    var info = new
+      Info(
+        v.Landscape,
+        v.Platform,
+        v.Service,
+        v.Module,
+        v.Version,
+        "OK",
+        DateTime.UtcNow);
+    return this.Ok(info);
   }
 }
