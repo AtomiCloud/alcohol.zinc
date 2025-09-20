@@ -1,3 +1,15 @@
+## [1.4.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.3.0...v1.4.0) (2025-09-20)
+
+
+### ✨ Features ✨
+
+* enable optionally instally secrets ([3b40c12](https://github.com/AtomiCloud/alcohol.zinc/commit/3b40c1289e0c752d0f7e0518fcfb0ce284b903a7))
+
+
+### 🐛 Bug Fixes 🐛
+
+* allow installation of CRD ([6ca5f05](https://github.com/AtomiCloud/alcohol.zinc/commit/6ca5f05bc309ee9a0d9a7956344326d9e7bb9006))
+
 ## [1.3.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.2.0...v1.3.0) (2025-09-16)
 
 
