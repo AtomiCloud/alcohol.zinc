@@ -4,15 +4,6 @@ landscape="$1"
 
 set -euo pipefail
 
-# install external-secrets operator
-echo "🛠 Installing external-secrets operator..."
-helm repo add external-secrets https://charts.external-secrets.io
-helm upgrade --install --kube-context "k3d-$landscape" external-secrets external-secrets/external-secrets -n external-secrets --create-namespace
-kubectl --context "k3d-$landscape" -n external-secrets wait --for=jsonpath=.status.readyReplicas=1 --timeout=300s deployment external-secrets-webhook
-kubectl --context "k3d-$landscape" -n external-secrets wait --for=jsonpath=.status.readyReplicas=1 --timeout=300s deployment external-secrets-cert-controller
-kubectl --context "k3d-$landscape" -n external-secrets wait --for=jsonpath=.status.readyReplicas=1 --timeout=300s deployment external-secrets
-echo "✅ Installed external-secrets operator!"
-
 # create infisical secret
 echo "🛠 Creating infisical secret..."
 root_client_id="$(infisical secrets get "--projectId=$SOS_PROJECT_ID" "--env=$landscape" SULFOXIDE_SOS_CLIENT_ID --plain | base64 -w 0)"
