@@ -5,6 +5,7 @@ namespace Domain.Habit;
 public interface IHabitService
 {
   Task<Result<List<HabitVersionPrincipal>>> ListActiveHabits(string userId, DateOnly date);
+  Task<Result<List<HabitVersionPrincipal>>> ListAllUserHabits(string userId);
   Task<Result<HabitVersionPrincipal?>> GetCurrentHabitVersion(string userId, Guid habitId);
   Task<Result<HabitVersionPrincipal>> Create(string userId, HabitVersionRecord versionRecord);
   Task<Result<HabitVersionPrincipal?>> Update(string userId, Guid habitId, HabitVersionRecord versionRecord, bool enabled);

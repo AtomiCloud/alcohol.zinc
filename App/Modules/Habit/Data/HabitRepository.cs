@@ -43,6 +43,28 @@ namespace App.Modules.Habit.Data
             }
         }
 
+        public async Task<Result<List<HabitVersionPrincipal>>> GetAllUserHabits(string userId)
+        {
+            try
+            {
+                logger.LogInformation("Retrieving all habits for UserId: {UserId}", userId);
+
+                // Join habit with current version to get all habits for the user (enabled and disabled)
+                var data = await (from h in db.Habits
+                                 join hv in db.HabitVersions on new { h.Id, h.Version } equals new { Id = hv.HabitId, hv.Version }
+                                 where h.UserId == userId && h.DeletedAt == null
+                                 select hv).AsNoTracking().ToListAsync();
+
+                logger.LogInformation("Retrieved {Count} total habits for UserId: {UserId}", data.Count, userId);
+                return data.Select(x => x.ToPrincipal()).ToList();
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Failed retrieving all habits for UserId: {UserId}", userId);
+                return e;
+            }
+        }
+
         public async Task<Result<HabitPrincipal?>> GetHabit(Guid habitId)
         {
             try

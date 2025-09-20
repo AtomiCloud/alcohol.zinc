@@ -9,6 +9,11 @@ public class HabitService(IHabitRepository repo) : IHabitService
         return repo.GetActiveHabitVersions(userId, date);
     }
 
+    public Task<Result<List<HabitVersionPrincipal>>> ListAllUserHabits(string userId)
+    {
+        return repo.GetAllUserHabits(userId);
+    }
+
     public async Task<Result<HabitVersionPrincipal?>> GetCurrentHabitVersion(string userId, Guid habitId)
     {
         return await repo.GetCurrentVersion(userId, habitId);

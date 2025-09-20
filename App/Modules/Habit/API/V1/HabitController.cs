@@ -24,16 +24,12 @@ public class HabitController(
 ) : AtomiControllerBase(authHelper)
 {
     [Authorize, HttpGet("")]
-    public async Task<ActionResult<List<HabitVersionRes>>> ListActiveHabits()
+    public async Task<ActionResult<List<HabitVersionRes>>> ListAllHabits()
     {
         var userId = this.Sub();
         if (userId == null) return Unauthorized();
 
-        // Get user's current date based on their timezone configuration
-        var currentDateResult = await service.GetUserCurrentDate(userId);
-        if (currentDateResult.IsFailure())
-            return this.ReturnResult<List<HabitVersionRes>>(currentDateResult.FailureOrDefault());
-        var result = await service.ListActiveHabits(userId, currentDateResult.SuccessOrDefault())
+        var result = await service.ListAllUserHabits(userId)
             .Then(habits => habits.Select(h => h.ToRes()).ToList().ToResult());
         return this.ReturnResult(result);
     }
