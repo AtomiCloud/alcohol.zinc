@@ -185,7 +185,7 @@ Auth:
         Target:
           - admin
         Type: 'All'
-        Field: 'scopes'
+        Field: 'scope'
       Registered:
         Target:
           - 'true'
