@@ -1,3 +1,10 @@
+## [1.4.1](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.4.0...v1.4.1) (2025-09-20)
+
+
+### 🐛 Bug Fixes 🐛
+
+* incorrect scope ([1f1199a](https://github.com/AtomiCloud/alcohol.zinc/commit/1f1199a9af40575b406558598da5a29bc9dc5a18))
+
 ## [1.4.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.3.0...v1.4.0) (2025-09-20)
 
 
