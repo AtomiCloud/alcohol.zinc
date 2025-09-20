@@ -1,3 +1,10 @@
+## [1.5.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.4.1...v1.5.0) (2025-09-20)
+
+
+### ✨ Features ✨
+
+* implement habit tracking system with domain model ([b167715](https://github.com/AtomiCloud/alcohol.zinc/commit/b16771551fc365b814a86207e4b304168deca1bc))
+
 ## [1.4.1](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.4.0...v1.4.1) (2025-09-20)
 
 
