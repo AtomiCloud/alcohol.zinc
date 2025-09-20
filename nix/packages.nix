@@ -25,6 +25,7 @@ let
 
           infisical
           git
+          k6
 
           # linter
           treefmt

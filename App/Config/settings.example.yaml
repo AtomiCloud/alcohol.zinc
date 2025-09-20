@@ -185,12 +185,12 @@ Auth:
     Policies:
       admin/internal:
         Type: All
-        Field: roles
+        Field: scope
         Target:
           - internal
           - admin
       admin:
         Type: Any
-        Field: roles
+        Field: scope
         Target:
           - admin
