@@ -21,12 +21,6 @@ public class ConfigurationService(IConfigurationRepository repo) : IConfiguratio
 
   public Task<Result<ConfigurationPrincipal?>> Update(Guid id, string userId, ConfigurationRecord record)
   {
-    var principal = new ConfigurationPrincipal
-    {
-      Id = id,
-      UserId = userId,
-      Record = record
-    };
-    return repo.Update(principal);
+    return repo.Update(id, userId, record);
   }
 }

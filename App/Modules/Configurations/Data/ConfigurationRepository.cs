@@ -80,35 +80,35 @@ namespace App.Modules.Configurations.Data
             }
         }
 
-        public async Task<Result<ConfigurationPrincipal?>> Update(ConfigurationPrincipal principal)
+        public async Task<Result<ConfigurationPrincipal?>> Update(Guid id, string userId, ConfigurationRecord record)
         {
             try
             {
-                logger.LogInformation("Updating Configuration Id: {Id}", principal.Id);
+                logger.LogInformation("Updating Configuration Id: {Id}", id);
 
                 var data = await db
                     .Configurations
-                    .Where(x => x.Id == principal.Id)
+                    .Where(x => x.Id == id && x.UserId == userId)
                     .FirstOrDefaultAsync();
                 if (data == null)
                 {
-                    logger.LogWarning("Configuration not found for update, Id: {Id}", principal.Id);
+                    logger.LogWarning("Configuration not found for update, Id: {Id}", id);
                     return (ConfigurationPrincipal?)null;
                 }
 
-                data.Timezone = principal.Record.Timezone;
+                data.Timezone = record.Timezone;
                 data.EndOfDay = new TimeOnly(23, 59);
-                data.DefaultCharityId = principal.Record.DefaultCharityId;
+                data.DefaultCharityId = record.DefaultCharityId;
                 var updated = db.Configurations.Update(data);
                 await db.SaveChangesAsync();
 
-                logger.LogInformation("Configuration updated for Id: {Id}", principal.Id);
+                logger.LogInformation("Configuration updated for Id: {Id}", id);
 
                 return updated.Entity.ToPrincipal();
             }
             catch (Exception e)
             {
-                logger.LogError(e, "Failed to update Configuration Id: {Id}", principal.Id);
+                logger.LogError(e, "Failed to update Configuration Id: {Id}", id);
                 return e;
             }
         }

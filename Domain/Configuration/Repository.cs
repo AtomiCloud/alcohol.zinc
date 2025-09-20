@@ -7,6 +7,6 @@ namespace Domain.Configuration
     Task<Result<Configuration?>> Get(Guid id);
     Task<Result<Configuration?>> Get(Guid id, string userId);
     Task<Result<ConfigurationPrincipal>> Create(string userId, ConfigurationRecord record);
-    Task<Result<ConfigurationPrincipal?>> Update(ConfigurationPrincipal principal);
+    Task<Result<ConfigurationPrincipal?>> Update(Guid id, string userId, ConfigurationRecord record);
   }
 }
