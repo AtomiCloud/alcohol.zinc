@@ -19,7 +19,8 @@ namespace App.Modules.HabitVersion.Data
                     NotificationTime = data.NotificationTime,
                     Stake = new Money(data.StakeCents / 100m, Currency.FromCode(data.StakeCurrency)),
                     Ratio = data.RatioBasisPoints / 10000m,  // Basis points to decimal
-                    Version = data.Version
+                    Version = data.Version,
+                    Timezone = data.Timezone
                 }
             };
         }
@@ -37,7 +38,8 @@ namespace App.Modules.HabitVersion.Data
                 NotificationTime = principal.Record.NotificationTime,
                 StakeCents = (int)(principal.Record.Stake.Amount * 100),  // Convert to cents
                 StakeCurrency = principal.Record.Stake.Currency.Code,
-                RatioBasisPoints = (int)(principal.Record.Ratio * 10000)  // Convert to basis points
+                RatioBasisPoints = (int)(principal.Record.Ratio * 10000),  // Convert to basis points
+                Timezone = principal.Record.Timezone
             };
         }
 
@@ -54,7 +56,8 @@ namespace App.Modules.HabitVersion.Data
                 NotificationTime = record.NotificationTime,
                 StakeCents = (int)(record.Stake.Amount * 100),  // Convert to cents
                 StakeCurrency = record.Stake.Currency.Code,
-                RatioBasisPoints = (int)(record.Ratio * 10000)  // Convert to basis points
+                RatioBasisPoints = (int)(record.Ratio * 10000),  // Convert to basis points
+                Timezone = record.Timezone
             };
         }
     }

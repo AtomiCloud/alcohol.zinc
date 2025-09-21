@@ -31,6 +31,10 @@ public class CreateHabitReqValidator : AbstractValidator<CreateHabitReq>
 
         RuleFor(x => x.CharityId)
             .NotEmpty();
+
+        RuleFor(x => x.Timezone)
+            .NotEmpty()
+            .TimezoneValid();
     }
 
     private static bool BeValidDaysOfWeek(string[] days)
@@ -96,6 +100,10 @@ public class UpdateHabitReqValidator : AbstractValidator<UpdateHabitReq>
 
         RuleFor(x => x.CharityId)
             .NotEmpty();
+
+        RuleFor(x => x.Timezone)
+            .NotEmpty()
+            .TimezoneValid();
     }
 
     private static bool BeValidDaysOfWeek(string[] days)

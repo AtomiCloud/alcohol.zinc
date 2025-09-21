@@ -25,7 +25,8 @@ public static class HabitMapper
             hv.Record.NotificationTime.ToStandardTimeFormat(),
             hv.Record.Stake.Amount.ToString("F2", CultureInfo.InvariantCulture),
             (hv.Record.Ratio * 100m).ToString("F1", CultureInfo.InvariantCulture),
-            hv.Record.CharityId
+            hv.Record.CharityId,
+            hv.Record.Timezone
         );
 
     public static HabitVersionRecord ToVersionRecord(this CreateHabitReq req) =>
@@ -37,7 +38,8 @@ public static class HabitMapper
             NotificationTime = req.NotificationTime.ToTime(),
             Stake = new Money(decimal.Parse(req.Stake, CultureInfo.InvariantCulture), Currency.FromCode("USD")),
             Ratio = 1.0m,  // Fixed at 100% - all stake goes to charity
-            Version = 1  // First version
+            Version = 1,  // First version
+            Timezone = req.Timezone
         };
 
     public static HabitVersionRecord ToVersionRecord(this UpdateHabitReq req, ushort version) =>
@@ -49,7 +51,8 @@ public static class HabitMapper
             NotificationTime = req.NotificationTime.ToTime(),
             Stake = new Money(decimal.Parse(req.Stake, CultureInfo.InvariantCulture), Currency.FromCode("USD")),
             Ratio = 1.0m,  // Fixed at 100% - all stake goes to charity
-            Version = version  // Will be set by repository
+            Version = version,  // Will be set by repository
+            Timezone = req.Timezone
         };
 
     public static HabitExecutionRes ToRes(this HabitExecutionPrincipal he) =>
