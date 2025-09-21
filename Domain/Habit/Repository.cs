@@ -13,12 +13,15 @@ namespace Domain.Habit
         Task<Result<HabitVersionPrincipal>> Create(string userId, HabitVersionRecord versionRecord);
         // Creates new version + updates enabled status
         Task<Result<HabitVersionPrincipal?>> Update(Guid habitId, string userId, HabitVersionRecord versionRecord, bool enabled);
-        Task<Result<Unit?>> Delete(Guid habitId, string userId);                              // Soft delete habit
-        Task<Result<int>> CreateFailedExecutions(List<string> userIds, DateOnly date);        // Batch create failed executions
+        // Soft delete habit
+        Task<Result<Unit?>> Delete(Guid habitId, string userId);
 
         // Habit Execution Methods
-        Task<Result<DateOnly>> GetUserCurrentDate(string userId);                    // Get current date in user's timezone
+        // Get current date in user's timezone
+        Task<Result<DateOnly>> GetUserCurrentDate(string userId);                    
         Task<Result<HabitExecutionPrincipal>> CompleteHabit(string userId, Guid habitId, DateOnly date, string? notes);
         Task<Result<List<HabitExecutionPrincipal>>> GetDailyExecutions(string userId, DateOnly date);
+        // Batch create failed executions
+        Task<Result<int>> CreateFailedExecutions(List<string> userIds, DateOnly date);
     }
 }

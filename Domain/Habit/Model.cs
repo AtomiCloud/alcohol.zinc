@@ -34,6 +34,7 @@ namespace Domain.Habit
         public required Money Stake { get; init; }
         public required decimal Ratio { get; init; }
         public required ushort Version { get; init; }
+        public required string Timezone { get; init; }
     }
 
     public record HabitVersionPrincipal

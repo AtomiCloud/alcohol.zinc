@@ -21,6 +21,9 @@ namespace App.Modules.HabitVersion.Data
         public string StakeCurrency { get; set; } = "SGD";
         public int RatioBasisPoints { get; set; }        // Ratio stored as basis points
 
+        [MaxLength(64)]
+        public required string Timezone { get; set; }
+
         // Navigation properties
         public virtual HabitData? Habit { get; set; }
         public virtual CharityData? Charity { get; set; }

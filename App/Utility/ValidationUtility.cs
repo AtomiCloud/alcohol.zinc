@@ -91,6 +91,29 @@ public static class ValidationUtility
       .WithMessage($"TimeOnly must be in the format of {Utils.StandardTimeFormat}");
   }
 
+  public static IRuleBuilderOptions<T, string> TimezoneValid<T>(
+    this IRuleBuilder<T, string> ruleBuilder)
+  {
+    return ruleBuilder
+      .Must(x =>
+      {
+        try
+        {
+          TimeZoneInfo.FindSystemTimeZoneById(x);
+          return true;
+        }
+        catch (TimeZoneNotFoundException)
+        {
+          return false;
+        }
+        catch (InvalidTimeZoneException)
+        {
+          return false;
+        }
+      })
+      .WithMessage("Timezone must be a valid timezone identifier (e.g. 'Asia/Singapore', 'America/New_York')");
+  }
+
 
   public static IRuleBuilderOptions<T, string> UsernameValid<T>(
     this IRuleBuilder<T, string> ruleBuilder)

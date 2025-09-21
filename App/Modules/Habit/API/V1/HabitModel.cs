@@ -3,7 +3,8 @@ public record CreateHabitReq(
     string[] DaysOfWeek,
     string NotificationTime, // string (e.g. "HH:mm")
     string Stake,            // string decimal (e.g. "10.50")
-    Guid CharityId
+    Guid CharityId,
+    string Timezone          // string (e.g. "Asia/Singapore", "America/New_York")
 );
 
 public record UpdateHabitReq(
@@ -12,7 +13,8 @@ public record UpdateHabitReq(
     string NotificationTime,
     string Stake,
     Guid CharityId,
-    bool Enabled
+    bool Enabled,
+    string Timezone          // string (e.g. "Asia/Singapore", "America/New_York")
 );
 
 public record HabitRes(
@@ -31,7 +33,8 @@ public record HabitVersionRes(
     string NotificationTime,
     string Stake,
     string Ratio,
-    Guid CharityId
+    Guid CharityId,
+    string Timezone          // string (e.g. "Asia/Singapore", "America/New_York")
 );
 
 public record MarkDailyFailuresReq(
