@@ -49,7 +49,7 @@ public static class HabitMapper
             NotificationTime = req.NotificationTime.ToTime(),
             Stake = new Money(decimal.Parse(req.Stake, CultureInfo.InvariantCulture), Currency.FromCode("USD")),
             Ratio = 1.0m,  // Fixed at 100% - all stake goes to charity
-            Version = version  // Will be set by repository
+            Version = version,  // Will be set by repository
         };
 
     public static HabitExecutionRes ToRes(this HabitExecutionPrincipal he) =>
@@ -62,4 +62,24 @@ public static class HabitMapper
             he.Record.Notes,
             false  // PaymentProcessed - not exposed in domain model yet
         );
+  
+    public static HabitExecutionSearch ToDomain(this SearchHabitExecutionQuery query) =>
+      new ()
+      {
+        Id = query.Id,
+        Date = query.Date?.ToDate(),
+        Limit = query.Limit ?? 20,  // Default limit
+        Skip = query.Skip ?? 0      // Default skip
+      };
+
+    public static HabitSearch ToDomain(this SearchHabitQuery query) =>
+      new()
+      {
+        Id = query.Id,
+        UserId = query.UserId,
+        Task = query.Task,
+        Enabled = query.Enabled,
+        Limit = query.Limit ?? 20, 
+        Skip = query.Skip ?? 0
+      };
 }

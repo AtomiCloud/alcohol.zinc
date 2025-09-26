@@ -43,24 +43,40 @@ namespace App.Modules.Habit.Data
             }
         }
 
-        public async Task<Result<List<HabitVersionPrincipal>>> GetAllUserHabits(string userId)
+        public async Task<Result<List<HabitVersionPrincipal>>> SearchHabits(HabitSearch habitSearch)
         {
             try
             {
-                logger.LogInformation("Retrieving all habits for UserId: {UserId}", userId);
+                logger.LogInformation("Searching habits with search: {@Search}", habitSearch);
 
-                // Join habit with current version to get all habits for the user (enabled and disabled)
-                var data = await (from h in db.Habits
-                                 join hv in db.HabitVersions on new { h.Id, h.Version } equals new { Id = hv.HabitId, hv.Version }
-                                 where h.UserId == userId && h.DeletedAt == null
-                                 select hv).AsNoTracking().ToListAsync();
+                var query = (from h in db.Habits
+                           join hv in db.HabitVersions on new { h.Id, h.Version } equals new { Id = hv.HabitId, hv.Version }
+                           where h.DeletedAt == null
+                           select new { Habit = h, HabitVersion = hv }).AsNoTracking().AsQueryable();
 
-                logger.LogInformation("Retrieved {Count} total habits for UserId: {UserId}", data.Count, userId);
-                return data.Select(x => x.ToPrincipal()).ToList();
+                if (habitSearch.Id != null)
+                    query = query.Where(x => x.Habit.Id == habitSearch.Id);
+
+                if (!string.IsNullOrWhiteSpace(habitSearch.UserId))
+                    query = query.Where(x => x.Habit.UserId == habitSearch.UserId);
+
+                if (!string.IsNullOrWhiteSpace(habitSearch.Task))
+                    query = query.Where(x => EF.Functions.ILike(x.HabitVersion.Task, $"%{habitSearch.Task}%"));
+
+                if (habitSearch.Enabled != null)
+                    query = query.Where(x => x.Habit.Enabled == habitSearch.Enabled);
+
+                var data = await query
+                    .Skip(habitSearch.Skip)
+                    .Take(habitSearch.Limit)
+                    .ToListAsync();
+
+                logger.LogInformation("Retrieved {Count} habits", data.Count);
+                return data.Select(x => x.HabitVersion.ToPrincipal()).ToList();
             }
             catch (Exception e)
             {
-                logger.LogError(e, "Failed retrieving all habits for UserId: {UserId}", userId);
+                logger.LogError(e, "Failed searching habits with search: {@Search}", habitSearch);
                 return e;
             }
         }
@@ -346,27 +362,38 @@ namespace App.Modules.Habit.Data
             }
         }
 
-        public async Task<Result<List<HabitExecutionPrincipal>>> GetDailyExecutions(string userId, DateOnly date)
+        public async Task<Result<List<HabitExecutionPrincipal>>> SearchHabitExecutions(string userId,
+          HabitExecutionSearch habitExecutionSearch)
         {
-            try
-            {
-                logger.LogInformation("Retrieving daily executions for UserId: {UserId}, Date: {Date}", userId, date);
-                
-                // Get all executions for user's habits on the specified date
-                var data = await (from h in db.Habits
-                                join hv in db.HabitVersions on new { h.Id, h.Version } equals new { Id = hv.HabitId, hv.Version }
-                                join he in db.HabitExecutions on hv.Id equals he.HabitVersionId
-                                where h.UserId == userId && he.Date == date && h.DeletedAt == null
-                                select he).AsNoTracking().ToListAsync();
-                
-                logger.LogInformation("Retrieved {Count} executions for UserId: {UserId}, Date: {Date}", data.Count, userId, date);
-                return data.Select(x => x.ToPrincipal()).ToList();
-            }
-            catch (Exception e)
-            {
-                logger.LogError(e, "Failed retrieving daily executions for UserId: {UserId}, Date: {Date}", userId, date);
-                return e;
-            }
+          try
+          {
+            logger.LogInformation("Searching habit executions for UserId: {UserId}, Search: {@Search}", userId, habitExecutionSearch);
+
+            var query = (from h in db.Habits
+              join hv in db.HabitVersions on new { h.Id, h.Version } equals new { Id = hv.HabitId, hv.Version }
+              join he in db.HabitExecutions on hv.Id equals he.HabitVersionId
+              where h.UserId == userId && h.DeletedAt == null
+              select new { HabitExecution = he, HabitId = h.Id }).AsNoTracking().AsQueryable();
+
+            if (habitExecutionSearch.Id != null)
+              query = query.Where(x => x.HabitId == habitExecutionSearch.Id);
+
+            if (habitExecutionSearch.Date != null)
+              query = query.Where(x => x.HabitExecution.Date == habitExecutionSearch.Date);
+
+            var data = await query
+                .Skip(habitExecutionSearch.Skip)
+                .Take(habitExecutionSearch.Limit)
+                .ToListAsync();
+
+            logger.LogInformation("Retrieved {Count} executions for UserId: {UserId}", data.Count, userId);
+            return data.Select(x => x.HabitExecution.ToPrincipal()).ToList();
+          }
+          catch (Exception e)
+          {
+            logger.LogError(e, "Failed searching habit executions for UserId: {UserId}, Search: {@Search}", userId, habitExecutionSearch);
+            return e;
+          }
         }
     }
 }
