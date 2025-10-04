@@ -31,6 +31,10 @@ public class CreateHabitReqValidator : AbstractValidator<CreateHabitReq>
 
         RuleFor(x => x.CharityId)
             .NotEmpty();
+
+        RuleFor(x => x.Timezone)
+            .NotEmpty()
+            .TimezoneValid();
     }
 
     private static bool BeValidDaysOfWeek(string[] days)
@@ -59,13 +63,9 @@ public class MarkDailyFailuresReqValidator : AbstractValidator<MarkDailyFailures
             .NotEmpty()
             .DateValid();
 
-        RuleFor(x => x.UserIds)
+        RuleFor(x => x.HabitIds)
             .NotEmpty()
-            .WithMessage("UserIds list cannot be empty.");
-
-        RuleForEach(x => x.UserIds)
-            .NotEmpty()
-            .WithMessage("UserIds cannot contain empty values.");
+            .WithMessage("HabitIds list cannot be empty.");
     }
 }
 
@@ -96,11 +96,15 @@ public class UpdateHabitReqValidator : AbstractValidator<UpdateHabitReq>
 
         RuleFor(x => x.CharityId)
             .NotEmpty();
+
+        RuleFor(x => x.Timezone)
+            .NotEmpty()
+            .TimezoneValid();
     }
 
     private static bool BeValidDaysOfWeek(string[] days)
     {
-        return days.All(day => Enum.TryParse(typeof(DayOfWeek), day, true, out _));
+        return days.All(day => Enum.TryParse(typeof(DayOfWeek), day, false, out _));
     }
 
     private static bool BeAValidDecimal(string value)
@@ -112,7 +116,7 @@ public class UpdateHabitReqValidator : AbstractValidator<UpdateHabitReq>
     {
         return decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var d) && d >= 0;
     }
-    
+
 }
 
 public class SearchHabitQueryValidator : AbstractValidator<SearchHabitQuery>

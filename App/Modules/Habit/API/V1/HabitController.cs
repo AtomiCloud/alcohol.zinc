@@ -63,7 +63,7 @@ public class HabitController(
     {
         var result = await this.GuardAsync(userId)
             .ThenAwait(_ => updateHabitReqValidator.ValidateAsyncResult(req, "Invalid UpdateHabitReq"))
-            .ThenAwait(x => service.Update(userId, id, x.ToVersionRecord(0), req.Enabled))
+            .ThenAwait(x => service.Update(userId, id, x.ToVersionRecord(), req.Enabled))
             .Then(h => h?.ToRes(), Errors.MapNone);
         
         return this.ReturnNullableResult(result, new EntityNotFound(
@@ -80,11 +80,11 @@ public class HabitController(
           new EntityNotFound("Habit Not Found", typeof(Domain.Habit.Habit), id.ToString()));
     }
 
-    [Authorize, HttpPost("{userId}/{id:guid}/executions")]
-    public async Task<ActionResult<HabitExecutionRes>> CompleteHabit(string userId, Guid id, [FromBody] CompleteHabitReq req)
+    [Authorize, HttpPost("{userId}/{habitVersionId:guid}/executions")]
+    public async Task<ActionResult<HabitExecutionRes>> CompleteHabit(string userId, Guid habitVersionId, [FromBody] CompleteHabitReq req)
     {
       var result = await this.GuardAsync(userId)
-        .ThenAwait(_ => service.CompleteHabit(userId, id, req.Notes))
+        .ThenAwait(_ => service.CompleteHabit(userId, habitVersionId, req.Notes))
         .Then(execution => execution.ToRes(), Errors.MapNone);
 
       return this.ReturnResult(result);
@@ -107,9 +107,8 @@ public class HabitController(
       // todo change input from userid to list of habit id
         var result = await markDailyFailuresReqValidator
             .ValidateAsyncResult(req, "Invalid MarkDailyFailuresReq")
-            .ThenAwait(x => service.MarkDailyFailures(x.UserIds, x.Date.ToDate()));
+            .ThenAwait(x => service.MarkDailyFailures(x.HabitIds, x.Date.ToDate()));
         
-        // todo need to call donation api after mark daily failure
         return this.ReturnResult(result);
     }
 }

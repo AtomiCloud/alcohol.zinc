@@ -11,17 +11,23 @@ namespace App.Modules.HabitVersion.Data
             {
                 Id = data.Id,
                 HabitId = data.HabitId,
-                Record = new HabitVersionRecord
-                {
-                    CharityId = data.CharityId,
-                    Task = data.Task,
-                    DaysOfWeek = data.DaysOfWeek,
-                    NotificationTime = data.NotificationTime,
-                    Stake = new Money(data.StakeCents / 100m, Currency.FromCode(data.StakeCurrency)),
-                    Ratio = data.RatioBasisPoints / 10000m,  // Basis points to decimal
-                    Version = data.Version
-                }
+                Version = data.Version,
+                Record = data.ToRecord()
             };
+        }
+
+        public static HabitVersionRecord ToRecord(this HabitVersionData data)
+        {
+          return new HabitVersionRecord
+          {
+            CharityId = data.CharityId,
+            Task = data.Task,
+            DaysOfWeek = data.DaysOfWeek,
+            NotificationTime = data.NotificationTime,
+            Stake = new Money(data.StakeCents / 100m, Currency.FromCode(data.StakeCurrency)),
+            Ratio = data.RatioBasisPoints / 10000m, // Basis points to decimal
+            Timezone = data.Timezone
+          };
         }
 
         public static HabitVersionData ToData(this HabitVersionPrincipal principal)
@@ -31,13 +37,14 @@ namespace App.Modules.HabitVersion.Data
                 Id = principal.Id,
                 HabitId = principal.HabitId,
                 CharityId = principal.Record.CharityId,
-                Version = principal.Record.Version,
+                Version = principal.Version,
                 Task = principal.Record.Task,
                 DaysOfWeek = principal.Record.DaysOfWeek,
                 NotificationTime = principal.Record.NotificationTime,
                 StakeCents = (int)(principal.Record.Stake.Amount * 100),  // Convert to cents
                 StakeCurrency = principal.Record.Stake.Currency.Code,
-                RatioBasisPoints = (int)(principal.Record.Ratio * 10000)  // Convert to basis points
+                RatioBasisPoints = (int)(principal.Record.Ratio * 10000),  // Convert to basis points
+                Timezone = principal.Record.Timezone
             };
         }
 
@@ -54,7 +61,8 @@ namespace App.Modules.HabitVersion.Data
                 NotificationTime = record.NotificationTime,
                 StakeCents = (int)(record.Stake.Amount * 100),  // Convert to cents
                 StakeCurrency = record.Stake.Currency.Code,
-                RatioBasisPoints = (int)(record.Ratio * 10000)  // Convert to basis points
+                RatioBasisPoints = (int)(record.Ratio * 10000),  // Convert to basis points
+                Timezone = record.Timezone
             };
         }
     }

@@ -33,13 +33,14 @@ namespace Domain.Habit
         public required TimeOnly NotificationTime { get; init; }
         public required Money Stake { get; init; }
         public required decimal Ratio { get; init; }
-        public required ushort Version { get; init; }
+        public required string Timezone { get; init; }
     }
 
     public record HabitVersionPrincipal
     {
         public required Guid Id { get; init; }
         public required Guid HabitId { get; init; }
+        public required ushort Version { get; init; }
         public required HabitVersionRecord Record { get; init; }
     }
 
@@ -73,9 +74,10 @@ namespace Domain.Habit
 
     public enum ExecutionStatus
     {
-        Pending,    // Created, waiting for user action
+        Skipped,    
         Completed,  // User marked as done
-        Failed      // End-of-day passed without completion
+        Failed,      // End-of-day passed without completion
+        Freeze
     }
 
     public record HabitExecutionSearch

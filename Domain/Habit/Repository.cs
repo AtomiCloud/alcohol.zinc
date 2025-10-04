@@ -14,11 +14,11 @@ namespace Domain.Habit
         // Creates new version + updates enabled status
         Task<Result<HabitVersionPrincipal?>> Update(Guid habitId, string userId, HabitVersionRecord versionRecord, bool enabled);
         Task<Result<Unit?>> Delete(Guid habitId, string userId);                              // Soft delete habit
-        Task<Result<int>> CreateFailedExecutions(List<string> userIds, DateOnly date);        // Batch create failed executions
+        Task<Result<int>> CreateFailedExecutions(List<Guid> habitIds, DateOnly date);        // Batch create failed executions
 
         // Habit Execution Methods
-        Task<Result<DateOnly>> GetUserCurrentDate(string userId);                    // Get current date in user's timezone
-        Task<Result<HabitExecutionPrincipal>> CompleteHabit(string userId, Guid habitId, DateOnly date, string? notes);
+        Task<Result<DateOnly>> GetUserCurrentDate(string userId, Guid habitVersionId);                    // Get current date in user's timezone
+        Task<Result<HabitExecutionPrincipal>> CompleteHabit(string userId, Guid habitVersionId, DateOnly date, string? notes);
         Task<Result<List<HabitExecutionPrincipal>>> SearchHabitExecutions(string userId, 
           HabitExecutionSearch habitExecutionSearch);
     }

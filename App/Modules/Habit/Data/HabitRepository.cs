@@ -242,11 +242,11 @@ namespace App.Modules.Habit.Data
             }
         }
 
-        public async Task<Result<int>> CreateFailedExecutions(List<string> userIds, DateOnly date)
+        public async Task<Result<int>> CreateFailedExecutions(List<Guid> habitIds, DateOnly date)
         {
             try
             {
-                logger.LogInformation("Creating failed executions for {UserCount} users on date: {Date}", userIds.Count, date);
+                logger.LogInformation("Creating failed executions for {HabitCount} habits on date: {Date}", habitIds.Count, date);
 
                 // Get day of week from the provided date
                 var dayOfWeek = date.DayOfWeek.ToString();
@@ -260,7 +260,7 @@ namespace App.Modules.Habit.Data
                     FROM ""Habits"" h
                     JOIN ""HabitVersions"" hv ON h.""Id"" = hv.""HabitId"" AND h.""Version"" = hv.""Version""
                     LEFT JOIN ""HabitExecutions"" he ON he.""HabitVersionId"" = hv.""Id"" AND he.""Date"" = {date}
-                    WHERE h.""UserId"" = ANY({userIds})
+                    WHERE h.""Id"" = ANY({habitIds})
                       AND h.""DeletedAt"" IS NULL
                       AND h.""Enabled"" = true
                       AND hv.""DaysOfWeek"" @> ARRAY[{dayOfWeek}]
@@ -277,30 +277,31 @@ namespace App.Modules.Habit.Data
             }
         }
 
-        public async Task<Result<DateOnly>> GetUserCurrentDate(string userId)
+        public async Task<Result<DateOnly>> GetUserCurrentDate(string userId, Guid habitVersionId)
         {
             try
             {
                 logger.LogInformation("Getting current date for UserId: {UserId}", userId);
 
                 // Get user's timezone from their configuration
-                var userConfig = await (from c in db.Configurations
-                                      where c.UserId == userId
-                                      select c.Timezone).AsNoTracking().FirstOrDefaultAsync();
+                var habitLevelTimezoneConfig = await (from hv in db.HabitVersions
+                                      where hv.Id == habitVersionId
+                                      select hv.Timezone).AsNoTracking().FirstOrDefaultAsync();
 
-                if (string.IsNullOrEmpty(userConfig))
+                if (string.IsNullOrEmpty(habitLevelTimezoneConfig))
                 {
-                    logger.LogWarning("No configuration found for UserId: {UserId}, using UTC", userId);
-                    return DateOnly.FromDateTime(DateTime.UtcNow);
-                }
+                  var ex = new NotFoundException("HabitVersion not found",
+                    typeof(HabitExecutionPrincipal), habitVersionId.ToString());
+                  logger.LogError(ex, "GetUserCurrentDate failed to find HabitVersion");
 
-                // Convert UTC now to user's timezone
-                var userTimeZone = TimeZoneInfo.FindSystemTimeZoneById(userConfig);
-                var userDateTime = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, userTimeZone);
+                  return ex;
+                }
+                var habitLevelTimezone = TimeZoneInfo.FindSystemTimeZoneById(habitLevelTimezoneConfig);
+                var userDateTime = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, habitLevelTimezone);
                 var userDate = DateOnly.FromDateTime(userDateTime);
 
                 logger.LogInformation("Current date for UserId: {UserId} in timezone {Timezone} is {Date}",
-                    userId, userConfig, userDate);
+                    userId, habitLevelTimezone, userDate);
                 return userDate;
             }
             catch (Exception e)
@@ -310,11 +311,11 @@ namespace App.Modules.Habit.Data
             }
         }
 
-        public async Task<Result<HabitExecutionPrincipal>> CompleteHabit(string userId, Guid habitId, DateOnly date, string? notes)
+        public async Task<Result<HabitExecutionPrincipal>> CompleteHabit(string userId, Guid habitVersionId, DateOnly date, string? notes)
         {
             try
             {
-                logger.LogInformation("Completing habit for UserId: {UserId}, HabitId: {HabitId}, Date: {Date}", userId, habitId, date);
+                logger.LogInformation("Completing habit for UserId: {UserId}, HabitId: {HabitId}, Date: {Date}", userId, habitVersionId, date);
 
                 // Get day of week from the provided date
                 var dayOfWeek = date.DayOfWeek.ToString();
@@ -323,14 +324,14 @@ namespace App.Modules.Habit.Data
                 // Atomic INSERT ... SELECT to get current version and create execution
                 var affectedRows = await db.Database.ExecuteSqlAsync($@"
                     INSERT INTO ""HabitExecutions"" (""Id"", ""HabitVersionId"", ""Date"", ""Status"", ""CompletedAt"", ""Notes"", ""PaymentProcessed"")
-                    SELECT gen_random_uuid(), hv.""Id"", {date}, {(int)ExecutionStatus.Completed}, {DateTime.UtcNow}, {notes}, false
-                    FROM ""Habits"" h
-                    JOIN ""HabitVersions"" hv ON h.""Id"" = hv.""HabitId"" AND h.""Version"" = hv.""Version""
-                    WHERE h.""Id"" = {habitId}
+                    SELECT gen_random_uuid(), {habitVersionId}, {date}, {(int)ExecutionStatus.Completed}, {DateTime.UtcNow}, {notes}, false
+                    FROM ""HabitVersions"" hv
+                    JOIN ""Habits"" h ON h.""Id"" = hv.""HabitId"" AND h.""Version"" = hv.""Version""
+                    WHERE hv.""Id"" = {habitVersionId}
+                      AND hv.""DaysOfWeek"" @> ARRAY[{dayOfWeek}]
                       AND h.""UserId"" = {userId}
                       AND h.""DeletedAt"" IS NULL
                       AND h.""Enabled"" = true
-                      AND hv.""DaysOfWeek"" @> ARRAY[{dayOfWeek}]
                       AND NOT EXISTS (
                           SELECT 1 FROM ""HabitExecutions"" he
                           WHERE he.""HabitVersionId"" = hv.""Id"" AND he.""Date"" = {date}
@@ -340,24 +341,24 @@ namespace App.Modules.Habit.Data
                 if (affectedRows == 0)
                 {
                     logger.LogWarning("No habit execution created - habit not found, not enabled, not scheduled for {DayOfWeek}, or already completed " +
-                                      "for HabitId: {HabitId}, Date: {Date}", dayOfWeek, habitId, date);
+                                      "for HabitVersionId: {HabitVersionId}, Date: {Date}", dayOfWeek, habitVersionId, date);
                     return new NotFoundException("Habit not found, not enabled, not scheduled for this day, or already completed",
-                      typeof(HabitExecutionPrincipal), habitId.ToString());
+                      typeof(HabitExecutionPrincipal), habitVersionId.ToString());
                 }
 
                 // Get the created execution to return
-                var execution = await (from h in db.Habits
-                                     join hv in db.HabitVersions on new { h.Id, h.Version } equals new { Id = hv.HabitId, hv.Version }
+                var execution = await (from hv in db.HabitVersions
+                                     join h in db.Habits on hv.HabitId equals h.Id
                                      join he in db.HabitExecutions on hv.Id equals he.HabitVersionId
-                                     where h.Id == habitId && h.UserId == userId && he.Date == date
+                                     where hv.Id == habitVersionId && h.UserId == userId && he.Date == date
                                      select he).AsNoTracking().FirstOrDefaultAsync();
 
-                logger.LogInformation("Habit completed for HabitId: {HabitId}, Date: {Date}", habitId, date);
+                logger.LogInformation("Habit completed for HabitVersionId: {HabitVersionId}, Date: {Date}", habitVersionId, date);
                 return execution!.ToPrincipal();
             }
             catch (Exception e)
             {
-                logger.LogError(e, "Failed to complete habit for HabitId: {HabitId}, UserId: {UserId}, Date: {Date}", habitId, userId, date);
+                logger.LogError(e, "Failed to complete habit for HabitVersionId: {HabitVersionId}, UserId: {UserId}, Date: {Date}", habitVersionId, userId, date);
                 return e;
             }
         }
