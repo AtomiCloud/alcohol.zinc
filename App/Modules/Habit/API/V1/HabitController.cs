@@ -63,7 +63,7 @@ public class HabitController(
     {
         var result = await this.GuardAsync(userId)
             .ThenAwait(_ => updateHabitReqValidator.ValidateAsyncResult(req, "Invalid UpdateHabitReq"))
-            .ThenAwait(x => service.Update(userId, id, x.ToVersionRecord(0), req.Enabled))
+            .ThenAwait(x => service.Update(userId, id, x.ToVersionRecord(), req.Enabled))
             .Then(h => h?.ToRes(), Errors.MapNone);
         
         return this.ReturnNullableResult(result, new EntityNotFound(
