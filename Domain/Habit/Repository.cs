@@ -6,7 +6,7 @@ namespace Domain.Habit
     {
         // Habit Methods (Main Entity + Version Management)
         Task<Result<List<HabitVersionPrincipal>>> GetActiveHabitVersions(string userId, DateOnly date);
-        Task<Result<List<HabitVersionPrincipal>>> GetAllUserHabits(string userId);
+        Task<Result<List<HabitVersionPrincipal>>> SearchHabits(HabitSearch habitSearch);
         Task<Result<HabitPrincipal?>> GetHabit(Guid habitId);
         Task<Result<HabitVersionPrincipal?>> GetCurrentVersion(string userId, Guid habitId);
         // Creates habit + first version
@@ -19,6 +19,7 @@ namespace Domain.Habit
         // Habit Execution Methods
         Task<Result<DateOnly>> GetUserCurrentDate(string userId);                    // Get current date in user's timezone
         Task<Result<HabitExecutionPrincipal>> CompleteHabit(string userId, Guid habitId, DateOnly date, string? notes);
-        Task<Result<List<HabitExecutionPrincipal>>> GetDailyExecutions(string userId, DateOnly date);
+        Task<Result<List<HabitExecutionPrincipal>>> SearchHabitExecutions(string userId, 
+          HabitExecutionSearch habitExecutionSearch);
     }
 }

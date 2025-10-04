@@ -4,14 +4,9 @@ namespace Domain.Habit;
 
 public class HabitService(IHabitRepository repo) : IHabitService
 {
-    public Task<Result<List<HabitVersionPrincipal>>> ListActiveHabits(string userId, DateOnly date)
+    public Task<Result<List<HabitVersionPrincipal>>> SearchHabits(HabitSearch habitSearch)
     {
-        return repo.GetActiveHabitVersions(userId, date);
-    }
-
-    public Task<Result<List<HabitVersionPrincipal>>> ListAllUserHabits(string userId)
-    {
-        return repo.GetAllUserHabits(userId);
+        return repo.SearchHabits(habitSearch);
     }
 
     public Task<Result<HabitVersionPrincipal?>> GetCurrentHabitVersion(string userId, Guid habitId)
@@ -58,8 +53,9 @@ public class HabitService(IHabitRepository repo) : IHabitService
           .ThenAwait(date => repo.CompleteHabit(userId, habitId, date, notes));
     }
 
-    public Task<Result<List<HabitExecutionPrincipal>>> GetDailyExecutions(string userId, DateOnly date)
+    public Task<Result<List<HabitExecutionPrincipal>>> SearchHabitExecutions(string userId, 
+      HabitExecutionSearch habitExecutionSearch)
     {
-        return repo.GetDailyExecutions(userId, date);
+        return repo.SearchHabitExecutions(userId, habitExecutionSearch);
     }
 }

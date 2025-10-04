@@ -52,3 +52,17 @@ public record HabitExecutionRes(
     string? Notes,           // Optional notes
     bool PaymentProcessed    // Penalty payment status
 );
+
+public record SearchHabitQuery(
+  Guid? Id,
+  string? UserId,
+  string? Task,
+  bool? Enabled,
+  int? Limit,
+  int? Skip);
+
+public record SearchHabitExecutionQuery(
+  Guid? Id,
+  string? Date,
+  int? Limit,
+  int? Skip);

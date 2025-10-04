@@ -77,4 +77,22 @@ namespace Domain.Habit
         Completed,  // User marked as done
         Failed      // End-of-day passed without completion
     }
+
+    public record HabitExecutionSearch
+    {
+      public Guid? Id { get; init; }
+      public DateOnly? Date { get; init; }
+      public int Limit { get; init; }
+      public int Skip { get; init; }
+    }
+
+    public record HabitSearch
+    {
+      public Guid? Id { get; init; }
+      public string? UserId { get; init; }
+      public string? Task { get; init; }
+      public bool? Enabled { get; init; }
+      public int Limit { get; init; }
+      public int Skip { get; init; }
+    }
 }
