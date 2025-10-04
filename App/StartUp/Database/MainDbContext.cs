@@ -31,8 +31,6 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
   {
     optionsBuilder
       .UseLoggerFactory(factory)
-      .EnableSensitiveDataLogging()
-      .EnableDetailedErrors()
       .AddPostgres(options.CurrentValue, Key)
       .UseExceptionProcessor();
   }
