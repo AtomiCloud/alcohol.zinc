@@ -108,7 +108,7 @@ public class UpdateHabitReqValidator : AbstractValidator<UpdateHabitReq>
 
     private static bool BeValidDaysOfWeek(string[] days)
     {
-        return days.All(day => Enum.TryParse(typeof(DayOfWeek), day, true, out _));
+        return days.All(day => Enum.TryParse(typeof(DayOfWeek), day, false, out _));
     }
 
     private static bool BeAValidDecimal(string value)
@@ -120,7 +120,7 @@ public class UpdateHabitReqValidator : AbstractValidator<UpdateHabitReq>
     {
         return decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var d) && d >= 0;
     }
-    
+
 }
 
 public class SearchHabitQueryValidator : AbstractValidator<SearchHabitQuery>
