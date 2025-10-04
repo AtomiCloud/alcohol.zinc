@@ -32,9 +32,18 @@ Cache:
   MAIN:
     SSL: true
 # external
-HttpClient: {}
+HttpClient:
+  Logto:
+    BaseAddress: https://admin.lithium.alcohol.raichu.atomi.cloud
 Auth:
+  Enabled: true
   Settings:
-    Issuer: https://fz8y9h.logto.app/oidc
+    Issuer: https://admin.lithium.alcohol.raichu.atomi.cloud/oidc
     Audience: https://api.zinc.alcohol.raichu
-    Domain: fz8y9h.logto.app/oidc
+    Domain: admin.lithium.alcohol.raichu.atomi.cloud/oidc
+  Management:
+    Endpoint: https://admin.lithium.alcohol.raichu.atomi.cloud
+    Id: xtd72hm10b85nib956r85
+    Secret: supersecret
+    Resource: https://default.logto.app/api
+    Scope: all

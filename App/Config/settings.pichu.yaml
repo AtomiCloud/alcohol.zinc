@@ -33,9 +33,18 @@ Cache:
     SSL: true
 
 # external
-HttpClient: {}
+HttpClient:
+  Logto:
+    BaseAddress: https://admin.lithium.alcohol.pichu.atomi.cloud
 Auth:
+  Enabled: true
   Settings:
-    Issuer: https://im3flr.logto.app/oidc
+    Issuer: https://admin.lithium.alcohol.pichu.atomi.cloud/oidc
     Audience: https://api.zinc.alcohol.pichu
-    Domain: im3flr.logto.app/oidc
+    Domain: admin.lithium.alcohol.pichu.atomi.cloud/oidc
+  Management:
+    Endpoint: https://admin.lithium.alcohol.pichu.atomi.cloud
+    Id: q821ucbj78gyppgqsx179
+    Secret: supersecret
+    Resource: https://default.logto.app/api
+    Scope: all
