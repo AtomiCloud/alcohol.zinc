@@ -246,7 +246,7 @@ namespace App.Modules.Habit.Data
         {
             try
             {
-                logger.LogInformation("Creating failed executions for {UserCount} users on date: {Date}", habitIds.Count, date);
+                logger.LogInformation("Creating failed executions for {HabitCount} habits on date: {Date}", habitIds.Count, date);
 
                 // Get day of week from the provided date
                 var dayOfWeek = date.DayOfWeek.ToString();
