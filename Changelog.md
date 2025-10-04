@@ -1,3 +1,10 @@
+## [1.6.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.5.0...v1.6.0) (2025-10-04)
+
+
+### ✨ Features ✨
+
+* update config to use new logto ([1b734f5](https://github.com/AtomiCloud/alcohol.zinc/commit/1b734f5da7816eeaf413f494c778db1885fd54ae))
+
 ## [1.5.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.4.1...v1.5.0) (2025-09-20)
 
 
