@@ -65,7 +65,7 @@ public class MarkDailyFailuresReqValidator : AbstractValidator<MarkDailyFailures
 
         RuleFor(x => x.HabitIds)
             .NotEmpty()
-            .WithMessage("UserIds list cannot be empty.");
+            .WithMessage("HabitIds list cannot be empty.");
     }
 }
 
