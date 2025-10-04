@@ -18,7 +18,7 @@ namespace Domain.Habit
 
         // Habit Execution Methods
         // Get current date in user's timezone
-        Task<Result<DateOnly>> GetUserCurrentDate(string userId);                    
+        Task<Result<DateOnly>> GetUserCurrentDate(string userId, Guid habitVersionId);                    
         Task<Result<HabitExecutionPrincipal>> CompleteHabit(string userId, Guid habitId, DateOnly date, string? notes);
         Task<Result<List<HabitExecutionPrincipal>>> GetDailyExecutions(string userId, DateOnly date);
         // Batch create failed executions

@@ -46,16 +46,16 @@ public class HabitService(IHabitRepository repo) : IHabitService
         return repo.CreateFailedExecutions(userIds, date);
     }
 
-    public Task<Result<DateOnly>> GetUserCurrentDate(string userId)
-    {
-        return repo.GetUserCurrentDate(userId);
-    }
+    // public Task<Result<DateOnly>> GetUserCurrentDate(string userId)
+    // {
+    //     return repo.GetUserCurrentDate(userId);
+    // }
 
-    public Task<Result<HabitExecutionPrincipal>> CompleteHabit(string userId, Guid habitId, string? notes)
+    public Task<Result<HabitExecutionPrincipal>> CompleteHabit(string userId, Guid habitVersionId, string? notes)
     {
         return repo
-          .GetUserCurrentDate(userId)
-          .ThenAwait(date => repo.CompleteHabit(userId, habitId, date, notes));
+          .GetUserCurrentDate(userId, habitVersionId)
+          .ThenAwait(date => repo.CompleteHabit(userId, habitVersionId, date, notes));
     }
 
     public Task<Result<List<HabitExecutionPrincipal>>> GetDailyExecutions(string userId, DateOnly date)

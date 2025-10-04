@@ -86,13 +86,13 @@ public class HabitController(
         return this.ReturnResult(result);
     }
 
-    [Authorize, HttpPost("{id:guid}/executions")]
-    public async Task<ActionResult<HabitExecutionRes>> CompleteHabit(Guid id, [FromBody] CompleteHabitReq req)
+    [Authorize, HttpPost("{habitVersionId:guid}/executions")]
+    public async Task<ActionResult<HabitExecutionRes>> CompleteHabit(Guid habitVersionId, [FromBody] CompleteHabitReq req)
     {
         var userId = this.Sub();
         if (userId == null) return Unauthorized();
 
-        var result = await service.CompleteHabit(userId, id, req.Notes)
+        var result = await service.CompleteHabit(userId, habitVersionId, req.Notes)
             .Then(execution => execution.ToRes().ToResult());
         return this.ReturnResult(result);
     }
