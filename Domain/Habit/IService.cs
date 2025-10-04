@@ -4,8 +4,7 @@ namespace Domain.Habit;
 
 public interface IHabitService
 {
-  Task<Result<List<HabitVersionPrincipal>>> ListActiveHabits(string userId, DateOnly date);
-  Task<Result<List<HabitVersionPrincipal>>> ListAllUserHabits(string userId);
+  Task<Result<List<HabitVersionPrincipal>>> SearchHabits(HabitSearch habitSearch);
   Task<Result<HabitVersionPrincipal?>> GetCurrentHabitVersion(string userId, Guid habitId);
   Task<Result<HabitVersionPrincipal>> Create(string userId, HabitVersionRecord versionRecord);
   Task<Result<HabitVersionPrincipal?>> Update(string userId, Guid habitId, HabitVersionRecord versionRecord, bool enabled);
@@ -13,5 +12,5 @@ public interface IHabitService
   Task<Result<int>> MarkDailyFailures(List<string> userIds, DateOnly date);
   // Task<Result<DateOnly>> GetUserCurrentDate(string userId);
   Task<Result<HabitExecutionPrincipal>> CompleteHabit(string userId, Guid habitId, string? notes);
-  Task<Result<List<HabitExecutionPrincipal>>> GetDailyExecutions(string userId, DateOnly date);
+  Task<Result<List<HabitExecutionPrincipal>>> SearchHabitExecutions(string userId, HabitExecutionSearch habitExecutionSearch);
 }

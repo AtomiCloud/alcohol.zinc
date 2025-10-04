@@ -120,6 +120,54 @@ public class UpdateHabitReqValidator : AbstractValidator<UpdateHabitReq>
     {
         return decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var d) && d >= 0;
     }
+    
+}
 
+public class SearchHabitQueryValidator : AbstractValidator<SearchHabitQuery>
+{
+  public SearchHabitQueryValidator()
+  {
+    When(x => x.Task != null, () => {
+      RuleFor(x => x.Task)
+        .MaximumLength(256)
+        .WithMessage("Task must be 256 characters or less.");
+    });
 
+    When(x => x.UserId != null, () => {
+      RuleFor(x => x.UserId)
+        .MaximumLength(128)
+        .WithMessage("UserId must be 128 characters or less.");
+    });
+
+    When(x => x.Limit != null, () => {
+      RuleFor(x => x.Limit)
+        .Limit();
+    });
+
+    When(x => x.Skip != null, () => {
+      RuleFor(x => x.Skip)
+        .Skip();
+    });
+  }
+}
+
+public class SearchHabitExecutionQueryValidator: AbstractValidator<SearchHabitExecutionQuery>
+{
+  public SearchHabitExecutionQueryValidator()
+  {
+    When(x => x.Date != null, () => {
+      RuleFor(x => x.Date)
+        .NullableDateValid();
+    });
+
+    When(x => x.Limit != null, () => {
+      RuleFor(x => x.Limit)
+        .Limit();
+    });
+
+    When(x => x.Skip != null, () => {
+      RuleFor(x => x.Skip)
+        .Skip();
+    });
+  }
 }
