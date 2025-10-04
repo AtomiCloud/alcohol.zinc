@@ -74,9 +74,10 @@ namespace Domain.Habit
 
     public enum ExecutionStatus
     {
-        Pending,    // Created, waiting for user action
+        Skipped,    
         Completed,  // User marked as done
-        Failed      // End-of-day passed without completion
+        Failed,      // End-of-day passed without completion
+        Freeze
     }
 
     public record HabitExecutionSearch

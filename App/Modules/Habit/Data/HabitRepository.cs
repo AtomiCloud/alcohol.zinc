@@ -242,11 +242,11 @@ namespace App.Modules.Habit.Data
             }
         }
 
-        public async Task<Result<int>> CreateFailedExecutions(List<string> userIds, DateOnly date)
+        public async Task<Result<int>> CreateFailedExecutions(List<Guid> habitIds, DateOnly date)
         {
             try
             {
-                logger.LogInformation("Creating failed executions for {UserCount} users on date: {Date}", userIds.Count, date);
+                logger.LogInformation("Creating failed executions for {UserCount} users on date: {Date}", habitIds.Count, date);
 
                 // Get day of week from the provided date
                 var dayOfWeek = date.DayOfWeek.ToString();
@@ -260,7 +260,7 @@ namespace App.Modules.Habit.Data
                     FROM ""Habits"" h
                     JOIN ""HabitVersions"" hv ON h.""Id"" = hv.""HabitId"" AND h.""Version"" = hv.""Version""
                     LEFT JOIN ""HabitExecutions"" he ON he.""HabitVersionId"" = hv.""Id"" AND he.""Date"" = {date}
-                    WHERE h.""UserId"" = ANY({userIds})
+                    WHERE h.""Id"" = ANY({habitIds})
                       AND h.""DeletedAt"" IS NULL
                       AND h.""Enabled"" = true
                       AND hv.""DaysOfWeek"" @> ARRAY[{dayOfWeek}]

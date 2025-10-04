@@ -107,9 +107,8 @@ public class HabitController(
       // todo change input from userid to list of habit id
         var result = await markDailyFailuresReqValidator
             .ValidateAsyncResult(req, "Invalid MarkDailyFailuresReq")
-            .ThenAwait(x => service.MarkDailyFailures(x.UserIds, x.Date.ToDate()));
+            .ThenAwait(x => service.MarkDailyFailures(x.HabitIds, x.Date.ToDate()));
         
-        // todo need to call donation api after mark daily failure
         return this.ReturnResult(result);
     }
 }
