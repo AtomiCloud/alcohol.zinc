@@ -33,7 +33,6 @@ namespace Domain.Habit
         public required TimeOnly NotificationTime { get; init; }
         public required Money Stake { get; init; }
         public required decimal Ratio { get; init; }
-        public required ushort Version { get; init; }
         public required string Timezone { get; init; }
     }
 
@@ -41,6 +40,7 @@ namespace Domain.Habit
     {
         public required Guid Id { get; init; }
         public required Guid HabitId { get; init; }
+        public required ushort Version { get; init; }
         public required HabitVersionRecord Record { get; init; }
     }
 
