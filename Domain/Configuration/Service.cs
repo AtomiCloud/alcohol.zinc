@@ -2,7 +2,9 @@ using CSharp_Result;
 
 namespace Domain.Configuration;
 
-public class ConfigurationService(IConfigurationRepository repo) : IConfigurationService
+public class ConfigurationService(
+  IConfigurationRepository repo,
+  ITransactionManager tm) : IConfigurationService
 {
   public Task<Result<Configuration?>> GetById(Guid id)
   {
@@ -14,9 +16,12 @@ public class ConfigurationService(IConfigurationRepository repo) : IConfiguratio
     return repo.Get(id, userId);
   }
 
-  public Task<Result<ConfigurationPrincipal>> Create(string userId, ConfigurationRecord record)
+  public Task<Result<ConfigurationPrincipal>> Create(string userId, ConfigurationRecord record,
+    Func<ConfigurationPrincipal, Task<Result<Unit>>>? sync)
   {
-    return repo.Create(userId, record);
+    return tm.Start(() => repo.Create(userId, record)
+      .DoAwait(DoType.MapErrors, config => sync?.Invoke(config) ?? new Unit().ToAsyncResult())
+    );
   }
 
   public Task<Result<ConfigurationPrincipal?>> Update(Guid id, string userId, ConfigurationRecord record)

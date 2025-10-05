@@ -16,4 +16,5 @@ public class AuthRoles
 public class LogtoClaims
 {
   public const string ZincUpdated = "alcohol_zinc";
+  public const string ConfigurationId = "configuration_id";
 }
