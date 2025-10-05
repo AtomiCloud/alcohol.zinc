@@ -1,3 +1,10 @@
+## [1.9.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.8.0...v1.9.0) (2025-10-05)
+
+
+### ✨ Features ✨
+
+* allow configuration setup to be synced to auth engine ([bf2f8b8](https://github.com/AtomiCloud/alcohol.zinc/commit/bf2f8b8eb421f42e26181f8ace7caebbcc386996))
+
 ## [1.8.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.7.0...v1.8.0) (2025-10-04)
 
 
