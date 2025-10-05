@@ -1,3 +1,10 @@
+## [1.11.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.10.0...v1.11.0) (2025-10-05)
+
+
+### ✨ Features ✨
+
+* add hasPaymentConsent to jwt claim ([8f4cc5f](https://github.com/AtomiCloud/alcohol.zinc/commit/8f4cc5ffcb03f342192efd9f4c341fd7cb3e34b8))
+
 ## [1.10.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.9.0...v1.10.0) (2025-10-05)
 
 
