@@ -116,7 +116,6 @@ public class AirwallexClient(
           throw;
         }
 
-        logger.LogInformation("Airwallex GenerateClientSecret Response: {Body}", body);
         return body.ToObj<AirwallexClientSecretRes>().ToResult();
       });
   }
