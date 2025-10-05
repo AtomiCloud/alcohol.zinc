@@ -1,3 +1,12 @@
+## [1.10.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.9.0...v1.10.0) (2025-10-05)
+
+
+### ✨ Features ✨
+
+* add local cache and redis cache for token ([464794f](https://github.com/AtomiCloud/alcohol.zinc/commit/464794f1b0e7a3de1f7bb9861cb22b2150b7d19c))
+* payment consent ([107e68b](https://github.com/AtomiCloud/alcohol.zinc/commit/107e68bfe5f4acef04c4ea38ab8709d18dd13035))
+* payment init ([068bd52](https://github.com/AtomiCloud/alcohol.zinc/commit/068bd529b27c452c3c4369f86f7a2ae0c978a004))
+
 ## [1.9.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.8.0...v1.9.0) (2025-10-05)
 
 
