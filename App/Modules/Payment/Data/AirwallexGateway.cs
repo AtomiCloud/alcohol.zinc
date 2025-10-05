@@ -7,6 +7,13 @@ namespace App.Modules.Payment.Data;
 
 public class AirwallexGateway(AirwallexClient client) : IPaymentGateway
 {
+  public async Task<Result<string?>> GetCustomerIdByMerchantIdAsync(string merchantCustomerId)
+  {
+    return await client
+      .ListCustomersAsync(merchantCustomerId)
+      .Then(res => res.Items.Length > 0 ? res.Items[0].Id : null, Errors.MapNone);
+  }
+
   public async Task<Result<string>> CreateCustomerAsync(string merchantCustomerId)
   {
     var req = new AirwallexCreateCustomerReq
@@ -36,8 +43,7 @@ public class AirwallexGateway(AirwallexClient client) : IPaymentGateway
         Id = item.Id,
         Status = item.Status,
         Currency = item.Currency,
-        NextTriggeredBy = item.NextTriggeredBy,
-        AdditionalData = JsonDocument.Parse("{}")
+        NextTriggeredBy = item.NextTriggeredBy
       }).ToArray(), Errors.MapNone);
   }
 
@@ -61,8 +67,7 @@ public class AirwallexGateway(AirwallexClient client) : IPaymentGateway
         Amount = res.Amount,
         Currency = res.Currency,
         CustomerId = res.CustomerId,
-        MerchantOrderId = res.MerchantOrderId,
-        AdditionalData = JsonDocument.Parse("{}")
+        MerchantOrderId = res.MerchantOrderId
       }, Errors.MapNone);
   }
 
@@ -84,8 +89,7 @@ public class AirwallexGateway(AirwallexClient client) : IPaymentGateway
         Amount = res.Amount,
         Currency = res.Currency,
         CustomerId = res.CustomerId,
-        MerchantOrderId = res.MerchantOrderId,
-        AdditionalData = JsonDocument.Parse("{}")
+        MerchantOrderId = res.MerchantOrderId
       }, Errors.MapNone);
   }
 

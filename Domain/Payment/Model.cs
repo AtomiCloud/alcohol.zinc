@@ -1,6 +1,11 @@
-using System.Text.Json;
-
 namespace Domain.Payment;
+
+public enum PaymentConsentStatus
+{
+  Verified,
+  RequiresPaymentMethod,
+  RequiresCustomerAction
+}
 
 public record PaymentCustomerSearch
 {
@@ -30,8 +35,9 @@ public record PaymentCustomerRecord
 {
   public required string UserId { get; init; }
   public required string AirwallexCustomerId { get; init; }
+  public string? PaymentConsentId { get; init; }
+  public PaymentConsentStatus? ConsentStatus { get; init; }
   public required bool HasPaymentConsent { get; init; }
-  public required JsonDocument AdditionalData { get; init; }
 }
 
 public record PaymentConsentInfo
@@ -40,7 +46,13 @@ public record PaymentConsentInfo
   public required string Status { get; init; }
   public required string Currency { get; init; }
   public required string NextTriggeredBy { get; init; }
-  public required JsonDocument AdditionalData { get; init; }
+}
+
+public record PaymentConsentStatusResult
+{
+  public string? ConsentId { get; init; }
+  public PaymentConsentStatus? Status { get; init; }
+  public required bool HasPaymentConsent { get; init; }
 }
 
 public record PaymentIntentResult
@@ -51,7 +63,6 @@ public record PaymentIntentResult
   public required string Currency { get; init; }
   public required string CustomerId { get; init; }
   public required string MerchantOrderId { get; init; }
-  public required JsonDocument AdditionalData { get; init; }
 }
 
 public record ClientSecretResult
@@ -83,5 +94,4 @@ public record PaymentRecord
   public required string Currency { get; init; }
   public required DateTime LastUpdated { get; init; }
   public required string Status { get; init; }
-  public required JsonDocument AdditionalData { get; init; }
 }

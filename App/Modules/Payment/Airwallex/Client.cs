@@ -13,6 +13,42 @@ public class AirwallexClient(
 {
   private HttpClient HttpClient => factory.CreateClient(HttpClients.Airwallex);
 
+  public Task<Result<AirwallexListCustomersRes>> ListCustomersAsync(string merchantCustomerId)
+  {
+    return authenticator
+      .GetToken()
+      .ThenAwait(async token =>
+      {
+        var request = new HttpRequestMessage
+        {
+          Method = HttpMethod.Get,
+          RequestUri = new Uri($"api/v1/pa/customers?merchant_customer_id={merchantCustomerId}", UriKind.Relative),
+          Headers = { Authorization = new AuthenticationHeaderValue("Bearer", token) },
+        };
+
+        using var response = await HttpClient.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        try
+        {
+          response.EnsureSuccessStatusCode();
+        }
+        catch (HttpRequestException e)
+        {
+          logger.LogError(e, "Failed to list customers with Airwallex (HTTP Error), Response: {Body}", body);
+          return e;
+        }
+        catch (Exception e)
+        {
+          logger.LogError(e, "Failed to list customers with Airwallex");
+          throw;
+        }
+
+        logger.LogInformation("Airwallex ListCustomers Response: {Body}", body);
+        return body.ToObj<AirwallexListCustomersRes>().ToResult();
+      });
+  }
+
   public Task<Result<AirwallexCreateCustomerRes>> CreateCustomerAsync(AirwallexCreateCustomerReq req)
   {
     return authenticator
@@ -80,6 +116,7 @@ public class AirwallexClient(
           throw;
         }
 
+        logger.LogInformation("Airwallex GenerateClientSecret Response: {Body}", body);
         return body.ToObj<AirwallexClientSecretRes>().ToResult();
       });
   }

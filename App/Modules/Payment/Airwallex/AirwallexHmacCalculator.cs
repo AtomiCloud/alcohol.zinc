@@ -10,7 +10,7 @@ public class AirwallexHmacCalculator(IOptions<PaymentOption> options)
 {
   public Result<string> Compute(string timestamp, string payload)
   {
-    var key = options.Value.Airwallex.WebhookKey;
+    var key = options.Value.Airwallex.Webhook;
     using var hmacsha256 = new HMACSHA256(Encoding.UTF8.GetBytes(key));
     var hash = hmacsha256.ComputeHash(Encoding.UTF8.GetBytes(timestamp + payload));
     return Convert.ToHexString(hash).ToLower();

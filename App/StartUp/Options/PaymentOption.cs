@@ -11,8 +11,7 @@ public class PaymentOption
 
 public class AirwallexOption
 {
-  [Required] public string ClientId { get; set; } = string.Empty;
-  [Required] public string ApiKey { get; set; } = string.Empty;
-  [Required] public string WebhookKey { get; set; } = string.Empty;
-  [Required, Url] public string BaseUrl { get; set; } = "https://api-demo.airwallex.com/api/v1";
+  [Required] public string Id { get; set; } = string.Empty;
+  [Required] public string Key { get; set; } = string.Empty;
+  [Required] public string Webhook { get; set; } = string.Empty;
 }

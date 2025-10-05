@@ -23,13 +23,28 @@ public record AirwallexCreateCustomerRes
   public required string MerchantCustomerId { get; init; }
 }
 
+public record AirwallexListCustomersRes
+{
+  [JsonPropertyName("items")]
+  public required AirwallexCustomerItem[] Items { get; init; }
+}
+
+public record AirwallexCustomerItem
+{
+  [JsonPropertyName("id")]
+  public required string Id { get; init; }
+
+  [JsonPropertyName("merchant_customer_id")]
+  public required string MerchantCustomerId { get; init; }
+}
+
 public record AirwallexClientSecretRes
 {
   [JsonPropertyName("client_secret")]
   public required string ClientSecret { get; init; }
 
-  [JsonPropertyName("customer_id")]
-  public required string CustomerId { get; init; }
+  [JsonPropertyName("expired_time")]
+  public string? ExpiredTime { get; init; }
 }
 
 public record AirwallexPaymentConsentsRes

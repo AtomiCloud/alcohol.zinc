@@ -56,6 +56,16 @@ public static class PaymentMapper
     };
   }
 
+  public static PaymentConsentRes ToRes(this PaymentConsentStatusResult status)
+  {
+    return new PaymentConsentRes
+    {
+      HasPaymentConsent = status.HasPaymentConsent,
+      ConsentId = status.ConsentId,
+      Status = status.Status?.ToString()
+    };
+  }
+
   public static CreatePaymentIntentRes ToRes(this PaymentIntentResult result)
   {
     return new CreatePaymentIntentRes

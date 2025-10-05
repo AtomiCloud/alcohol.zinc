@@ -5,7 +5,6 @@ using App.StartUp.Options.Swagger;
 using App.StartUp.Options.Traces;
 using App.StartUp.Registry;
 using App.Utility;
-using NJsonSchema;
 
 namespace App.StartUp.Options;
 
@@ -129,7 +128,10 @@ public static class OptionsExtensions
         c => c.All(x => SmtpProviders.Any(d => d == x.Key)),
         "Smtp.Key (Config File) must be in SmtpProviders (Class)"
       );
-    
+
+    // Register Payment Options
+    services.RegisterOption<PaymentOption>(PaymentOption.Key);
+
     return services;
   }
 }

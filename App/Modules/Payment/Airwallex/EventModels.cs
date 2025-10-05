@@ -37,6 +37,7 @@ public record AirwallexEventData
 
 public record AirwallexEventDataObject
 {
+  // Payment Intent fields
   [JsonPropertyName("amount")]
   public decimal Amount { get; set; }
 
@@ -49,8 +50,18 @@ public record AirwallexEventDataObject
   [JsonPropertyName("captured_amount")]
   public decimal CapturedAmount { get; set; }
 
+  [JsonPropertyName("merchant_order_id")]
+  public string MerchantOrderId { get; set; } = string.Empty;
+
+  [JsonPropertyName("request_id")]
+  public Guid RequestId { get; set; }
+
+  // Common fields
   [JsonPropertyName("created_at")]
   public string CreatedAt { get; set; } = string.Empty;
+
+  [JsonPropertyName("updated_at")]
+  public string UpdatedAt { get; set; } = string.Empty;
 
   [JsonPropertyName("currency")]
   public string Currency { get; set; } = string.Empty;
@@ -61,18 +72,22 @@ public record AirwallexEventDataObject
   [JsonPropertyName("id")]
   public string Id { get; set; } = string.Empty;
 
-  [JsonPropertyName("merchant_order_id")]
-  public string MerchantOrderId { get; set; } = string.Empty;
-
-  [JsonPropertyName("request_id")]
-  public Guid RequestId { get; set; }
-
   [JsonPropertyName("status")]
   public string Status { get; set; } = string.Empty;
 
-  [JsonPropertyName("updated_at")]
-  public string UpdatedAt { get; set; } = string.Empty;
-
   [JsonPropertyName("customer_id")]
   public string CustomerId { get; set; } = string.Empty;
+
+  // Payment Consent specific fields
+  [JsonPropertyName("initial_payment_intent_id")]
+  public string InitialPaymentIntentId { get; set; } = string.Empty;
+
+  [JsonPropertyName("merchant_trigger_reason")]
+  public string MerchantTriggerReason { get; set; } = string.Empty;
+
+  [JsonPropertyName("next_triggered_by")]
+  public string NextTriggeredBy { get; set; } = string.Empty;
+
+  [JsonPropertyName("purpose")]
+  public string Purpose { get; set; } = string.Empty;
 }

@@ -49,8 +49,8 @@ public class AirwallexAuthenticator(
         RequestUri = new Uri("api/v1/authentication/login", UriKind.Relative),
         Headers =
         {
-          { "x-client-id", options.Value.Airwallex.ClientId },
-          { "x-api-key", options.Value.Airwallex.ApiKey },
+          { "x-client-id", options.Value.Airwallex.Id },
+          { "x-api-key", options.Value.Airwallex.Key },
         },
       };
 

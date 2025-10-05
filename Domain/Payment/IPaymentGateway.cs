@@ -5,6 +5,7 @@ namespace Domain.Payment;
 public interface IPaymentGateway
 {
   // Customer management
+  Task<Result<string?>> GetCustomerIdByMerchantIdAsync(string merchantCustomerId);
   Task<Result<string>> CreateCustomerAsync(string merchantCustomerId);
   Task<Result<string>> GenerateClientSecretAsync(string customerId);
 

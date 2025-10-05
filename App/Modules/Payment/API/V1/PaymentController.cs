@@ -1,10 +1,8 @@
 using System.Net.Mime;
 using System.Text.Encodings.Web;
 using System.Text.Json;
-using App.Error.V1;
 using App.Modules.Common;
 using App.Modules.Payment.Airwallex;
-using App.StartUp.Registry;
 using App.StartUp.Services.Auth;
 using App.Utility;
 using Asp.Versioning;
@@ -18,7 +16,7 @@ namespace App.Modules.Payment.API.V1;
 [ApiVersion(1.0)]
 [ApiController]
 [Consumes(MediaTypeNames.Application.Json)]
-[Route("api/v{version:apiVersion}/{userId}/payment")]
+[Route("api/v{version:apiVersion}/[controller]")]
 public class PaymentController(
   IPaymentService service,
   CreatePaymentIntentReqValidator createPaymentIntentReqValidator,
@@ -27,8 +25,8 @@ public class PaymentController(
   IAuthHelper authHelper
 ) : AtomiControllerBase(authHelper)
 {
-  // 1. POST /api/v1/{userId}/payment/customers
-  [Authorize, HttpPost("customers")]
+  // 1. POST /api/v1/payment/{userId}/customers
+  [Authorize, HttpPost("{userId}/customers")]
   public async Task<ActionResult<CreateCustomerRes>> CreateCustomer(string userId)
   {
     var result = await service.CreateCustomerAsync(userId)
@@ -38,8 +36,8 @@ public class PaymentController(
     return this.ReturnResult(result);
   }
 
-  // 2. GET /api/v1/{userId}/payment/client-secret
-  [Authorize, HttpGet("client-secret")]
+  // 2. GET /api/v1/payment/{userId}/client-secret
+  [Authorize, HttpGet("{userId}/client-secret")]
   public async Task<ActionResult<ClientSecretRes>> GetClientSecret(string userId)
   {
     var result = await service.GenerateClientSecretAsync(userId)
@@ -48,8 +46,8 @@ public class PaymentController(
     return this.ReturnResult(result);
   }
 
-  // 3. GET /api/v1/{userId}/payment/consent
-  [Authorize, HttpGet("consent")]
+  // 3. GET /api/v1/payment/{userId}/consent
+  [Authorize, HttpGet("{userId}/consent")]
   public async Task<ActionResult<PaymentConsentRes>> GetPaymentConsent(string userId)
   {
     var result = await service.GetPaymentConsentAsync(userId)
@@ -58,8 +56,8 @@ public class PaymentController(
     return this.ReturnResult(result);
   }
 
-  // 4. POST /api/v1/{userId}/payment/intent
-  [Authorize, HttpPost("intent")]
+  // 4. POST /api/v1/payment/{userId}/intent
+  [Authorize, HttpPost("{userId}/intent")]
   public async Task<ActionResult<CreatePaymentIntentRes>> CreatePaymentIntent(
     string userId,
     [FromBody] CreatePaymentIntentReq req
@@ -73,8 +71,8 @@ public class PaymentController(
     return this.ReturnResult(result);
   }
 
-  // 5. POST /api/v1/{userId}/payment/intent/{intentId}
-  [Authorize, HttpPost("intent/{intentId}")]
+  // 5. POST /api/v1/payment/{userId}/intent/{intentId}
+  [Authorize, HttpPost("{userId}/intent/{intentId}")]
   public async Task<ActionResult<ConfirmPaymentIntentRes>> ConfirmPaymentIntent(
     string userId,
     string intentId,

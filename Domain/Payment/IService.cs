@@ -7,10 +7,13 @@ public interface IPaymentService
   // Customer management
   Task<Result<PaymentCustomerPrincipal>> CreateCustomerAsync(string userId);
   Task<Result<ClientSecretResult>> GenerateClientSecretAsync(string userId);
-  Task<Result<PaymentCustomerPrincipal?>> UpdatePaymentConsentAsync(string userId, bool hasConsent);
+  Task<Result<PaymentCustomerPrincipal?>> UpdatePaymentConsentAsync(
+    string airwallexCustomerId,
+    string? paymentConsentId,
+    PaymentConsentStatus? consentStatus);
 
   // Payment consent operations
-  Task<Result<PaymentConsentInfo>> GetPaymentConsentAsync(string userId);
+  Task<Result<PaymentConsentStatusResult>> GetPaymentConsentAsync(string userId);
   Task<Result<bool>> HasPaymentConsentAsync(string userId);
 
   // Payment intent operations
