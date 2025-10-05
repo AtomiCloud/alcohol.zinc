@@ -92,11 +92,4 @@ public class AirwallexGateway(AirwallexClient client) : IPaymentGateway
         MerchantOrderId = res.MerchantOrderId
       }, Errors.MapNone);
   }
-
-  public async Task<Result<bool>> VerifyWebhookSignatureAsync(string payload, string timestamp, string signature)
-  {
-    return await client
-      .VerifyWebhookSignatureAsync(payload, timestamp, signature)
-      .Then(isValid => isValid, Errors.MapNone);
-  }
 }

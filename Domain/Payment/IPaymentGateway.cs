@@ -15,7 +15,4 @@ public interface IPaymentGateway
   // Payment intent operations
   Task<Result<PaymentIntentResult>> CreatePaymentIntentAsync(CreatePaymentIntentRequest request);
   Task<Result<PaymentIntentResult>> ConfirmPaymentIntentAsync(string paymentIntentId, string paymentConsentId, string customerId);
-
-  // Webhook verification
-  Task<Result<bool>> VerifyWebhookSignatureAsync(string payload, string timestamp, string signature);
 }

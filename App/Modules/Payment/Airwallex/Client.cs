@@ -236,12 +236,4 @@ public class AirwallexClient(
         ExpiresAt = DateTime.UtcNow.AddHours(1).ToString("O") // Default 1 hour expiry
       }, Errors.MapNone);
   }
-
-  public Task<Result<bool>> VerifyWebhookSignatureAsync(string payload, string timestamp, string signature)
-  {
-    // Webhook signature verification logic would go here
-    // For now, return true as placeholder
-    logger.LogDebug(payload, timestamp, signature);
-    return Task.FromResult(true.ToResult());
-  }
 }
