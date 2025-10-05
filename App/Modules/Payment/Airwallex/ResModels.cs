@@ -97,3 +97,18 @@ public record AirwallexPaymentIntentRes
   [JsonPropertyName("client_secret")]
   public required string ClientSecret { get; init; }
 }
+
+public record AirwallexPaymentConsentRes
+{
+  [JsonPropertyName("id")]
+  public required string Id { get; init; }
+
+  [JsonPropertyName("request_id")]
+  public required string RequestId { get; init; }
+
+  [JsonPropertyName("customer_id")]
+  public required string CustomerId { get; init; }
+
+  [JsonPropertyName("status")]
+  public required string Status { get; init; }
+}

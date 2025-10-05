@@ -56,6 +56,15 @@ public class PaymentController(
     return this.ReturnResult(result);
   }
 
+  // 3b. DELETE /api/v1/payment/{userId}/consent
+  [Authorize, HttpDelete("{userId}/consent")]
+  public async Task<ActionResult> DisablePaymentConsent(string userId)
+  {
+    var result = await service.DisablePaymentConsentAsync(userId);
+
+    return this.ReturnUnitResult(result);
+  }
+
   // 4. POST /api/v1/payment/{userId}/intent
   [Authorize, HttpPost("{userId}/intent")]
   public async Task<ActionResult<CreatePaymentIntentRes>> CreatePaymentIntent(

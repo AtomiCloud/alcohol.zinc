@@ -7,4 +7,6 @@ public static class HttpClients
   public const string Logto = "Logto";
 
   public const string Airwallex = "Airwallex";
+  
+  public const string Pledge = "PLEDGE";
 }

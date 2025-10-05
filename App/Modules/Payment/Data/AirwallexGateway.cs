@@ -47,6 +47,13 @@ public class AirwallexGateway(AirwallexClient client) : IPaymentGateway
       }).ToArray(), Errors.MapNone);
   }
 
+  public async Task<Result<Unit>> DisablePaymentConsentAsync(string paymentConsentId)
+  {
+    return await client
+      .DisablePaymentConsentAsync(paymentConsentId)
+      .Then(_ => new Unit(), Errors.MapNone);
+  }
+
   public async Task<Result<PaymentIntentResult>> CreatePaymentIntentAsync(CreatePaymentIntentRequest request)
   {
     var req = new AirwallexCreatePaymentIntentReq

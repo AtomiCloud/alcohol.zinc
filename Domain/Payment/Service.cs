@@ -98,6 +98,29 @@ public class PaymentService(
       .Then(customer => customer?.Principal.Record.HasPaymentConsent ?? false, Errors.MapNone);
   }
 
+  public Task<Result<Unit>> DisablePaymentConsentAsync(string userId)
+  {
+    return repo.GetByUserId(userId)
+      .Then(customer =>
+        customer == null
+          ? new NotFoundException($"Payment customer not found for userId: {userId}", typeof(PaymentCustomer), userId)
+          : customer.ToResult()
+      )
+      .Then(customer =>
+      {
+        if (string.IsNullOrEmpty(customer.Principal.Record.PaymentConsentId))
+        {
+          return new NotFoundException($"No payment consent found for userId: {userId}", typeof(PaymentCustomer), userId);
+        }
+        return customer.ToResult();
+      })
+      .ThenAwait(customer =>
+        gateway.DisablePaymentConsentAsync(customer.Principal.Record.PaymentConsentId!)
+          .ThenAwait(_ => repo.DisablePaymentConsentAsync(userId))
+          .Then(_ => new Unit(), Errors.MapNone)
+      );
+  }
+
   public Task<Result<PaymentIntentResult>> CreatePaymentIntentAsync(string userId, CreatePaymentIntentRequest request)
   {
     throw new NotImplementedException();
