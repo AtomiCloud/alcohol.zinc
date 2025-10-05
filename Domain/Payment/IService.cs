@@ -31,7 +31,4 @@ public interface IPaymentService
   // Payment completion and status updates
   Task<Result<Unit>> CompletePaymentAsync(Guid requestId, PaymentRecord record);
   Task<Result<Unit>> UpdatePaymentStatusAsync(Guid requestId, PaymentRecord record);
-
-  // Token management
-  Task<Result<string>> RefreshAccessTokenAsync();
 }

@@ -93,13 +93,6 @@ public class AirwallexGateway(AirwallexClient client) : IPaymentGateway
       }, Errors.MapNone);
   }
 
-  public async Task<Result<string>> RefreshAccessTokenAsync()
-  {
-    return await client
-      .RefreshAccessTokenAsync()
-      .Then(res => res.Token, Errors.MapNone);
-  }
-
   public async Task<Result<bool>> VerifyWebhookSignatureAsync(string payload, string timestamp, string signature)
   {
     return await client

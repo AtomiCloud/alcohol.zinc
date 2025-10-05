@@ -230,7 +230,7 @@ public class AirwallexClient(
 
   public Task<Result<AirwallexAuthTokenRes>> RefreshAccessTokenAsync()
   {
-    return authenticator.RefreshTokenAsync()
+    return authenticator.GetToken()
       .Then(token => new AirwallexAuthTokenRes
       {
         Token = token,

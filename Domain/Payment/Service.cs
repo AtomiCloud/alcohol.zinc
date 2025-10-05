@@ -127,9 +127,4 @@ public class PaymentService(
   {
     throw new NotImplementedException();
   }
-
-  public Task<Result<string>> RefreshAccessTokenAsync()
-  {
-    throw new NotImplementedException();
-  }
 }
