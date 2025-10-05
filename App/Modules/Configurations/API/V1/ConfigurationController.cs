@@ -20,6 +20,7 @@ public class ConfigurationController(
   IConfigurationService service,
   CreateConfigurationReqValidator createConfigurationReqValidator,
   UpdateConfigurationReqValidator updateConfigurationReqValidator,
+  IAuthManagement authManagement,
   IAuthHelper h
 ) : AtomiControllerBase(h)
 {
@@ -35,8 +36,8 @@ public class ConfigurationController(
 
     // Admin can access any configuration, regular users only their own
     var result = h.HasAny(HttpContext.User, AuthRoles.Field, AuthRoles.Admin) 
-      ? await service.GetById(id).Then(config => config?.ToRes(), Errors.MapAll)
-      : await service.GetById(id, userId).Then(config => config?.ToRes(), Errors.MapAll);
+      ? await service.GetById(id).Then(config => config?.ToRes(), Errors.MapNone)
+      : await service.GetById(id, userId).Then(config => config?.ToRes(), Errors.MapNone);
       
     return this.ReturnNullableResult(result, new EntityNotFound("Configuration Not Found", typeof(Configuration), id.ToString()));
   }
@@ -53,7 +54,7 @@ public class ConfigurationController(
 
     var result = await createConfigurationReqValidator
       .ValidateAsyncResult(req, "Invalid CreateConfigurationReq")
-      .ThenAwait(r => service.Create(userId, r.ToRecord()))
+      .ThenAwait(r => service.Create(userId, r.ToRecord(), config => authManagement.SetClaim(config.UserId, LogtoClaims.ConfigurationId, config.Id.ToString())))
       .Then(config => config.ToRes().ToResult());
     return this.ReturnResult(result);
   }
@@ -71,7 +72,7 @@ public class ConfigurationController(
     var result = await updateConfigurationReqValidator
       .ValidateAsyncResult(req, "Invalid UpdateConfigurationReq")
       .ThenAwait(r => service.Update(id, userId, r.ToRecord()))
-      .Then(config => (config?.ToRes()).ToResult());
+      .Then(config => (config?.ToRes()), Errors.MapNone);
     return this.ReturnNullableResult(result, new EntityNotFound("Configuration Not Found", typeof(ConfigurationPrincipal), id.ToString()));
   }
 

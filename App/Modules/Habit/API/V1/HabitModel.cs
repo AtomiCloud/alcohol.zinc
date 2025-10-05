@@ -39,7 +39,7 @@ public record HabitVersionRes(
 
 public record MarkDailyFailuresReq(
     string Date,             // string (e.g. "31-08-2025")
-    List<string> UserIds     // List of user IDs to process
+    List<Guid> HabitIds     // List of user IDs to process
 );
 
 public record CompleteHabitReq(
@@ -55,3 +55,17 @@ public record HabitExecutionRes(
     string? Notes,           // Optional notes
     bool PaymentProcessed    // Penalty payment status
 );
+
+public record SearchHabitQuery(
+  Guid? Id,
+  string? UserId,
+  string? Task,
+  bool? Enabled,
+  int? Limit,
+  int? Skip);
+
+public record SearchHabitExecutionQuery(
+  Guid? Id,
+  string? Date,
+  int? Limit,
+  int? Skip);

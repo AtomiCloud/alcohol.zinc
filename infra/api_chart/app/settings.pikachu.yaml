@@ -32,9 +32,18 @@ Cache:
   MAIN:
     SSL: true
 # external
-HttpClient: {}
+HttpClient:
+  Logto:
+    BaseAddress: https://admin.lithium.alcohol.pikachu.atomi.cloud
 Auth:
+  Enabled: true
   Settings:
-    Issuer: https://favybm.logto.app/oidc
+    Issuer: https://admin.lithium.alcohol.pikachu.atomi.cloud/oidc
     Audience: https://api.zinc.alcohol.pikachu
-    Domain: favybm.logto.app/oidc
+    Domain: admin.lithium.alcohol.pikachu.atomi.cloud/oidc
+  Management:
+    Endpoint: https://admin.lithium.alcohol.pikachu.atomi.cloud
+    Id: me4y2umq0wtujywxi5aff
+    Secret: supersecret
+    Resource: https://default.logto.app/api
+    Scope: all

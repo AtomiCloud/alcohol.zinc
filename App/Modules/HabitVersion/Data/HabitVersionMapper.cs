@@ -11,18 +11,23 @@ namespace App.Modules.HabitVersion.Data
             {
                 Id = data.Id,
                 HabitId = data.HabitId,
-                Record = new HabitVersionRecord
-                {
-                    CharityId = data.CharityId,
-                    Task = data.Task,
-                    DaysOfWeek = data.DaysOfWeek,
-                    NotificationTime = data.NotificationTime,
-                    Stake = new Money(data.StakeCents / 100m, Currency.FromCode(data.StakeCurrency)),
-                    Ratio = data.RatioBasisPoints / 10000m,  // Basis points to decimal
-                    Version = data.Version,
-                    Timezone = data.Timezone
-                }
+                Version = data.Version,
+                Record = data.ToRecord()
             };
+        }
+
+        public static HabitVersionRecord ToRecord(this HabitVersionData data)
+        {
+          return new HabitVersionRecord
+          {
+            CharityId = data.CharityId,
+            Task = data.Task,
+            DaysOfWeek = data.DaysOfWeek,
+            NotificationTime = data.NotificationTime,
+            Stake = new Money(data.StakeCents / 100m, Currency.FromCode(data.StakeCurrency)),
+            Ratio = data.RatioBasisPoints / 10000m, // Basis points to decimal
+            Timezone = data.Timezone
+          };
         }
 
         public static HabitVersionData ToData(this HabitVersionPrincipal principal)
@@ -32,7 +37,7 @@ namespace App.Modules.HabitVersion.Data
                 Id = principal.Id,
                 HabitId = principal.HabitId,
                 CharityId = principal.Record.CharityId,
-                Version = principal.Record.Version,
+                Version = principal.Version,
                 Task = principal.Record.Task,
                 DaysOfWeek = principal.Record.DaysOfWeek,
                 NotificationTime = principal.Record.NotificationTime,

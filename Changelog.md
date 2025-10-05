@@ -1,3 +1,36 @@
+## [1.9.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.8.0...v1.9.0) (2025-10-05)
+
+
+### ✨ Features ✨
+
+* allow configuration setup to be synced to auth engine ([bf2f8b8](https://github.com/AtomiCloud/alcohol.zinc/commit/bf2f8b8eb421f42e26181f8ace7caebbcc386996))
+
+## [1.8.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.7.0...v1.8.0) (2025-10-04)
+
+
+### ✨ Features ✨
+
+* add habit-level timezone configuration ([803cd40](https://github.com/AtomiCloud/alcohol.zinc/commit/803cd409d256b4e7c623e93716ebe57250855d72))
+* Failed execution should be based off habit id, not user id ([fb7e132](https://github.com/AtomiCloud/alcohol.zinc/commit/fb7e13246990cea5fa95c91951112989c72283ed))
+
+
+### 🐛 Bug Fixes 🐛
+
+* dow validator ([a447d82](https://github.com/AtomiCloud/alcohol.zinc/commit/a447d82858947d6c375171ce3b24f838661f582f))
+* fix pr comment ([2d86ef3](https://github.com/AtomiCloud/alcohol.zinc/commit/2d86ef3ee2835b44e5259afb91c8412ee6c1e782))
+* fix pr comments ([25a09c4](https://github.com/AtomiCloud/alcohol.zinc/commit/25a09c4eb0aa65aeceb7c693d7040987222f5d45))
+* remove debug logging ([ff9891f](https://github.com/AtomiCloud/alcohol.zinc/commit/ff9891f2eb6c20457776298d5093b40739ba4211))
+* resolve conflict ([b1e255f](https://github.com/AtomiCloud/alcohol.zinc/commit/b1e255ff4ef6a0350073d8b85e366ec55146ffbe))
+
+## [1.7.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.6.0...v1.7.0) (2025-10-04)
+
+## [1.6.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.5.0...v1.6.0) (2025-10-04)
+
+
+### ✨ Features ✨
+
+* update config to use new logto ([1b734f5](https://github.com/AtomiCloud/alcohol.zinc/commit/1b734f5da7816eeaf413f494c778db1885fd54ae))
+
 ## [1.5.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.4.1...v1.5.0) (2025-09-20)
 
 

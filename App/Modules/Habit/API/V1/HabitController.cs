@@ -21,113 +21,94 @@ public class HabitController(
     IAuthHelper authHelper,
     CreateHabitReqValidator createHabitReqValidator,
     UpdateHabitReqValidator updateHabitReqValidator,
-    MarkDailyFailuresReqValidator markDailyFailuresReqValidator
+    MarkDailyFailuresReqValidator markDailyFailuresReqValidator,
+    SearchHabitQueryValidator searchHabitQueryValidator
 ) : AtomiControllerBase(authHelper)
 {
-    [Authorize, HttpGet("")]
-    public async Task<ActionResult<List<HabitVersionRes>>> ListAllHabits()
+    [Authorize, HttpGet("{userId}")]
+    public async Task<ActionResult<List<HabitVersionRes>>> SearchHabits(string userId, [FromQuery] SearchHabitQuery query)
     {
-        var userId = this.Sub();
-        if (userId == null) return Unauthorized();
-
-        var result = await service.ListAllUserHabits(userId)
-            .Then(habits => habits.Select(h => h.ToRes()).ToList().ToResult());
+        var result = await this.GuardAsync(userId)
+          .ThenAwait(_ => searchHabitQueryValidator.ValidateAsyncResult(query, "Invalid Search Habit Query"))
+          .ThenAwait(_ => service.SearchHabits(query.ToDomain()))
+          .Then(habits => habits.Select(h => h.ToRes()).ToList(), Errors.MapNone);
+        
         return this.ReturnResult(result);
     }
 
-    [Authorize, HttpGet("{id:guid}")]
-    public async Task<ActionResult<HabitVersionRes>> GetCurrentHabitVersion(Guid id)
+    [Authorize, HttpGet("{userId}/{id:guid}")]
+    public async Task<ActionResult<HabitVersionRes>> GetCurrentHabitVersion(string userId, Guid id)
     {
-        var userId = this.Sub();
-        if (userId == null) return Unauthorized();
-
-        var result = await service.GetCurrentHabitVersion(userId, id)
-            .Then(x => x?.ToRes(), Errors.MapAll);
+        var result = await this.GuardAsync(userId)
+          .ThenAwait(_ => service.GetCurrentHabitVersion(userId, id))
+          .Then(x => x?.ToRes(), Errors.MapNone);
+        
         return this.ReturnNullableResult(result, new EntityNotFound(
             "Habit Not Found", typeof(HabitVersionPrincipal), id.ToString()));
     }
 
-    [Authorize, HttpPost]
-    public async Task<ActionResult<HabitVersionRes>> Create([FromBody] CreateHabitReq req)
+    [Authorize, HttpPost("{userId}")]
+    public async Task<ActionResult<HabitVersionRes>> Create(string userId, [FromBody] CreateHabitReq req)
     {
-        var userId = this.Sub();
-        if (userId == null) return Unauthorized();
-
-        var result = await createHabitReqValidator
-            .ValidateAsyncResult(req, "Invalid CreateHabitReq")
-            .ThenAwait(x => service.Create(userId, x.ToVersionRecord()))
-            .Then(h => h.ToRes().ToResult());
+        var result = await this.GuardAsync(userId)
+          .ThenAwait(_ => createHabitReqValidator.ValidateAsyncResult(req, "Invalid CreateHabitReq"))
+          .ThenAwait(x => service.Create(userId, x.ToVersionRecord()))
+          .Then(h => h.ToRes(), Errors.MapNone);
+        
         return this.ReturnResult(result);
     }
 
-    [Authorize, HttpPut("{id:guid}")]
-    public async Task<ActionResult<HabitVersionRes>> Update(Guid id, [FromBody] UpdateHabitReq req)
+    [Authorize, HttpPut("{userId}/{id:guid}")]
+    public async Task<ActionResult<HabitVersionRes>> Update(string userId, Guid id, [FromBody] UpdateHabitReq req)
     {
-        var userId = this.Sub();
-        if (userId == null) return Unauthorized();
-
-        var result = await updateHabitReqValidator
-            .ValidateAsyncResult(req, "Invalid UpdateHabitReq")
-            .ThenAwait(x => service.Update(userId, id, x.ToVersionRecord(0), req.Enabled)) // Version will be set by repository, pass enabled status
-            .Then(h => h?.ToRes(), Errors.MapAll);
+        var result = await this.GuardAsync(userId)
+            .ThenAwait(_ => updateHabitReqValidator.ValidateAsyncResult(req, "Invalid UpdateHabitReq"))
+            .ThenAwait(x => service.Update(userId, id, x.ToVersionRecord(), req.Enabled))
+            .Then(h => h?.ToRes(), Errors.MapNone);
+        
         return this.ReturnNullableResult(result, new EntityNotFound(
             "Habit Not Found", typeof(HabitVersionPrincipal), id.ToString()));
     }
 
-    [Authorize, HttpDelete("{id:guid}")]
-    public async Task<ActionResult<Unit>> Delete(Guid id)
+    [Authorize, HttpDelete("{userId}/{id:guid}")]
+    public async Task<ActionResult> Delete(string userId, Guid id)
     {
-        var userId = this.Sub();
-        if (userId == null) return Unauthorized();
-
-        var result = await service.Delete(id, userId)
-            .Then(unit => unit != null ? new Unit().ToResult() : 
-                new EntityNotFound("Habit Not Found", typeof(HabitPrincipal), id.ToString()).ToException());
-        return this.ReturnResult(result);
+      var result = await this.GuardAsync(userId)
+        .ThenAwait(_ => service.Delete(id, userId));
+        
+        return this.ReturnUnitNullableResult(result, 
+          new EntityNotFound("Habit Not Found", typeof(Domain.Habit.Habit), id.ToString()));
     }
 
-    [Authorize, HttpPost("{id:guid}/executions")]
-    public async Task<ActionResult<HabitExecutionRes>> CompleteHabit(Guid id, [FromBody] CompleteHabitReq req)
+    [Authorize, HttpPost("{userId}/{habitVersionId:guid}/executions")]
+    public async Task<ActionResult<HabitExecutionRes>> CompleteHabit(string userId, Guid habitVersionId, [FromBody] CompleteHabitReq req)
     {
-        var userId = this.Sub();
-        if (userId == null) return Unauthorized();
+      var result = await this.GuardAsync(userId)
+        .ThenAwait(_ => service.CompleteHabit(userId, habitVersionId, req.Notes))
+        .Then(execution => execution.ToRes(), Errors.MapNone);
 
-        var result = await service.CompleteHabit(userId, id, req.Notes)
-            .Then(execution => execution.ToRes().ToResult());
-        return this.ReturnResult(result);
+      return this.ReturnResult(result);
     }
 
-    [Authorize, HttpGet("executions")]
-    public async Task<ActionResult<List<HabitExecutionRes>>> GetDailyExecutions([FromQuery] string? date = null)
+    [Authorize, HttpGet("{userId}/executions")]
+    public async Task<ActionResult<List<HabitExecutionRes>>> GetDailyExecutions(string userId, 
+      [FromQuery] SearchHabitExecutionQuery searchHabitExecutionQuery)
     {
-        var userId = this.Sub();
-        if (userId == null) return Unauthorized();
-
-        DateOnly targetDate;
-        if (string.IsNullOrEmpty(date))
-        {
-            targetDate = DateOnly.FromDateTime(DateTime.Today);
-        }
-        else
-        {
-            if (!DateOnly.TryParse(date, out targetDate))
-            {
-                return BadRequest($"Invalid date format: {date}. Expected format: YYYY-MM-DD");
-            }
-        }
-
-        var result = await service.GetDailyExecutions(userId, targetDate)
-            .Then(executions => executions.Select(e => e.ToRes()).ToList().ToResult());
+        var result = await this.GuardAsync(userId)
+          .ThenAwait(_ => service.SearchHabitExecutions(userId, searchHabitExecutionQuery.ToDomain()))
+          .Then(executions => executions.Select(e => e.ToRes()).ToList(), 
+            Errors.MapNone);
         return this.ReturnResult(result);
     }
 
     [Authorize(Policy = AuthPolicies.OnlyAdmin), HttpPost("executions/mark-daily-failures")]
     public async Task<ActionResult<int>> MarkDailyFailures([FromBody] MarkDailyFailuresReq req)
     {
-      //todo change input from userid to list of habit id
+      // todo change input from userid to list of habit id
         var result = await markDailyFailuresReqValidator
             .ValidateAsyncResult(req, "Invalid MarkDailyFailuresReq")
-            .ThenAwait(x => service.MarkDailyFailures(x.UserIds, x.Date.ToDate()));
+            .ThenAwait(x => service.MarkDailyFailures(x.HabitIds, x.Date.ToDate()));
+        
         return this.ReturnResult(result);
     }
 }
