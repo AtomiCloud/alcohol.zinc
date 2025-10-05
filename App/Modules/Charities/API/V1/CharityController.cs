@@ -27,7 +27,7 @@ public class CharityController(
   public async Task<ActionResult<IEnumerable<CharityPrincipalRes>>> GetAll()
   {
     var result = await service.GetAll()
-      .Then(charities => charities.Select(c => c.ToRes()).ToResult());
+      .Then(charities => charities.Select(c => c.ToRes()), Errors.MapNone);
     return this.ReturnResult(result);
   }
 
@@ -35,7 +35,7 @@ public class CharityController(
   public async Task<ActionResult<CharityRes>> GetById(Guid id)
   {
     var result = await service.GetById(id)
-      .Then(charity => charity?.ToRes(), Errors.MapAll);
+      .Then(charity => charity?.ToRes(), Errors.MapNone);
     return this.ReturnNullableResult(result, new EntityNotFound("Charity Not Found", typeof(Charity), id.ToString()));
   }
 
@@ -45,7 +45,7 @@ public class CharityController(
     var result = await createCharityReqValidator
       .ValidateAsyncResult(req, "Invalid CreateCharityReq")
       .ThenAwait(r => service.Create(r.ToRecord()))
-      .Then(charity => charity.ToRes().ToResult());
+      .Then(charity => charity.ToRes(), Errors.MapNone);
     return this.ReturnResult(result);
   }
 
@@ -55,16 +55,15 @@ public class CharityController(
     var result = await updateCharityReqValidator
       .ValidateAsyncResult(req, "Invalid UpdateCharityReq")
       .ThenAwait(r => service.Update(id, r.ToRecord()))
-      .Then(charity => (charity?.ToRes()).ToResult());
+      .Then(charity => (charity?.ToRes()), Errors.MapNone);
     return this.ReturnNullableResult(result, new EntityNotFound("Charity Not Found", typeof(CharityPrincipal), id.ToString()));
   }
 
   [Authorize(Policy = AuthPolicies.OnlyAdmin), HttpDelete("{id:guid}")]
-  public async Task<ActionResult<Unit>> Delete(Guid id)
+  public async Task<ActionResult> Delete(Guid id)
   {
-    var result = await service.Delete(id)
-      .Then(unit => unit != null ? new Unit().ToResult() : 
-        new EntityNotFound("Charity Not Found", typeof(Charity), id.ToString()).ToException());
-    return this.ReturnNullableResult(result, new EntityNotFound("Charity Not Found", typeof(Charity), id.ToString()));
+    var result = await service.Delete(id);
+    
+    return this.ReturnUnitNullableResult(result, new EntityNotFound("Charity Not Found", typeof(Charity), id.ToString()));
   }
 }

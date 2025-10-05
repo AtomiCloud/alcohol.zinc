@@ -3,7 +3,8 @@ public record CreateHabitReq(
     string[] DaysOfWeek,
     string NotificationTime, // string (e.g. "HH:mm")
     string Stake,            // string decimal (e.g. "10.50")
-    Guid CharityId
+    Guid CharityId,
+    string Timezone          // string (e.g. "Asia/Singapore", "America/New_York")
 );
 
 public record UpdateHabitReq(
@@ -12,7 +13,8 @@ public record UpdateHabitReq(
     string NotificationTime,
     string Stake,
     Guid CharityId,
-    bool Enabled
+    bool Enabled,
+    string Timezone          // string (e.g. "Asia/Singapore", "America/New_York")
 );
 
 public record HabitRes(
@@ -31,12 +33,13 @@ public record HabitVersionRes(
     string NotificationTime,
     string Stake,
     string Ratio,
-    Guid CharityId
+    Guid CharityId,
+    string Timezone          // string (e.g. "Asia/Singapore", "America/New_York")
 );
 
 public record MarkDailyFailuresReq(
     string Date,             // string (e.g. "31-08-2025")
-    List<string> UserIds     // List of user IDs to process
+    List<Guid> HabitIds     // List of user IDs to process
 );
 
 public record CompleteHabitReq(
@@ -52,3 +55,17 @@ public record HabitExecutionRes(
     string? Notes,           // Optional notes
     bool PaymentProcessed    // Penalty payment status
 );
+
+public record SearchHabitQuery(
+  Guid? Id,
+  string? UserId,
+  string? Task,
+  bool? Enabled,
+  int? Limit,
+  int? Skip);
+
+public record SearchHabitExecutionQuery(
+  Guid? Id,
+  string? Date,
+  int? Limit,
+  int? Skip);

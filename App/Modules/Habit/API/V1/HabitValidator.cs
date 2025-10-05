@@ -31,6 +31,10 @@ public class CreateHabitReqValidator : AbstractValidator<CreateHabitReq>
 
         RuleFor(x => x.CharityId)
             .NotEmpty();
+
+        RuleFor(x => x.Timezone)
+            .NotEmpty()
+            .TimezoneValid();
     }
 
     private static bool BeValidDaysOfWeek(string[] days)
@@ -59,13 +63,9 @@ public class MarkDailyFailuresReqValidator : AbstractValidator<MarkDailyFailures
             .NotEmpty()
             .DateValid();
 
-        RuleFor(x => x.UserIds)
+        RuleFor(x => x.HabitIds)
             .NotEmpty()
-            .WithMessage("UserIds list cannot be empty.");
-
-        RuleForEach(x => x.UserIds)
-            .NotEmpty()
-            .WithMessage("UserIds cannot contain empty values.");
+            .WithMessage("HabitIds list cannot be empty.");
     }
 }
 
@@ -96,11 +96,15 @@ public class UpdateHabitReqValidator : AbstractValidator<UpdateHabitReq>
 
         RuleFor(x => x.CharityId)
             .NotEmpty();
+
+        RuleFor(x => x.Timezone)
+            .NotEmpty()
+            .TimezoneValid();
     }
 
     private static bool BeValidDaysOfWeek(string[] days)
     {
-        return days.All(day => Enum.TryParse(typeof(DayOfWeek), day, true, out _));
+        return days.All(day => Enum.TryParse(typeof(DayOfWeek), day, false, out _));
     }
 
     private static bool BeAValidDecimal(string value)
@@ -113,5 +117,53 @@ public class UpdateHabitReqValidator : AbstractValidator<UpdateHabitReq>
         return decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var d) && d >= 0;
     }
 
+}
 
+public class SearchHabitQueryValidator : AbstractValidator<SearchHabitQuery>
+{
+  public SearchHabitQueryValidator()
+  {
+    When(x => x.Task != null, () => {
+      RuleFor(x => x.Task)
+        .MaximumLength(256)
+        .WithMessage("Task must be 256 characters or less.");
+    });
+
+    When(x => x.UserId != null, () => {
+      RuleFor(x => x.UserId)
+        .MaximumLength(128)
+        .WithMessage("UserId must be 128 characters or less.");
+    });
+
+    When(x => x.Limit != null, () => {
+      RuleFor(x => x.Limit)
+        .Limit();
+    });
+
+    When(x => x.Skip != null, () => {
+      RuleFor(x => x.Skip)
+        .Skip();
+    });
+  }
+}
+
+public class SearchHabitExecutionQueryValidator: AbstractValidator<SearchHabitExecutionQuery>
+{
+  public SearchHabitExecutionQueryValidator()
+  {
+    When(x => x.Date != null, () => {
+      RuleFor(x => x.Date)
+        .NullableDateValid();
+    });
+
+    When(x => x.Limit != null, () => {
+      RuleFor(x => x.Limit)
+        .Limit();
+    });
+
+    When(x => x.Skip != null, () => {
+      RuleFor(x => x.Skip)
+        .Skip();
+    });
+  }
 }
