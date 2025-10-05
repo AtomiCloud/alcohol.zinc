@@ -50,4 +50,13 @@ BlockStorage:
     UseSSL: false
     EnsureBucketCreation: true
 # external
-HttpClient: {}
+HttpClient:
+  Airwallex:
+    BaseAddress: 'https://api-demo.airwallex.com'
+    Timeout: 60
+
+Payment:
+  Airwallex:
+    Id: 'your-airwallex-client-id'
+    Key: 'your-airwallex-api-key'
+    Webhook: 'webhook-secret-key'
