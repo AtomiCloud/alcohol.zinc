@@ -113,11 +113,6 @@ public class PaymentService(
     throw new NotImplementedException();
   }
 
-  public Task<Result<Unit>> ProcessWebhookAsync(string payload, string timestamp, string signature)
-  {
-    throw new NotImplementedException();
-  }
-
   public Task<Result<Unit>> CompletePaymentAsync(Guid requestId, PaymentRecord record)
   {
     throw new NotImplementedException();

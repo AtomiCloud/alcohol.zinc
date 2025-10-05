@@ -25,9 +25,6 @@ public interface IPaymentService
   Task<Result<PaymentCustomer?>> GetCustomerByUserId(string userId);
   Task<Result<PaymentCustomer?>> GetCustomerById(Guid id);
 
-  // Webhook processing
-  Task<Result<Unit>> ProcessWebhookAsync(string payload, string timestamp, string signature);
-
   // Payment completion and status updates
   Task<Result<Unit>> CompletePaymentAsync(Guid requestId, PaymentRecord record);
   Task<Result<Unit>> UpdatePaymentStatusAsync(Guid requestId, PaymentRecord record);
