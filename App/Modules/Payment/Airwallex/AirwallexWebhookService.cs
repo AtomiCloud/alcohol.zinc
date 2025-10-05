@@ -1,5 +1,6 @@
 using App.Error.Common;
 using App.Error.V1;
+using App.StartUp.Services.Auth;
 using App.Utility;
 using CSharp_Result;
 using Domain.Payment;
@@ -8,6 +9,7 @@ namespace App.Modules.Payment.Airwallex;
 
 public class AirwallexWebhookService(
   IPaymentService paymentService,
+  IAuthManagement authManagement,
   AirwallexEventAdapter adapter,
   AirwallexHmacCalculator airwallexHmacCalculator,
   ILogger<AirwallexWebhookService> logger
@@ -53,7 +55,18 @@ public class AirwallexWebhookService(
 
     return paymentService
       .UpdatePaymentConsentAsync(customerId, consentId, status)
-      .Then(_ => new Unit(), Errors.MapNone);
+      .ThenAwait(customer =>
+      {
+        // If consent is verified, update Logto custom claims
+        if (status == PaymentConsentStatus.Verified && customer != null)
+        {
+          logger.LogInformation("Payment consent verified, updating Logto custom claim for userId: {UserId}", customer.Record.UserId);
+          return authManagement
+            .SetClaim(customer.Record.UserId, "hasPaymentConsent", "true")
+            .Then(_ => new Unit(), Errors.MapNone);
+        }
+        return new Unit().ToAsyncResult();
+      });
   }
 
   // private Task<Result<Unit>> ProcessPaymentIntentEvent(AirwallexEvent evt)
