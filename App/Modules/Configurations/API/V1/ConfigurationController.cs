@@ -20,6 +20,7 @@ public class ConfigurationController(
   IConfigurationService service,
   CreateConfigurationReqValidator createConfigurationReqValidator,
   UpdateConfigurationReqValidator updateConfigurationReqValidator,
+  IAuthManagement authManagement,
   IAuthHelper h
 ) : AtomiControllerBase(h)
 {
@@ -53,8 +54,8 @@ public class ConfigurationController(
 
     var result = await createConfigurationReqValidator
       .ValidateAsyncResult(req, "Invalid CreateConfigurationReq")
-      .ThenAwait(r => service.Create(userId, r.ToRecord()))
-      .Then(config => config.ToRes(), Errors.MapNone);
+      .ThenAwait(r => service.Create(userId, r.ToRecord(), config => authManagement.SetClaim(config.UserId, LogtoClaims.ConfigurationId, config.Id.ToString())))
+      .Then(config => config.ToRes().ToResult());
     return this.ReturnResult(result);
   }
 
