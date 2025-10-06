@@ -13,8 +13,6 @@ public class CreateCharityReqValidator : AbstractValidator<CreateCharityReq>
 
     RuleFor(x => x.Mission).MaximumLength(8192).When(x => x.Mission != null);
 
-    RuleFor(x => x.Description).MaximumLength(2048).When(x => x.Description != null);
-
     RuleFor(x => x.Countries)
       .Must(c => c == null || c.All(cc => !string.IsNullOrWhiteSpace(cc) && cc.Length == 2))
       .WithMessage("Each country must be an ISO alpha-2 code");
@@ -31,8 +29,6 @@ public class CreateCharityReqValidator : AbstractValidator<CreateCharityReq>
     RuleFor(x => x.LogoUrl!)
       .UrlValid()
       .When(x => x.LogoUrl != null);
-
-    RuleFor(x => x.VerificationSource).MaximumLength(128).When(x => x.VerificationSource != null);
   }
 }
 
@@ -46,8 +42,6 @@ public class UpdateCharityReqValidator : AbstractValidator<UpdateCharityReq>
 
     RuleFor(x => x.Mission).MaximumLength(8192).When(x => x.Mission != null);
 
-    RuleFor(x => x.Description).MaximumLength(2048).When(x => x.Description != null);
-
     RuleFor(x => x.Countries)
       .Must(c => c == null || c.All(cc => !string.IsNullOrWhiteSpace(cc) && cc.Length == 2))
       .WithMessage("Each country must be an ISO alpha-2 code");
@@ -60,8 +54,6 @@ public class UpdateCharityReqValidator : AbstractValidator<UpdateCharityReq>
 
     RuleFor(x => x.WebsiteUrl!).UrlValid().When(x => x.WebsiteUrl != null);
     RuleFor(x => x.LogoUrl!).UrlValid().When(x => x.LogoUrl != null);
-
-    RuleFor(x => x.VerificationSource).MaximumLength(128).When(x => x.VerificationSource != null);
   }
 }
 

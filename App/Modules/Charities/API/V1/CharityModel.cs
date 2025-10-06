@@ -5,31 +5,21 @@ public record CreateCharityReq(
   string Name,
   string? Slug,
   string? Mission,
-  string? Description,
   string[]? Countries,
   string? PrimaryRegistrationNumber,
   string? PrimaryRegistrationCountry,
   string? WebsiteUrl,
-  string? LogoUrl,
-  bool? IsVerified,
-  string? VerificationSource,
-  DateTimeOffset? LastVerifiedAt,
-  bool? DonationEnabled);
+  string? LogoUrl);
 
 public record UpdateCharityReq(
   string Name,
   string? Slug,
   string? Mission,
-  string? Description,
   string[]? Countries,
   string? PrimaryRegistrationNumber,
   string? PrimaryRegistrationCountry,
   string? WebsiteUrl,
-  string? LogoUrl,
-  bool? IsVerified,
-  string? VerificationSource,
-  DateTimeOffset? LastVerifiedAt,
-  bool? DonationEnabled);
+  string? LogoUrl);
 
 public record CharitySearchReq(
   string? Name,
@@ -38,8 +28,6 @@ public record CharitySearchReq(
   string? PrimaryRegistrationNumber,
   string? PrimaryRegistrationCountry,
   string? CauseKey,
-  bool? IsVerified,
-  bool? DonationEnabled,
   int? Limit,
   int? Skip);
 
@@ -49,16 +37,11 @@ public record CharityPrincipalRes(
   string Name,
   string? Slug,
   string? Mission,
-  string? Description,
   string[] Countries,
   string? PrimaryRegistrationNumber,
   string? PrimaryRegistrationCountry,
   string? WebsiteUrl,
-  string? LogoUrl,
-  bool? IsVerified,
-  string? VerificationSource,
-  DateTimeOffset? LastVerifiedAt,
-  bool? DonationEnabled);
+  string? LogoUrl);
 
 public record CharityRes(CharityPrincipalRes Principal);
 

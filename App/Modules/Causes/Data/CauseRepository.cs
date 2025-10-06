@@ -29,7 +29,7 @@ namespace App.Modules.Causes.Data
             catch (Exception e)
             {
                 logger.LogError(e, "Failed retrieving Cause by Id: {Id}", id);
-                return e;
+                throw;
             }
         }
 
@@ -102,12 +102,6 @@ namespace App.Modules.Causes.Data
                 await db.SaveChangesAsync();
                 logger.LogInformation("Cause updated for Id: {Id}", id);
                 return updated.Entity.ToPrincipal();
-            }
-            catch (UniqueConstraintException e)
-            {
-                logger.LogError(e, "Cause update conflict for Id: {Id}", id);
-                return new EntityConflict("Cause update conflicts with existing record", typeof(CausePrincipal))
-                    .ToException();
             }
             catch (Exception e)
             {

@@ -72,8 +72,6 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
     var charity = modelBuilder.Entity<CharityData>();
     charity.HasIndex(c => c.Name);
     charity.HasIndex(c => new { c.PrimaryRegistrationCountry, c.PrimaryRegistrationNumber });
-    charity.HasIndex(c => c.IsVerified);
-    charity.HasIndex(c => c.DonationEnabled);
     charity.HasIndex(c => c.Countries).HasMethod("gin");
 
     // Cause configuration

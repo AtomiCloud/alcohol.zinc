@@ -11,16 +11,11 @@ public static class CharityMapper
       charityPrincipal.Record.Name,
       charityPrincipal.Record.Slug,
       charityPrincipal.Record.Mission,
-      charityPrincipal.Record.Description,
       charityPrincipal.Record.Countries ?? [],
       charityPrincipal.Record.PrimaryRegistrationNumber,
       charityPrincipal.Record.PrimaryRegistrationCountry,
       charityPrincipal.Record.WebsiteUrl,
-      charityPrincipal.Record.LogoUrl,
-      charityPrincipal.Record.IsVerified,
-      charityPrincipal.Record.VerificationSource,
-      charityPrincipal.Record.LastVerifiedAt,
-      charityPrincipal.Record.DonationEnabled);
+      charityPrincipal.Record.LogoUrl);
 
   public static CharityRes ToRes(this Charity charity)
     => new(charity.Principal.ToRes());
@@ -32,16 +27,11 @@ public static class CharityMapper
       Name = req.Name,
       Slug = req.Slug,
       Mission = req.Mission,
-      Description = req.Description,
       Countries = req.Countries,
       PrimaryRegistrationNumber = req.PrimaryRegistrationNumber,
       PrimaryRegistrationCountry = req.PrimaryRegistrationCountry,
       WebsiteUrl = req.WebsiteUrl,
-      LogoUrl = req.LogoUrl,
-      IsVerified = req.IsVerified,
-      VerificationSource = req.VerificationSource,
-      LastVerifiedAt = req.LastVerifiedAt,
-      DonationEnabled = req.DonationEnabled
+      LogoUrl = req.LogoUrl
     };
 
   public static CharityRecord ToRecord(this UpdateCharityReq req) =>
@@ -50,16 +40,11 @@ public static class CharityMapper
       Name = req.Name,
       Slug = req.Slug,
       Mission = req.Mission,
-      Description = req.Description,
       Countries = req.Countries,
       PrimaryRegistrationNumber = req.PrimaryRegistrationNumber,
       PrimaryRegistrationCountry = req.PrimaryRegistrationCountry,
       WebsiteUrl = req.WebsiteUrl,
-      LogoUrl = req.LogoUrl,
-      IsVerified = req.IsVerified,
-      VerificationSource = req.VerificationSource,
-      LastVerifiedAt = req.LastVerifiedAt,
-      DonationEnabled = req.DonationEnabled
+      LogoUrl = req.LogoUrl
     };
 
   public static CharitySearch ToDomain(this CharitySearchReq req) =>
@@ -71,8 +56,6 @@ public static class CharityMapper
       PrimaryRegistrationNumber = req.PrimaryRegistrationNumber,
       PrimaryRegistrationCountry = req.PrimaryRegistrationCountry,
       CauseKey = req.CauseKey,
-      IsVerified = req.IsVerified,
-      DonationEnabled = req.DonationEnabled,
       Limit = req.Limit ?? 20,
       Skip = req.Skip ?? 0,
     };

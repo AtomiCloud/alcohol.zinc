@@ -50,9 +50,10 @@ namespace App.Modules.Charities.Sync;
         var iso = updatedSince.Value.UtcDateTime.ToString("o");
         url += $"&updated_since={Uri.EscapeDataString(iso)}";
       }
-      if (countries is { Length: > 0 })
+
+      if (countries != null && countries.Length > 0)
       {
-        url = countries.Aggregate(url, (current, c) => current + $"&country={Uri.EscapeDataString(c)}");
+        url += $"&country={Uri.EscapeDataString(countries[0])}";
       }
 
       var res = await this.Client.GetFromJsonAsync<PledgeOrganizationsPage>(url, cancellationToken: ct);

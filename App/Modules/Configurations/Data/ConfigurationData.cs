@@ -21,6 +21,6 @@ namespace App.Modules.Configurations.Data
         public Guid DefaultCharityId { get; set; }
         
         // Navigation property
-        public CharityData? Charity { get; set; }
+        public CharityData Charity { get; set; }
     }
 }

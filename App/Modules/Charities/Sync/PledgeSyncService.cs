@@ -200,16 +200,11 @@ public class PledgeSyncService(
             Name = org.Name,
             Slug = slug,
             Mission = mission,
-            Description = null,
             Countries = !string.IsNullOrWhiteSpace(org.Country) ? [org.Country] : [],
             PrimaryRegistrationNumber = !string.IsNullOrWhiteSpace(org.NgoId) ? org.NgoId : null,
             PrimaryRegistrationCountry = !string.IsNullOrWhiteSpace(org.Country) ? org.Country : null,
             WebsiteUrl = !string.IsNullOrWhiteSpace(org.WebsiteUrl) ? org.WebsiteUrl : null,
-            LogoUrl = !string.IsNullOrWhiteSpace(org.LogoUrl) ? org.LogoUrl : null,
-            IsVerified = null,
-            VerificationSource = null,
-            LastVerifiedAt = null,
-            DonationEnabled = null
+            LogoUrl = !string.IsNullOrWhiteSpace(org.LogoUrl) ? org.LogoUrl : null
           },
           ExternalId = new ExternalIdRecord
           {
