@@ -11,7 +11,7 @@ public class CreateCharityReqValidator : AbstractValidator<CreateCharityReq>
 
     RuleFor(x => x.Slug).MaximumLength(128).When(x => x.Slug != null);
 
-    RuleFor(x => x.Mission).MaximumLength(512).When(x => x.Mission != null);
+    RuleFor(x => x.Mission).MaximumLength(8192).When(x => x.Mission != null);
 
     RuleFor(x => x.Description).MaximumLength(2048).When(x => x.Description != null);
 
@@ -44,7 +44,7 @@ public class UpdateCharityReqValidator : AbstractValidator<UpdateCharityReq>
 
     RuleFor(x => x.Slug).MaximumLength(128).When(x => x.Slug != null);
 
-    RuleFor(x => x.Mission).MaximumLength(512).When(x => x.Mission != null);
+    RuleFor(x => x.Mission).MaximumLength(8192).When(x => x.Mission != null);
 
     RuleFor(x => x.Description).MaximumLength(2048).When(x => x.Description != null);
 

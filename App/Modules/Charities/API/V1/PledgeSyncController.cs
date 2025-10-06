@@ -17,18 +17,20 @@ namespace App.Modules.Charities.API.V1;
 [Authorize(Policy = AuthPolicies.OnlyAdmin)]
 public class PledgeSyncController(IPledgeSyncService sync, IAuthHelper h) : AtomiControllerBase(h)
 {
-  public record PledgeSyncReq(int? MaxPages, int? PageSize, string[]? Countries, DateTimeOffset? UpdatedSince);
-  public record PledgeSyncSummaryRes(int CausesUpserted, int CharitiesCreated, int CharitiesUpdated, int ExternalIdsLinked, int CharitiesProcessed);
+  public record PledgeSyncSummaryRes(
+    int CausesUpserted,
+    int CharitiesCreated,
+    int CharitiesUpdated,
+    int ExternalIdsLinked,
+    int CharitiesProcessed);
 
   [HttpPost("pledge")]
-  public async Task<ActionResult<PledgeSyncSummaryRes>> Sync([FromBody] PledgeSyncReq req)
+  public async Task<ActionResult<PledgeSyncSummaryRes>> Sync()
   {
-    var r = await sync.Sync(new PledgeSyncRequest(
-      MaxPages: req.MaxPages ?? int.MaxValue,
-      PageSize: req.PageSize ?? 100,
-      Countries: req.Countries,
-      UpdatedSince: req.UpdatedSince));
-    var m = r.Then(x => new PledgeSyncSummaryRes(x.CausesUpserted, x.CharitiesCreated, x.CharitiesUpdated, x.ExternalIdsLinked, x.CharitiesProcessed), Errors.MapNone);
+    var r = await sync.Sync();
+    var m = r.Then(
+      x => new PledgeSyncSummaryRes(x.CausesUpserted, x.CharitiesCreated, x.CharitiesUpdated, x.ExternalIdsLinked,
+        x.CharitiesProcessed), Errors.MapNone);
     return this.ReturnResult(m);
   }
 }

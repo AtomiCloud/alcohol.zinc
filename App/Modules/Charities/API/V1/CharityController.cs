@@ -50,8 +50,7 @@ public class CharityController(
   {
     var result = await setCharityCausesReqValidator
       .ValidateAsyncResult(req, "Invalid SetCharityCausesReq")
-      .ThenAwait(r => service.SetCauses(id, r.Keys))
-      .Then(_ => (Unit?)new Unit(), Errors.MapNone);
+      .ThenAwait(r => service.SetCauses(id, r.Keys));
     return this.ReturnUnitNullableResult(result, new EntityNotFound("Charity Not Found", typeof(Charity), id.ToString()));
   }
 

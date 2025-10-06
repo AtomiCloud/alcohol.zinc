@@ -48,7 +48,7 @@ public record PledgeOrganizationsPage
 {
   [JsonPropertyName("page")] public int Page { get; init; }
   [JsonPropertyName("per")] public int PerPage { get; init; }
-  [JsonPropertyName("total_count")] public int TotalPages { get; init; }
+  [JsonPropertyName("total_count")] public int TotalCount { get; init; }
 
   [JsonPropertyName("uri")] public string Uri { get; init; }
   [JsonPropertyName("next")] public string? NextUri { get; init; }

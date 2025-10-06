@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace App.Migrations
 {
     [DbContext(typeof(MainDbContext))]
-    [Migration("20251005140818_CauseAndCharity")]
-    partial class CauseAndCharity
+    [Migration("20251006095700_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -99,8 +99,8 @@ namespace App.Migrations
                         .HasColumnType("character varying(512)");
 
                     b.Property<string>("Mission")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
+                        .HasMaxLength(8192)
+                        .HasColumnType("character varying(8192)");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -142,6 +142,45 @@ namespace App.Migrations
                     b.HasIndex("PrimaryRegistrationCountry", "PrimaryRegistrationNumber");
 
                     b.ToTable("Charities");
+                });
+
+            modelBuilder.Entity("App.Modules.Charities.Data.ExternalIdData", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CharityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ExternalKey")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTimeOffset?>("LastSyncedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Payload")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Url")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CharityId");
+
+                    b.HasIndex("Source", "ExternalKey")
+                        .IsUnique();
+
+                    b.ToTable("ExternalIds");
                 });
 
             modelBuilder.Entity("App.Modules.Configurations.Data.ConfigurationData", b =>
@@ -285,6 +324,46 @@ namespace App.Migrations
                     b.ToTable("HabitVersions");
                 });
 
+            modelBuilder.Entity("App.Modules.Payment.Data.PaymentCustomerData", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AirwallexCustomerId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PaymentConsentId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("PaymentConsentStatus")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AirwallexCustomerId");
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
+                    b.ToTable("PaymentCustomers");
+                });
+
             modelBuilder.Entity("App.Modules.Users.Data.UserData", b =>
                 {
                     b.Property<string>("Id")
@@ -327,6 +406,15 @@ namespace App.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("App.Modules.Charities.Data.CharityData", null)
+                        .WithMany()
+                        .HasForeignKey("CharityId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("App.Modules.Charities.Data.ExternalIdData", b =>
+                {
                     b.HasOne("App.Modules.Charities.Data.CharityData", null)
                         .WithMany()
                         .HasForeignKey("CharityId")

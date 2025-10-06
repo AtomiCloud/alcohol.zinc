@@ -70,7 +70,7 @@ public class PledgeSyncService(
     return slug;
   }
 
-  public async Task<Result<PledgeSyncSummary>> Sync(PledgeSyncRequest req, CancellationToken ct = default)
+  public async Task<Result<PledgeSyncSummary>> Sync(CancellationToken ct = default)
   {
     try
     {

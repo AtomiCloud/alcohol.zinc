@@ -368,6 +368,12 @@ namespace App.Modules.Charities.Data
                 var externalIds = items.Select(i => i.ExternalId.ExternalKey).Distinct().ToArray();
                 var source = items.First().ExternalId.Source;
 
+                // Validate all items share the same source
+                if (items.Any(i => i.ExternalId.Source != source))
+                {
+                    throw new ArgumentException("All items in BulkUpsert must have the same ExternalId.Source");
+                }
+
                 var existingExtIds = await db.ExternalIds
                     .Where(e => e.Source == source && externalIds.Contains(e.ExternalKey))
                     .ToListAsync(ct);

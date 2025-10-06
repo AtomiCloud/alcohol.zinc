@@ -57,7 +57,7 @@ namespace App.Modules.Charities.Sync;
 
       var res = await this.Client.GetFromJsonAsync<PledgeOrganizationsPage>(url, cancellationToken: ct);
       logger.LogInformation("Fetched Pledge organizations page {Page} for cause {Cause}: {Count} results", page, causeKey ?? "all", res?.Data.Length ?? 0);
-      return res ?? new PledgeOrganizationsPage { Data = [], Page = page, PerPage = perPage, TotalPages = 0 };
+      return res ?? new PledgeOrganizationsPage { Data = [], Page = page, PerPage = perPage, TotalCount = 0 };
     }
     catch (Exception e)
     {
