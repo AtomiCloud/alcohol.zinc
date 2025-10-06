@@ -40,7 +40,7 @@ public class HabitOverviewService(
           return new NotFoundException("Habit Not Found", typeof(HabitPrincipal), hv.HabitId.ToString());
 
         // Charity (aggregate -> principal)
-        var charityAggRes = await charityService.GetById(hv.Record.CharityId);
+        var charityAggRes = await charityService.Get(hv.Record.CharityId);
         Domain.Charity.Charity? charityAgg = charityAggRes;
         if (charityAgg == null) return new NotFoundException("Charity not found", typeof(CharityPrincipal), hv.Record.CharityId.ToString());
         var charity = charityAgg.Principal;
