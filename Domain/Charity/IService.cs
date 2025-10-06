@@ -4,11 +4,22 @@ namespace Domain.Charity;
 
 public interface ICharityService
 {
-  Task<Result<Charity?>> GetById(Guid id);
-  Task<Result<IEnumerable<CharityPrincipal>>> GetAll();
+  Task<Result<Charity?>> Get(Guid id);
+  Task<Result<IEnumerable<CharityPrincipal>>> Search(CharitySearch search);
 
   Task<Result<CharityPrincipal>> Create(CharityRecord record);
   Task<Result<CharityPrincipal?>> Update(Guid id, CharityRecord record);
 
   Task<Result<Unit?>> Delete(Guid id);
+
+  // Linking
+  Task<Result<Unit?>> SetCauses(Guid id, IEnumerable<string> causeKeys);
+  Task<Result<Unit?>> AddCause(Guid id, string causeKey);
+
+  // External Ids
+  Task<Result<CharityPrincipal?>> GetByExternalId(string source, string externalKey);
+  Task<Result<Unit>> UpsertExternalId(Guid charityId, ExternalIdRecord external);
+
+  // Bulk Operations
+  Task<Result<BulkUpsertResult>> BulkUpsert(IEnumerable<BulkUpsertCharity> charities, CancellationToken ct = default);
 }

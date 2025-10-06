@@ -336,6 +336,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <Folder Include="Migrations\" />
       <Folder Include="Modules\Payment\" />
     </ItemGroup>
 

@@ -165,10 +165,14 @@ Cache:
       - alcohol-dotnet-main-cache:6379
 
 HttpClient:
-  Main:
+  LOGTO:
     BaseAddress: http://alcohol-analytics:9050
     Timeout: 30
     BearerAuth: supersecret
+  PLEDGE:
+    BaseAddress: https://api.pledge.to
+    Timeout: 30
+    BearerAuth: your_pledge_api_token_here
 
 Auth:
   Enabled: true
