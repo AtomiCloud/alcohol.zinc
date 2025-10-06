@@ -1,3 +1,10 @@
+## [1.12.1](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.12.0...v1.12.1) (2025-10-06)
+
+
+### 🐛 Bug Fixes 🐛
+
+* PR problems ([74cf8ed](https://github.com/AtomiCloud/alcohol.zinc/commit/74cf8ede8140bda96b40a7e2f732423645daa86c))
+
 ## [1.12.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.11.0...v1.12.0) (2025-10-06)
 
 
