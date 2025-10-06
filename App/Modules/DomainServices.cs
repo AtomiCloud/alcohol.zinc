@@ -1,6 +1,8 @@
 using App.Modules.Charities.Data;
 using App.Modules.Configurations.Data;
 using App.Modules.Habit.Data;
+using App.Modules.Payment.Airwallex;
+using App.Modules.Payment.Data;
 using App.Modules.System;
 using App.Modules.Users.Data;
 using App.StartUp.Services;
@@ -8,6 +10,7 @@ using Domain;
 using Domain.Charity;
 using Domain.Configuration;
 using Domain.Habit;
+using Domain.Payment;
 using Domain.User;
 
 namespace App.Modules;
@@ -53,6 +56,21 @@ public static class DomainServices
       .AutoTrace<IStreakService>();
     s.AddScoped<IStreakRepository, StreakRepository>()
       .AutoTrace<IStreakRepository>();
+    // PAYMENT
+    s.AddScoped<IPaymentService, PaymentService>()
+      .AutoTrace<IPaymentService>();
+
+    s.AddScoped<IPaymentCustomerRepository, PaymentCustomerRepository>()
+      .AutoTrace<IPaymentCustomerRepository>();
+
+    s.AddScoped<IPaymentGateway, AirwallexGateway>()
+      .AutoTrace<IPaymentGateway>();
+
+    s.AddScoped<AirwallexClient>();
+    s.AddScoped<IAirwallexAuthenticator, AirwallexAuthenticator>();
+    s.AddScoped<AirwallexWebhookService>();
+    s.AddScoped<AirwallexEventAdapter>();
+    s.AddScoped<AirwallexHmacCalculator>();
 
     // Transaction Manager
     s.AddScoped<ITransactionManager, TransactionManager>()

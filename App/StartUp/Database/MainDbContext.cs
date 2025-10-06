@@ -3,6 +3,7 @@ using App.Modules.Configurations.Data;
 using App.Modules.Habit.Data;
 using App.Modules.HabitExecution.Data;
 using App.Modules.HabitVersion.Data;
+using App.Modules.Payment.Data;
 using App.Modules.Users.Data;
 using App.StartUp.Options;
 using App.StartUp.Services;
@@ -24,6 +25,7 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
   public DbSet<HabitData> Habits { get; set; }
   public DbSet<HabitVersionData> HabitVersions { get; set; }
   public DbSet<HabitExecutionData> HabitExecutions { get; set; }
+  public DbSet<PaymentCustomerData> PaymentCustomers { get; set; }
   // public DbSet<CompletionData> Completions { get; set; }
   // public DbSet<StatsData> Stats { get; set; }
 
@@ -61,6 +63,11 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
     // HabitExecution configuration
     var habitExecution = modelBuilder.Entity<HabitExecutionData>();
     habitExecution.HasIndex(x => new { x.HabitVersionId, x.Date }).IsUnique();  // One execution per version per day
-    
+
+    // PaymentCustomer configuration
+    var paymentCustomer = modelBuilder.Entity<PaymentCustomerData>();
+    paymentCustomer.HasIndex(x => x.UserId).IsUnique();  // One payment customer per user
+    paymentCustomer.HasIndex(x => x.AirwallexCustomerId);
+
   }
 }

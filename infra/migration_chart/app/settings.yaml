@@ -171,6 +171,9 @@ HttpClient:
   Logto:
     BaseAddress: https://xzc47u.logto.app
     Timeout: 60
+  Airwallex:
+    BaseAddress: 'https://api.airwallex.com'
+    Timeout: 60
 Auth:
   Enabled: true
   Management:
@@ -200,3 +203,9 @@ Auth:
       ClockSkew: 0
       ValidateLifetime: true
       ValidateIssuerSigningKey: true
+
+Payment:
+  Airwallex:
+    Id: 'your-airwallex-client-id'
+    Key: 'your-airwallex-api-key'
+    Webhook: 'webhook-secret-key'

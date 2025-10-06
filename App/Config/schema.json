@@ -42,6 +42,9 @@
     },
     "Smtp": {
       "$ref": "#/definitions/Smtp"
+    },
+    "Payment": {
+      "$ref": "#/definitions/Payment"
     }
   },
   "definitions": {
@@ -1135,6 +1138,37 @@
             "Timeout": {
               "type": "integer",
               "format": "int32"
+            }
+          }
+        }
+      }
+    },
+    "Payment": {
+      "title": "PaymentOption",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "Airwallex": {
+          "$ref": "#/definitions/Payment/definitions/AirwallexOption"
+        }
+      },
+      "definitions": {
+        "AirwallexOption": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["Id", "Key", "Webhook"],
+          "properties": {
+            "Id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "Key": {
+              "type": "string",
+              "minLength": 1
+            },
+            "Webhook": {
+              "type": "string",
+              "minLength": 1
             }
           }
         }
