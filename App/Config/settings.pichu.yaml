@@ -34,8 +34,12 @@ Cache:
 
 # external
 HttpClient:
-  Logto:
+  LOGTO:
     BaseAddress: https://admin.lithium.alcohol.pichu.atomi.cloud
+  PLEDGE:
+    BaseAddress: https://api.pledge.to
+    Timeout: 60
+    BearerAuth: supersecret
 Auth:
   Enabled: true
   Settings:

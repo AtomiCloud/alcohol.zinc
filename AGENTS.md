@@ -41,4 +41,5 @@ Search vs. GetAll
 
 Linting
 
-- Always run `pls lint` after completing a task to ensure repository linters pass. If unavailable in the environment, instruct the user to run it locally.
+- Always run `pls lint` (alias for `task lint`) after completing a task to ensure repository linters pass. If unavailable in the environment, instruct the user to run it locally.
+- Note: `pls` is a shell alias for the `task` command in this project's Nix environment.
