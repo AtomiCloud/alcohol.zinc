@@ -45,17 +45,27 @@ public static class HabitOverviewMapper
       s.CurrentStreak,
       s.MaxStreak,
       s.IsCompleteToday,
-      new WeekRes(
-        s.Week[DayOfWeek.Sunday],
-        s.Week[DayOfWeek.Monday],
-        s.Week[DayOfWeek.Tuesday],
-        s.Week[DayOfWeek.Wednesday],
-        s.Week[DayOfWeek.Thursday],
-        s.Week[DayOfWeek.Friday],
-        s.Week[DayOfWeek.Saturday],
+      new WeekStatusRes(
+        MapDay(s.WeekStatuses[DayOfWeek.Sunday]),
+        MapDay(s.WeekStatuses[DayOfWeek.Monday]),
+        MapDay(s.WeekStatuses[DayOfWeek.Tuesday]),
+        MapDay(s.WeekStatuses[DayOfWeek.Wednesday]),
+        MapDay(s.WeekStatuses[DayOfWeek.Thursday]),
+        MapDay(s.WeekStatuses[DayOfWeek.Friday]),
+        MapDay(s.WeekStatuses[DayOfWeek.Saturday]),
         s.WeekStart.ToString("yyyy-MM-dd"),
         s.WeekEnd.ToString("yyyy-MM-dd")
       )
     );
   }
+
+  private static string MapDay(HabitDayStatus s) => s switch
+  {
+    HabitDayStatus.Succeeded => "succeeded",
+    HabitDayStatus.Failed => "failed",
+    HabitDayStatus.Vacation => "vacation",
+    HabitDayStatus.Skip => "skip",
+    HabitDayStatus.Frozen => "frozen",
+    _ => "not_applicable"
+  };
 }

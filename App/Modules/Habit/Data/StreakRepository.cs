@@ -15,7 +15,7 @@ public class StreakRepository(MainDbContext db, ILogger<StreakRepository> logger
 
       var lastFailed = await (from he in db.HabitExecutions
                               join hv in db.HabitVersions on he.HabitVersionId equals hv.Id
-                              where hv.HabitId == habitId && he.Date <= today && he.Status == ExecutionStatus.Failed
+                              where hv.HabitId == habitId && he.Date <= today && he.Status == App.Modules.HabitExecution.Data.HabitExecutionStatusData.Failed
                               select (DateOnly?)he.Date)
         .OrderByDescending(d => d)
         .FirstOrDefaultAsync();
@@ -25,7 +25,7 @@ public class StreakRepository(MainDbContext db, ILogger<StreakRepository> logger
       var current = await (from he in db.HabitExecutions
                            join hv in db.HabitVersions on he.HabitVersionId equals hv.Id
                            where hv.HabitId == habitId
-                                 && he.Status == ExecutionStatus.Completed
+                                 && he.Status == App.Modules.HabitExecution.Data.HabitExecutionStatusData.Completed
                                  && he.Date > since
                                  && he.Date <= today
                            select he)
@@ -57,12 +57,12 @@ public class StreakRepository(MainDbContext db, ILogger<StreakRepository> logger
       int cur = 0, max = 0;
       foreach (var e in events)
       {
-        if (e.Status == ExecutionStatus.Completed)
+        if (e.Status == App.Modules.HabitExecution.Data.HabitExecutionStatusData.Completed)
         {
           cur++;
           if (cur > max) max = cur;
         }
-        else if (e.Status == ExecutionStatus.Failed)
+        else if (e.Status == App.Modules.HabitExecution.Data.HabitExecutionStatusData.Failed)
         {
           cur = 0;
         }
@@ -82,7 +82,7 @@ public class StreakRepository(MainDbContext db, ILogger<StreakRepository> logger
     {
       var done = await (from he in db.HabitExecutions
                         join hv in db.HabitVersions on he.HabitVersionId equals hv.Id
-                        where hv.HabitId == habitId && he.Date == date && he.Status == ExecutionStatus.Completed
+                        where hv.HabitId == habitId && he.Date == date && he.Status == App.Modules.HabitExecution.Data.HabitExecutionStatusData.Completed
                         select he.Id)
         .AnyAsync();
       return done;
@@ -103,7 +103,7 @@ public class StreakRepository(MainDbContext db, ILogger<StreakRepository> logger
                            where hv.HabitId == habitId
                                  && he.Date >= start
                                  && he.Date <= end
-                                 && he.Status == ExecutionStatus.Completed
+                                 && he.Status == App.Modules.HabitExecution.Data.HabitExecutionStatusData.Completed
                            select he.Date)
         .ToListAsync();
       return results.ToHashSet();
@@ -125,7 +125,7 @@ public class StreakRepository(MainDbContext db, ILogger<StreakRepository> logger
                               && he.CompletedAt != null
                               && he.CompletedAt >= startUtc
                               && he.CompletedAt <= endUtc
-                              && he.Status == ExecutionStatus.Completed
+                              && he.Status == App.Modules.HabitExecution.Data.HabitExecutionStatusData.Completed
                         select he.Id)
         .AnyAsync();
       return done;
@@ -143,11 +143,11 @@ public class StreakRepository(MainDbContext db, ILogger<StreakRepository> logger
     {
       var items = await (from he in db.HabitExecutions
                          join hv in db.HabitVersions on he.HabitVersionId equals hv.Id
-                         where hv.HabitId == habitId
+                        where hv.HabitId == habitId
                                && he.CompletedAt != null
                                && he.CompletedAt >= startUtc
                                && he.CompletedAt <= endUtc
-                               && he.Status == ExecutionStatus.Completed
+                               && he.Status == App.Modules.HabitExecution.Data.HabitExecutionStatusData.Completed
                          select he.CompletedAt!.Value)
         .ToListAsync();
       return items;
@@ -155,6 +155,50 @@ public class StreakRepository(MainDbContext db, ILogger<StreakRepository> logger
     catch (Exception e)
     {
       logger.LogError(e, "GetCompletionsBetweenUtc failed for HabitId={HabitId}", habitId);
+      return e;
+    }
+  }
+
+  public async Task<Result<List<Domain.Habit.HabitExecutionRecord>>> GetExecutionsInHabitDateRange(Guid habitId, DateOnly start, DateOnly end)
+  {
+    try
+    {
+      var items = await (from he in db.HabitExecutions
+                         join hv in db.HabitVersions on he.HabitVersionId equals hv.Id
+                         where hv.HabitId == habitId
+                               && he.Date >= start
+                               && he.Date <= end
+                         select new { he.Date, he.Status, he.CompletedAt })
+        .AsNoTracking()
+        .ToListAsync();
+
+      var results = new List<Domain.Habit.HabitExecutionRecord>();
+      foreach (var it in items)
+      {
+        var status = it.Status switch
+        {
+          App.Modules.HabitExecution.Data.HabitExecutionStatusData.Completed => Domain.Habit.ExecutionStatus.Completed,
+          App.Modules.HabitExecution.Data.HabitExecutionStatusData.Failed => Domain.Habit.ExecutionStatus.Failed,
+          App.Modules.HabitExecution.Data.HabitExecutionStatusData.Skipped => Domain.Habit.ExecutionStatus.Skipped,
+          App.Modules.HabitExecution.Data.HabitExecutionStatusData.Frozen => Domain.Habit.ExecutionStatus.Freeze,
+          App.Modules.HabitExecution.Data.HabitExecutionStatusData.Vacation => Domain.Habit.ExecutionStatus.Vacation,
+          _ => Domain.Habit.ExecutionStatus.Failed
+        };
+
+        results.Add(new Domain.Habit.HabitExecutionRecord
+        {
+          Date = it.Date,
+          Status = status,
+          CompletedAt = it.CompletedAt,
+          Notes = null
+        });
+      }
+
+      return results;
+    }
+    catch (Exception e)
+    {
+      logger.LogError(e, "GetExecutionsInHabitDateRange failed for HabitId={HabitId}", habitId);
       return e;
     }
   }

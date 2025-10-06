@@ -26,17 +26,19 @@ public record HabitStatusRes(
   int CurrentStreak,
   int MaxStreak,
   bool IsCompleteToday,
-  WeekRes Week
+  WeekStatusRes Week
 );
 
-public record WeekRes(
-  bool Sunday,
-  bool Monday,
-  bool Tuesday,
-  bool Wednesday,
-  bool Thursday,
-  bool Friday,
-  bool Saturday,
+// For each day of the user's week, return one of:
+// "failed", "succeeded", "vacation", "skip", "frozen", or "not_applicable"
+public record WeekStatusRes(
+  string Sunday,
+  string Monday,
+  string Tuesday,
+  string Wednesday,
+  string Thursday,
+  string Friday,
+  string Saturday,
   string Start,
   string End
 );

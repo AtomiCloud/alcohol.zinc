@@ -46,7 +46,7 @@ public class HabitOverviewService(
         var charity = charityAgg.Principal;
 
         // Streak (user timezone for today/week; habit timezone for streak series + EOD countdown)
-        var streakRes = await streakService.GetStatusForHabit(userId, hv.HabitId, userTz, hv.Record.Timezone, nowUtc);
+        var streakRes = await streakService.GetStatusForHabit(userId, hv.HabitId, userTz, hv.Record.Timezone, hv.Record.DaysOfWeek, nowUtc);
         if (!streakRes.IsSuccess()) return streakRes.FailureOrDefault();
 
         // Versions (all for this habit) and active indicator

@@ -9,6 +9,7 @@ public class StreakService(IStreakRepository repo) : IStreakService
     Guid habitId,
     string userTimezone,
     string habitTimezone,
+    string[] daysOfWeek,
     DateTime? nowUtc = null)
   {
     try
@@ -40,28 +41,91 @@ public class StreakService(IStreakRepository repo) : IStreakService
       var completions = await repo.GetCompletionsBetweenUtc(habitId, weekStartUtc, weekEndUtc);
       if (!completions.IsSuccess()) return completions.FailureOrDefault();
       var completedUtc = completions.Get();
-      var weekMap = new Dictionary<DayOfWeek, bool>
+
+      // Initialize week statuses
+      var weekStatuses = new Dictionary<DayOfWeek, HabitDayStatus>
       {
-        [DayOfWeek.Sunday] = false,
-        [DayOfWeek.Monday] = false,
-        [DayOfWeek.Tuesday] = false,
-        [DayOfWeek.Wednesday] = false,
-        [DayOfWeek.Thursday] = false,
-        [DayOfWeek.Friday] = false,
-        [DayOfWeek.Saturday] = false,
+        [DayOfWeek.Sunday] = HabitDayStatus.NotApplicable,
+        [DayOfWeek.Monday] = HabitDayStatus.NotApplicable,
+        [DayOfWeek.Tuesday] = HabitDayStatus.NotApplicable,
+        [DayOfWeek.Wednesday] = HabitDayStatus.NotApplicable,
+        [DayOfWeek.Thursday] = HabitDayStatus.NotApplicable,
+        [DayOfWeek.Friday] = HabitDayStatus.NotApplicable,
+        [DayOfWeek.Saturday] = HabitDayStatus.NotApplicable,
       };
+
+      var scheduled = new HashSet<string>(daysOfWeek.Select(x => x.ToLowerInvariant()));
+      foreach (var dow in Enum.GetValues<DayOfWeek>())
+      {
+        var key = dow.ToString().ToLowerInvariant();
+        if (scheduled.Contains(key))
+        {
+          weekStatuses[dow] = HabitDayStatus.NotApplicable; // will be set if any events exist
+        }
+      }
+
+      // Mark successes by CompletedAt mapped to user local day
       foreach (var ts in completedUtc)
       {
         var local = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(ts, DateTimeKind.Utc), userTz);
         var d = DateOnly.FromDateTime(local);
         if (d >= weekStart && d <= weekEnd)
         {
-          weekMap[local.DayOfWeek] = true;
+          weekStatuses[local.DayOfWeek] = HabitDayStatus.Succeeded;
+        }
+      }
+
+      // Get non-completion statuses within approximate habit date range corresponding to the user's week
+      var habitTz = TimeZoneInfo.FindSystemTimeZoneById(habitTimezone);
+      var habitApproxStart = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(weekStartUtc, DateTimeKind.Utc), habitTz).Date.AddDays(-1);
+      var habitApproxEnd = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(weekEndUtc, DateTimeKind.Utc), habitTz).Date.AddDays(1);
+      var execsRes = await repo.GetExecutionsInHabitDateRange(habitId, DateOnly.FromDateTime(habitApproxStart), DateOnly.FromDateTime(habitApproxEnd));
+      if (!execsRes.IsSuccess()) return execsRes.FailureOrDefault();
+      var execs = execsRes.Get();
+
+      static HabitDayStatus MapStatus(ExecutionStatus s) => s switch
+      {
+        ExecutionStatus.Failed => HabitDayStatus.Failed,
+        ExecutionStatus.Skipped => HabitDayStatus.Skip,
+        ExecutionStatus.Freeze => HabitDayStatus.Frozen,
+        ExecutionStatus.Vacation => HabitDayStatus.Vacation,
+        ExecutionStatus.Completed => HabitDayStatus.Succeeded,
+        _ => HabitDayStatus.NotApplicable
+      };
+
+      foreach (var e in execs)
+      {
+        if (e.Status == ExecutionStatus.Completed)
+        {
+          // Completed already accounted via CompletedAt mapping
+          continue;
+        }
+
+        // Map habit EOD to user's local day
+        var eodLocalHabit = new DateTime(e.Date.Year, e.Date.Month, e.Date.Day, 23, 59, 0);
+        var eodUtc = TimeZoneInfo.ConvertTimeToUtc(eodLocalHabit, habitTz);
+        var userLocalAtEod = TimeZoneInfo.ConvertTimeFromUtc(eodUtc, userTz);
+        var userLocalDate = DateOnly.FromDateTime(userLocalAtEod);
+        if (userLocalDate >= weekStart && userLocalDate <= weekEnd)
+        {
+          var dow = userLocalAtEod.DayOfWeek;
+          // Do not override success; otherwise, set by priority (Vacation/Frozen/Skip over Failed)
+          if (weekStatuses[dow] != HabitDayStatus.Succeeded)
+          {
+            var mapped = MapStatus(e.Status);
+            if (mapped == HabitDayStatus.Vacation || mapped == HabitDayStatus.Frozen || mapped == HabitDayStatus.Skip)
+            {
+              weekStatuses[dow] = mapped;
+            }
+            else if (weekStatuses[dow] == HabitDayStatus.NotApplicable)
+            {
+              weekStatuses[dow] = mapped;
+            }
+          }
         }
       }
 
       // Time left until habit local EOD 23:59
-      var habitTz = TimeZoneInfo.FindSystemTimeZoneById(habitTimezone);
       var habitNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utcNow, DateTimeKind.Utc), habitTz);
       var eodLocal = new DateTime(habitNow.Year, habitNow.Month, habitNow.Day, 23, 59, 0);
       if (habitNow > eodLocal)
@@ -74,7 +138,7 @@ public class StreakService(IStreakRepository repo) : IStreakService
         current.Get(),
         max.Get(),
         doneToday.Get(),
-        weekMap,
+        weekStatuses,
         weekStart,
         weekEnd,
         minutesLeft

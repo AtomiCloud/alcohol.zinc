@@ -256,7 +256,7 @@ namespace App.Modules.Habit.Data
                 // Using PostgreSQL array contains operator (@>) for DaysOfWeek array
                 var affectedRows = await db.Database.ExecuteSqlAsync($@"
                     INSERT INTO ""HabitExecutions"" (""Id"", ""HabitVersionId"", ""Date"", ""Status"", ""PaymentProcessed"")
-                    SELECT gen_random_uuid(), hv.""Id"", {date}, {(int)ExecutionStatus.Failed}, false
+                    SELECT gen_random_uuid(), hv.""Id"", {date}, {(int)App.Modules.HabitExecution.Data.HabitExecutionStatusData.Failed}, false
                     FROM ""Habits"" h
                     JOIN ""HabitVersions"" hv ON h.""Id"" = hv.""HabitId"" AND h.""Version"" = hv.""Version""
                     LEFT JOIN ""HabitExecutions"" he ON he.""HabitVersionId"" = hv.""Id"" AND he.""Date"" = {date}
@@ -324,7 +324,7 @@ namespace App.Modules.Habit.Data
                 // Atomic INSERT ... SELECT to get current version and create execution
                 var affectedRows = await db.Database.ExecuteSqlAsync($@"
                     INSERT INTO ""HabitExecutions"" (""Id"", ""HabitVersionId"", ""Date"", ""Status"", ""CompletedAt"", ""Notes"", ""PaymentProcessed"")
-                    SELECT gen_random_uuid(), {habitVersionId}, {date}, {(int)ExecutionStatus.Completed}, {DateTime.UtcNow}, {notes}, false
+                    SELECT gen_random_uuid(), {habitVersionId}, {date}, {(int)App.Modules.HabitExecution.Data.HabitExecutionStatusData.Completed}, {DateTime.UtcNow}, {notes}, false
                     FROM ""HabitVersions"" hv
                     JOIN ""Habits"" h ON h.""Id"" = hv.""HabitId"" AND h.""Version"" = hv.""Version""
                     WHERE hv.""Id"" = {habitVersionId}

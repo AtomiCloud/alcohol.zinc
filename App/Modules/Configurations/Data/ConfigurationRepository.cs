@@ -7,6 +7,32 @@ namespace App.Modules.Configurations.Data
 {
     public class ConfigurationRepository(MainDbContext db, ILogger<ConfigurationRepository> logger) : IConfigurationRepository
     {
+        public async Task<Result<Configuration?>> GetByUserId(string userId)
+        {
+            try
+            {
+                logger.LogInformation("Retrieving Configuration by UserId: {UserId}", userId);
+
+                var data = await db.Configurations
+                    .AsNoTracking()
+                    .Where(x => x.UserId == userId)
+                    .Include(x => x.Charity)
+                    .FirstOrDefaultAsync();
+
+                if (data == null)
+                {
+                    logger.LogWarning("Configuration not found for UserId: {UserId}", userId);
+                    return (Configuration?)null;
+                }
+
+                return data.ToDomain();
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Failed retrieving Configuration by UserId: {UserId}", userId);
+                return e;
+            }
+        }
         public async Task<Result<Configuration?>> Get(Guid id)
         {
             try
