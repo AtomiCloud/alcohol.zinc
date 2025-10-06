@@ -50,7 +50,7 @@ public record HabitExecutionRes(
     Guid Id,                 // Execution ID
     Guid HabitVersionId,     // References habit version
     string Date,             // Execution date
-    string Status,           // "Completed" or "Failed"
+    string Status,           // one of: "succeeded", "failed", "vacation", "skip", "frozen"
     string? CompletedAt,     // When completed (if applicable)
     string? Notes,           // Optional notes
     bool PaymentProcessed    // Penalty payment status

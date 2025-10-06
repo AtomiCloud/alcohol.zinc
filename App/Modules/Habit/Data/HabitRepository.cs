@@ -39,7 +39,7 @@ namespace App.Modules.Habit.Data
             catch (Exception e)
             {
                 logger.LogError(e, "Failed retrieving active habits for UserId: {UserId}, Date: {Date}", userId, date);
-                return e;
+                throw;
             }
         }
 
@@ -77,7 +77,7 @@ namespace App.Modules.Habit.Data
             catch (Exception e)
             {
                 logger.LogError(e, "Failed searching habits with search: {@Search}", habitSearch);
-                return e;
+                throw;
             }
         }
 
@@ -103,7 +103,7 @@ namespace App.Modules.Habit.Data
             catch (Exception e)
             {
                 logger.LogError(e, "Failed retrieving habit by Id: {HabitId}", habitId);
-                return e;
+                throw;
             }
         }
 
@@ -131,7 +131,7 @@ namespace App.Modules.Habit.Data
             catch (Exception e)
             {
                 logger.LogError(e, "Failed retrieving current version for HabitId: {HabitId}", habitId);
-                return e;
+                throw;
             }
         }
 
@@ -166,7 +166,7 @@ namespace App.Modules.Habit.Data
             {
                 logger.LogError(e, "Failed to create habit for UserId: {UserId}", userId);
                 await transaction.RollbackAsync();
-                return e;
+                throw;
             }
         }
 
@@ -213,7 +213,7 @@ namespace App.Modules.Habit.Data
             {
                 logger.LogError(e, "Failed to update habit version for HabitId: {HabitId}", habitId);
                 await transaction.RollbackAsync();
-                return e;
+                throw;
             }
         }
 
@@ -238,7 +238,7 @@ namespace App.Modules.Habit.Data
             catch (Exception e)
             {
                 logger.LogError(e, "Failed to delete habit for HabitId: {HabitId}, UserId: {UserId}", habitId, userId);
-                return e;
+                throw;
             }
         }
 
@@ -256,7 +256,7 @@ namespace App.Modules.Habit.Data
                 // Using PostgreSQL array contains operator (@>) for DaysOfWeek array
                 var affectedRows = await db.Database.ExecuteSqlAsync($@"
                     INSERT INTO ""HabitExecutions"" (""Id"", ""HabitVersionId"", ""Date"", ""Status"", ""PaymentProcessed"")
-                    SELECT gen_random_uuid(), hv.""Id"", {date}, {(int)ExecutionStatus.Failed}, false
+                    SELECT gen_random_uuid(), hv.""Id"", {date}, {(int)App.Modules.HabitExecution.Data.HabitExecutionStatusData.Failed}, false
                     FROM ""Habits"" h
                     JOIN ""HabitVersions"" hv ON h.""Id"" = hv.""HabitId"" AND h.""Version"" = hv.""Version""
                     LEFT JOIN ""HabitExecutions"" he ON he.""HabitVersionId"" = hv.""Id"" AND he.""Date"" = {date}
@@ -273,7 +273,7 @@ namespace App.Modules.Habit.Data
             catch (Exception e)
             {
                 logger.LogError(e, "Failed to create failed executions for date: {Date}", date);
-                return e;
+                throw;
             }
         }
 
@@ -307,7 +307,7 @@ namespace App.Modules.Habit.Data
             catch (Exception e)
             {
                 logger.LogError(e, "Failed to get current date for UserId: {UserId}", userId);
-                return e;
+                throw;
             }
         }
 
@@ -324,7 +324,7 @@ namespace App.Modules.Habit.Data
                 // Atomic INSERT ... SELECT to get current version and create execution
                 var affectedRows = await db.Database.ExecuteSqlAsync($@"
                     INSERT INTO ""HabitExecutions"" (""Id"", ""HabitVersionId"", ""Date"", ""Status"", ""CompletedAt"", ""Notes"", ""PaymentProcessed"")
-                    SELECT gen_random_uuid(), {habitVersionId}, {date}, {(int)ExecutionStatus.Completed}, {DateTime.UtcNow}, {notes}, false
+                    SELECT gen_random_uuid(), {habitVersionId}, {date}, {(int)App.Modules.HabitExecution.Data.HabitExecutionStatusData.Completed}, {DateTime.UtcNow}, {notes}, false
                     FROM ""HabitVersions"" hv
                     JOIN ""Habits"" h ON h.""Id"" = hv.""HabitId"" AND h.""Version"" = hv.""Version""
                     WHERE hv.""Id"" = {habitVersionId}
@@ -359,7 +359,7 @@ namespace App.Modules.Habit.Data
             catch (Exception e)
             {
                 logger.LogError(e, "Failed to complete habit for HabitVersionId: {HabitVersionId}, UserId: {UserId}, Date: {Date}", habitVersionId, userId, date);
-                return e;
+                throw;
             }
         }
 
@@ -387,14 +387,34 @@ namespace App.Modules.Habit.Data
                 .Take(habitExecutionSearch.Limit)
                 .ToListAsync();
 
-            logger.LogInformation("Retrieved {Count} executions for UserId: {UserId}", data.Count, userId);
-            return data.Select(x => x.HabitExecution.ToPrincipal()).ToList();
-          }
-          catch (Exception e)
-          {
-            logger.LogError(e, "Failed searching habit executions for UserId: {UserId}, Search: {@Search}", userId, habitExecutionSearch);
-            return e;
-          }
-        }
+        logger.LogInformation("Retrieved {Count} executions for UserId: {UserId}", data.Count, userId);
+        return data.Select(x => x.HabitExecution.ToPrincipal()).ToList();
+      }
+      catch (Exception e)
+      {
+        logger.LogError(e, "Failed searching habit executions for UserId: {UserId}, Search: {@Search}", userId, habitExecutionSearch);
+        throw;
+      }
     }
+
+    public async Task<Result<List<HabitVersionPrincipal>>> GetVersions(string userId, Guid habitId)
+    {
+      try
+      {
+        logger.LogInformation("GetVersions for HabitId: {HabitId}, UserId: {UserId}", habitId, userId);
+        var data = await (from h in db.Habits
+                          join hv in db.HabitVersions on h.Id equals hv.HabitId
+                          where h.Id == habitId && h.UserId == userId && h.DeletedAt == null
+                          orderby hv.Version descending
+                          select hv).AsNoTracking().ToListAsync();
+
+        return data.Select(x => x.ToPrincipal()).ToList();
+      }
+      catch (Exception e)
+      {
+        logger.LogError(e, "Failed to get versions for HabitId: {HabitId}", habitId);
+        throw;
+      }
+    }
+  }
 }
