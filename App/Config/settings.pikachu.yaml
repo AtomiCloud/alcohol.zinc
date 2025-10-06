@@ -33,8 +33,12 @@ Cache:
     SSL: true
 # external
 HttpClient:
-  Logto:
+  LOGTO:
     BaseAddress: https://admin.lithium.alcohol.pikachu.atomi.cloud
+  PLEDGE:
+    BaseAddress: https://api.pledge.to
+    Timeout: 60
+    BearerAuth: supersecret
 Auth:
   Enabled: true
   Settings:

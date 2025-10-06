@@ -29,7 +29,7 @@ App:
   GenerateConfig: false
 Swagger:
   Title: Lapras Alcohol Zinc API
-  Description: 'Alcohol-Zinc: API for Phinish'
+  Description: 'Alcohol-Zinc: API for LazyTax'
   OpenApiContact:
     Name: kirinnee
     Email: kirinnee97@gmail.com
@@ -168,9 +168,13 @@ Smtp:
     Timeout: 5000
 # external
 HttpClient:
-  Logto:
+  LOGTO:
     BaseAddress: https://xzc47u.logto.app
     Timeout: 60
+  PLEDGE:
+    BaseAddress: https://api.pledge.to
+    Timeout: 60
+    BearerAuth: supersecret
 Auth:
   Enabled: true
   Management:

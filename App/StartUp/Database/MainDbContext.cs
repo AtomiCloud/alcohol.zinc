@@ -1,3 +1,4 @@
+using App.Modules.Causes.Data;
 using App.Modules.Charities.Data;
 using App.Modules.Configurations.Data;
 using App.Modules.Habit.Data;
@@ -21,6 +22,9 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
   public DbSet<UserData> Users { get; set; }
   public DbSet<ConfigurationData> Configurations { get; set; }
   public DbSet<CharityData> Charities { get; set; }
+  public DbSet<CauseData> Causes { get; set; }
+  public DbSet<CharityCauseData> CharityCauses { get; set; }
+  public DbSet<ExternalIdData> ExternalIds { get; set; }
   public DbSet<HabitData> Habits { get; set; }
   public DbSet<HabitVersionData> HabitVersions { get; set; }
   public DbSet<HabitExecutionData> HabitExecutions { get; set; }
@@ -61,6 +65,37 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
     // HabitExecution configuration
     var habitExecution = modelBuilder.Entity<HabitExecutionData>();
     habitExecution.HasIndex(x => new { x.HabitVersionId, x.Date }).IsUnique();  // One execution per version per day
-    
+
+    // Charity configuration
+    var charity = modelBuilder.Entity<CharityData>();
+    charity.HasIndex(c => c.Name);
+    charity.HasIndex(c => new { c.PrimaryRegistrationCountry, c.PrimaryRegistrationNumber });
+    charity.HasIndex(c => c.IsVerified);
+    charity.HasIndex(c => c.DonationEnabled);
+    charity.HasIndex(c => c.Countries).HasMethod("gin");
+
+    // Cause configuration
+    var cause = modelBuilder.Entity<CauseData>();
+    cause.HasIndex(c => c.Key).IsUnique();
+
+    // CharityCause configuration (many-to-many via explicit join)
+    var charityCause = modelBuilder.Entity<CharityCauseData>();
+    charityCause.HasIndex(cc => new { cc.CharityId, cc.CauseId }).IsUnique();
+    charityCause.HasOne<CharityData>()
+                .WithMany()
+                .HasForeignKey(cc => cc.CharityId)
+                .OnDelete(DeleteBehavior.Cascade);
+    charityCause.HasOne<CauseData>()
+                .WithMany()
+                .HasForeignKey(cc => cc.CauseId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+    // ExternalId configuration
+    var externalId = modelBuilder.Entity<ExternalIdData>();
+    externalId.HasIndex(e => new { e.Source, e.ExternalKey }).IsUnique();
+    externalId.HasOne<CharityData>()
+              .WithMany()
+              .HasForeignKey(e => e.CharityId)
+              .OnDelete(DeleteBehavior.Cascade);
   }
 }
