@@ -8,8 +8,6 @@ namespace Domain.Charity
       public string? PrimaryRegistrationNumber { get; init; }
       public string? PrimaryRegistrationCountry { get; init; }
       public string? CauseKey { get; init; }
-      public bool? IsVerified { get; init; }
-      public bool? DonationEnabled { get; init; }
       public int Limit { get; init; }
       public int Skip { get; init; }
     }
@@ -19,16 +17,11 @@ namespace Domain.Charity
       public required string Name { get; init; }
       public string? Slug { get; init; }
       public string? Mission { get; init; }
-      public string? Description { get; init; }
       public string[]? Countries { get; init; }
       public string? PrimaryRegistrationNumber { get; init; }
       public string? PrimaryRegistrationCountry { get; init; }
       public string? WebsiteUrl { get; init; }
       public string? LogoUrl { get; init; }
-      public bool? IsVerified { get; init; }
-      public string? VerificationSource { get; init; }
-      public DateTimeOffset? LastVerifiedAt { get; init; }
-      public bool? DonationEnabled { get; init; }
     }
     
     public class CharityPrincipal

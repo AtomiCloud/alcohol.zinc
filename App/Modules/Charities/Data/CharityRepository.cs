@@ -57,12 +57,6 @@ namespace App.Modules.Charities.Data
                 if (!string.IsNullOrWhiteSpace(search.Country))
                     query = query.Where(x => x.Countries != null && x.Countries.Contains(search.Country));
 
-                if (search.IsVerified != null)
-                    query = query.Where(x => x.IsVerified == search.IsVerified);
-
-                if (search.DonationEnabled != null)
-                    query = query.Where(x => x.DonationEnabled == search.DonationEnabled);
-
                 if (!string.IsNullOrWhiteSpace(search.CauseKey))
                 {
                     query = query
@@ -173,8 +167,10 @@ namespace App.Modules.Charities.Data
                 var charity = await db.Charities.FirstOrDefaultAsync(x => x.Id == id);
                 if (charity == null)
                 {
-                    logger.LogWarning("Charity not found for SetCauses, Id: {Id}", id);
-                    return (Unit?)null;
+                  var ex = new EntityNotFound("Charity not found", typeof(Charity), id.ToString()).ToException();
+                    logger.LogWarning(ex,"Charity not found for SetCauses, Id: {Id}", id);
+                    
+                    return ex;
                 }
 
                 var keys = causeKeys.Distinct().ToArray();
@@ -312,15 +308,7 @@ namespace App.Modules.Charities.Data
 
                 if (existing == null)
                 {
-                    var row = new ExternalIdData
-                    {
-                        CharityId = charityId,
-                        Source = external.Source,
-                        ExternalKey = external.ExternalKey,
-                        Url = external.Url,
-                        Payload = external.Payload,
-                        LastSyncedAt = external.LastSyncedAt
-                    };
+                    var row = external.ToData(charityId);
                     db.ExternalIds.Add(row);
                     await db.SaveChangesAsync();
                     return new Unit();
@@ -332,9 +320,7 @@ namespace App.Modules.Charities.Data
                     return new EntityConflict("ExternalId is already linked to a different Charity", typeof(ExternalIdData)).ToException();
                 }
 
-                existing.Url = external.Url;
-                existing.Payload = external.Payload;
-                existing.LastSyncedAt = external.LastSyncedAt;
+                existing = existing.ToData(external);
                 db.ExternalIds.Update(existing);
                 await db.SaveChangesAsync();
                 return new Unit();
@@ -445,22 +431,11 @@ namespace App.Modules.Charities.Data
 
                     if (existingExt == null)
                     {
-                        externalIdsToCreate.Add(new ExternalIdData
-                        {
-                            CharityId = charityId,
-                            Source = item.ExternalId.Source,
-                            ExternalKey = item.ExternalId.ExternalKey,
-                            Url = item.ExternalId.Url,
-                            Payload = item.ExternalId.Payload,
-                            LastSyncedAt = item.ExternalId.LastSyncedAt
-                        });
+                        externalIdsToCreate.Add(item.ExternalId.ToData(charityId));
                     }
                     else
                     {
-                        existingExt.Url = item.ExternalId.Url;
-                        existingExt.Payload = item.ExternalId.Payload;
-                        existingExt.LastSyncedAt = item.ExternalId.LastSyncedAt;
-                        externalIdsToUpdate.Add(existingExt);
+                        externalIdsToUpdate.Add(existingExt.ToData(item.ExternalId));
                     }
                 }
 
