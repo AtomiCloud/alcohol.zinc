@@ -44,6 +44,16 @@ public static class DomainServices
     s.AddScoped<IHabitRepository, HabitRepository>()
       .AutoTrace<IHabitRepository>();
 
+    // HABIT: Overview
+    s.AddScoped<IHabitOverviewService, HabitOverviewService>()
+      .AutoTrace<IHabitOverviewService>();
+
+    // HABIT: Streaks
+    s.AddScoped<IStreakService, StreakService>()
+      .AutoTrace<IStreakService>();
+    s.AddScoped<IStreakRepository, StreakRepository>()
+      .AutoTrace<IStreakRepository>();
+
     // Transaction Manager
     s.AddScoped<ITransactionManager, TransactionManager>()
       .AutoTrace<ITransactionManager>();

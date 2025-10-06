@@ -21,5 +21,8 @@ namespace Domain.Habit
         Task<Result<HabitExecutionPrincipal>> CompleteHabit(string userId, Guid habitVersionId, DateOnly date, string? notes);
         Task<Result<List<HabitExecutionPrincipal>>> SearchHabitExecutions(string userId, 
           HabitExecutionSearch habitExecutionSearch);
+
+        // Additional helpers for overview
+        Task<Result<List<HabitVersionPrincipal>>> GetVersions(string userId, Guid habitId);
     }
 }

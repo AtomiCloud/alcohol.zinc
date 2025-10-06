@@ -387,14 +387,34 @@ namespace App.Modules.Habit.Data
                 .Take(habitExecutionSearch.Limit)
                 .ToListAsync();
 
-            logger.LogInformation("Retrieved {Count} executions for UserId: {UserId}", data.Count, userId);
-            return data.Select(x => x.HabitExecution.ToPrincipal()).ToList();
-          }
-          catch (Exception e)
-          {
-            logger.LogError(e, "Failed searching habit executions for UserId: {UserId}, Search: {@Search}", userId, habitExecutionSearch);
-            return e;
-          }
-        }
+        logger.LogInformation("Retrieved {Count} executions for UserId: {UserId}", data.Count, userId);
+        return data.Select(x => x.HabitExecution.ToPrincipal()).ToList();
+      }
+      catch (Exception e)
+      {
+        logger.LogError(e, "Failed searching habit executions for UserId: {UserId}, Search: {@Search}", userId, habitExecutionSearch);
+        return e;
+      }
     }
+
+    public async Task<Result<List<HabitVersionPrincipal>>> GetVersions(string userId, Guid habitId)
+    {
+      try
+      {
+        logger.LogInformation("GetVersions for HabitId: {HabitId}, UserId: {UserId}", habitId, userId);
+        var data = await (from h in db.Habits
+                          join hv in db.HabitVersions on h.Id equals hv.HabitId
+                          where h.Id == habitId && h.UserId == userId && h.DeletedAt == null
+                          orderby hv.Version descending
+                          select hv).AsNoTracking().ToListAsync();
+
+        return data.Select(x => x.ToPrincipal()).ToList();
+      }
+      catch (Exception e)
+      {
+        logger.LogError(e, "Failed to get versions for HabitId: {HabitId}", habitId);
+        return e;
+      }
+    }
+  }
 }

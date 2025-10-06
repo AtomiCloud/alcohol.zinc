@@ -16,6 +16,11 @@ public class ConfigurationService(
     return repo.Get(id, userId);
   }
 
+  public Task<Result<Configuration?>> GetByUserId(string userId)
+  {
+    return repo.GetByUserId(userId);
+  }
+
   public Task<Result<ConfigurationPrincipal>> Create(string userId, ConfigurationRecord record,
     Func<ConfigurationPrincipal, Task<Result<Unit>>>? sync)
   {

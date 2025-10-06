@@ -140,7 +140,8 @@ public class SearchHabitQueryValidator : AbstractValidator<SearchHabitQuery>
         .Limit();
     });
 
-    When(x => x.Skip != null, () => {
+    When(x => x.Skip != null, () =>
+    {
       RuleFor(x => x.Skip)
         .Skip();
     });
@@ -164,6 +165,22 @@ public class SearchHabitExecutionQueryValidator: AbstractValidator<SearchHabitEx
     When(x => x.Skip != null, () => {
       RuleFor(x => x.Skip)
         .Skip();
+    });
+  }
+}
+
+public class SearchOverviewQueryValidator : AbstractValidator<OverviewQuery>
+{
+  public SearchOverviewQueryValidator()
+  {
+    When(x => x.Limit != null, () =>
+    {
+      RuleFor(x => x.Limit).Limit();
+    });
+
+    When(x => x.Skip != null, () =>
+    {
+      RuleFor(x => x.Skip).Skip();
     });
   }
 }
