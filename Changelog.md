@@ -1,3 +1,16 @@
+## [1.12.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.11.0...v1.12.0) (2025-10-06)
+
+
+### ✨ Features ✨
+
+* charity API and sync ([5dbc1a8](https://github.com/AtomiCloud/alcohol.zinc/commit/5dbc1a8e3f3c09fbceb19cdba38991ed64d1d35f))
+* merge from main ([4cb8e2e](https://github.com/AtomiCloud/alcohol.zinc/commit/4cb8e2e72ec0b7d9ec579bb50eda5bb0bdc1e7c1))
+
+
+### 🐛 Bug Fixes 🐛
+
+* PR problems ([4e310e7](https://github.com/AtomiCloud/alcohol.zinc/commit/4e310e7e725719bb51b17d31afd4ff199d0ce9d7))
+
 ## [1.11.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.10.0...v1.11.0) (2025-10-05)
 
 
