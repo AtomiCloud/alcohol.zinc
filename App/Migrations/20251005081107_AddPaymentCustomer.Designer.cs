@@ -3,6 +3,7 @@ using System;
 using App.StartUp.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace App.Migrations
 {
     [DbContext(typeof(MainDbContext))]
-    partial class MainDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251005081107_AddPaymentCustomer")]
+    partial class AddPaymentCustomer
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -22,162 +25,29 @@ namespace App.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("App.Modules.Causes.Data.CauseData", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Key")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Key")
-                        .IsUnique();
-
-                    b.ToTable("Causes");
-                });
-
-            modelBuilder.Entity("App.Modules.Charities.Data.CharityCauseData", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CauseId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CharityId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CauseId");
-
-                    b.HasIndex("CharityId", "CauseId")
-                        .IsUnique();
-
-                    b.ToTable("CharityCauses");
-                });
-
             modelBuilder.Entity("App.Modules.Charities.Data.CharityData", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<string[]>("Countries")
-                        .IsRequired()
-                        .HasColumnType("text[]");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
-
-                    b.Property<bool?>("DonationEnabled")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool?>("IsVerified")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTimeOffset?>("LastVerifiedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("LogoUrl")
+                    b.Property<string>("Address")
                         .HasMaxLength(512)
                         .HasColumnType("character varying(512)");
 
-                    b.Property<string>("Mission")
-                        .HasMaxLength(8192)
-                        .HasColumnType("character varying(8192)");
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
-                    b.Property<string>("PrimaryRegistrationCountry")
-                        .HasMaxLength(2)
-                        .HasColumnType("character varying(2)");
-
-                    b.Property<string>("PrimaryRegistrationNumber")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("Slug")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("VerificationSource")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("WebsiteUrl")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
                     b.HasKey("Id");
-
-                    b.HasIndex("Countries");
-
-                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Countries"), "gin");
-
-                    b.HasIndex("DonationEnabled");
-
-                    b.HasIndex("IsVerified");
-
-                    b.HasIndex("Name");
-
-                    b.HasIndex("PrimaryRegistrationCountry", "PrimaryRegistrationNumber");
 
                     b.ToTable("Charities");
-                });
-
-            modelBuilder.Entity("App.Modules.Charities.Data.ExternalIdData", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CharityId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ExternalKey")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<DateTimeOffset?>("LastSyncedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Payload")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Source")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("Url")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CharityId");
-
-                    b.HasIndex("Source", "ExternalKey")
-                        .IsUnique();
-
-                    b.ToTable("ExternalIds");
                 });
 
             modelBuilder.Entity("App.Modules.Configurations.Data.ConfigurationData", b =>
@@ -393,30 +263,6 @@ namespace App.Migrations
                         .IsUnique();
 
                     b.ToTable("Users");
-                });
-
-            modelBuilder.Entity("App.Modules.Charities.Data.CharityCauseData", b =>
-                {
-                    b.HasOne("App.Modules.Causes.Data.CauseData", null)
-                        .WithMany()
-                        .HasForeignKey("CauseId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("App.Modules.Charities.Data.CharityData", null)
-                        .WithMany()
-                        .HasForeignKey("CharityId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("App.Modules.Charities.Data.ExternalIdData", b =>
-                {
-                    b.HasOne("App.Modules.Charities.Data.CharityData", null)
-                        .WithMany()
-                        .HasForeignKey("CharityId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("App.Modules.Configurations.Data.ConfigurationData", b =>
