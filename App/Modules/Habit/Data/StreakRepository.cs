@@ -36,7 +36,7 @@ public class StreakRepository(MainDbContext db, ILogger<StreakRepository> logger
     catch (Exception e)
     {
       logger.LogError(e, "GetCurrentStreak failed for HabitId={HabitId}", habitId);
-      return e;
+      throw;
     }
   }
 
@@ -72,7 +72,7 @@ public class StreakRepository(MainDbContext db, ILogger<StreakRepository> logger
     catch (Exception e)
     {
       logger.LogError(e, "GetMaxStreak failed for HabitId={HabitId}", habitId);
-      return e;
+      throw;
     }
   }
 
@@ -90,7 +90,7 @@ public class StreakRepository(MainDbContext db, ILogger<StreakRepository> logger
     catch (Exception e)
     {
       logger.LogError(e, "IsCompleteOn failed for HabitId={HabitId}", habitId);
-      return e;
+      throw;
     }
   }
 
@@ -111,7 +111,7 @@ public class StreakRepository(MainDbContext db, ILogger<StreakRepository> logger
     catch (Exception e)
     {
       logger.LogError(e, "GetCompletedInRange failed for HabitId={HabitId}", habitId);
-      return e;
+      throw;
     }
   }
 
@@ -133,7 +133,7 @@ public class StreakRepository(MainDbContext db, ILogger<StreakRepository> logger
     catch (Exception e)
     {
       logger.LogError(e, "HasCompletionBetweenUtc failed for HabitId={HabitId}", habitId);
-      return e;
+      throw;
     }
   }
 
@@ -155,7 +155,7 @@ public class StreakRepository(MainDbContext db, ILogger<StreakRepository> logger
     catch (Exception e)
     {
       logger.LogError(e, "GetCompletionsBetweenUtc failed for HabitId={HabitId}", habitId);
-      return e;
+      throw;
     }
   }
 
@@ -199,7 +199,7 @@ public class StreakRepository(MainDbContext db, ILogger<StreakRepository> logger
     catch (Exception e)
     {
       logger.LogError(e, "GetExecutionsInHabitDateRange failed for HabitId={HabitId}", habitId);
-      return e;
+      throw;
     }
   }
 }

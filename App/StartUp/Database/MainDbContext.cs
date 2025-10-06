@@ -46,6 +46,10 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
     var user = modelBuilder.Entity<UserData>();
     user.HasIndex(x => x.Username).IsUnique();
     
+    // Configuration
+    var configuration = modelBuilder.Entity<ConfigurationData>();
+    configuration.HasIndex(c => c.UserId).IsUnique(); // One configuration per user
+
     // Habit configuration (main entity)
     var habit = modelBuilder.Entity<HabitData>();
     habit.HasIndex(h => h.Version);

@@ -56,7 +56,7 @@ namespace App.Modules.Configurations.Data
             catch (Exception e)
             {
                 logger.LogError(e, "Failed retrieving Configuration by Id: {Id}", id);
-                return e;
+                throw;
             }
         }
 
@@ -83,7 +83,7 @@ namespace App.Modules.Configurations.Data
             catch (Exception e)
             {
                 logger.LogError(e, "Failed retrieving Configuration by UserId: {UserId}", userId);
-                return e;
+                throw;
             }
         }
 
@@ -104,7 +104,7 @@ namespace App.Modules.Configurations.Data
             catch (Exception e)
             {
                 logger.LogError(e, "Failed to create Configuration for UserId: {UserId}", userId);
-                return e;
+                throw;
             }
         }
 
@@ -135,7 +135,7 @@ namespace App.Modules.Configurations.Data
             catch (Exception e)
             {
                 logger.LogError(e, "Failed to update Configuration Id: {Id}", id);
-                return e;
+                throw;
             }
         }
     }

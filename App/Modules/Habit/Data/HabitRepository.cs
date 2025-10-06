@@ -39,7 +39,7 @@ namespace App.Modules.Habit.Data
             catch (Exception e)
             {
                 logger.LogError(e, "Failed retrieving active habits for UserId: {UserId}, Date: {Date}", userId, date);
-                return e;
+                throw;
             }
         }
 
@@ -77,7 +77,7 @@ namespace App.Modules.Habit.Data
             catch (Exception e)
             {
                 logger.LogError(e, "Failed searching habits with search: {@Search}", habitSearch);
-                return e;
+                throw;
             }
         }
 
@@ -103,7 +103,7 @@ namespace App.Modules.Habit.Data
             catch (Exception e)
             {
                 logger.LogError(e, "Failed retrieving habit by Id: {HabitId}", habitId);
-                return e;
+                throw;
             }
         }
 
@@ -131,7 +131,7 @@ namespace App.Modules.Habit.Data
             catch (Exception e)
             {
                 logger.LogError(e, "Failed retrieving current version for HabitId: {HabitId}", habitId);
-                return e;
+                throw;
             }
         }
 
@@ -166,7 +166,7 @@ namespace App.Modules.Habit.Data
             {
                 logger.LogError(e, "Failed to create habit for UserId: {UserId}", userId);
                 await transaction.RollbackAsync();
-                return e;
+                throw;
             }
         }
 
@@ -213,7 +213,7 @@ namespace App.Modules.Habit.Data
             {
                 logger.LogError(e, "Failed to update habit version for HabitId: {HabitId}", habitId);
                 await transaction.RollbackAsync();
-                return e;
+                throw;
             }
         }
 
@@ -238,7 +238,7 @@ namespace App.Modules.Habit.Data
             catch (Exception e)
             {
                 logger.LogError(e, "Failed to delete habit for HabitId: {HabitId}, UserId: {UserId}", habitId, userId);
-                return e;
+                throw;
             }
         }
 
@@ -273,7 +273,7 @@ namespace App.Modules.Habit.Data
             catch (Exception e)
             {
                 logger.LogError(e, "Failed to create failed executions for date: {Date}", date);
-                return e;
+                throw;
             }
         }
 
@@ -307,7 +307,7 @@ namespace App.Modules.Habit.Data
             catch (Exception e)
             {
                 logger.LogError(e, "Failed to get current date for UserId: {UserId}", userId);
-                return e;
+                throw;
             }
         }
 
@@ -359,7 +359,7 @@ namespace App.Modules.Habit.Data
             catch (Exception e)
             {
                 logger.LogError(e, "Failed to complete habit for HabitVersionId: {HabitVersionId}, UserId: {UserId}, Date: {Date}", habitVersionId, userId, date);
-                return e;
+                throw;
             }
         }
 
@@ -393,7 +393,7 @@ namespace App.Modules.Habit.Data
       catch (Exception e)
       {
         logger.LogError(e, "Failed searching habit executions for UserId: {UserId}, Search: {@Search}", userId, habitExecutionSearch);
-        return e;
+        throw;
       }
     }
 
@@ -413,7 +413,7 @@ namespace App.Modules.Habit.Data
       catch (Exception e)
       {
         logger.LogError(e, "Failed to get versions for HabitId: {HabitId}", habitId);
-        return e;
+        throw;
       }
     }
   }

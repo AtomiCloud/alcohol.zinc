@@ -185,6 +185,9 @@ namespace App.Migrations
 
                     b.HasIndex("DefaultCharityId");
 
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
                     b.ToTable("Configurations");
                 });
 

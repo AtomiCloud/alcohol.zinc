@@ -12,8 +12,6 @@ public class StreakService(IStreakRepository repo) : IStreakService
     string[] daysOfWeek,
     DateTime? nowUtc = null)
   {
-    try
-    {
       var utcNow = nowUtc ?? DateTime.UtcNow;
       var userToday = StreakCalculator.TodayFor(userTimezone, utcNow);
       var (weekStart, weekEnd) = StreakCalculator.WeekSundayBounds(userToday);
@@ -143,10 +141,5 @@ public class StreakService(IStreakRepository repo) : IStreakService
         weekEnd,
         minutesLeft
       );
-    }
-    catch (Exception e)
-    {
-      return e;
-    }
   }
 }
