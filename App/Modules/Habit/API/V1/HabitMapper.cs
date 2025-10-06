@@ -93,4 +93,7 @@ public static class HabitMapper
         Limit = query.Limit ?? 20, 
         Skip = query.Skip ?? 0
       };
+
+    public static HabitOverviewSearch ToDomain(this OverviewQuery query, string userId) =>
+      new(userId, query.Limit ?? 20, query.Skip ?? 0);
 }

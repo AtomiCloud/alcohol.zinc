@@ -20,7 +20,7 @@ public static class HabitOverviewMapper
       new HabitCharityRefRes(i.Charity.Id.ToString(), i.Charity.Record.Name, null),
       ToStatus(i.Status),
       i.TimeLeftToEodMinutes,
-      i.Versions.Select(v => new HabitVersionMetaRes(v.Id.ToString(), v.Version, v.IsActive)).ToList()
+      new HabitVersionMetaRes(i.Version.Id.ToString(), i.Version.Version, i.Version.IsActive)
     );
   }
 

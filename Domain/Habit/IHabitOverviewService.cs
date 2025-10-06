@@ -18,10 +18,12 @@ public record HabitOverviewItem
   CharityPrincipal Charity,
   HabitStreakStatus Status,
   int TimeLeftToEodMinutes,
-  List<HabitVersionMeta> Versions
+  HabitVersionMeta Version
 );
+
+public record HabitOverviewSearch(string UserId, int Limit, int Skip);
 
 public interface IHabitOverviewService
 {
-  Task<Result<List<HabitOverviewItem>>> GetOverview(string userId, int limit, int skip, DateTime? nowUtc = null);
+  Task<Result<List<HabitOverviewItem>>> GetOverview(HabitOverviewSearch search, DateTime? nowUtc = null);
 }

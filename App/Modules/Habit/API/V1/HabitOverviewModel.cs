@@ -15,7 +15,7 @@ public record HabitOverviewHabitRes(
   HabitCharityRefRes Charity,
   HabitStatusRes Status,
   int TimeLeftToEodMinutes,
-  List<HabitVersionMetaRes> Versions
+  HabitVersionMetaRes Version
 );
 
 public record StakeRes(decimal Amount, string Currency);

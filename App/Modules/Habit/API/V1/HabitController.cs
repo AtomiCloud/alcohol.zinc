@@ -108,7 +108,8 @@ public class HabitController(
   {
     var result = await this.GuardAsync(userId)
       .ThenAwait(_ => searchOverviewQueryValidator.ValidateAsyncResult(query, "Invalid Overview Query"))
-      .ThenAwait(q => overviewService.GetOverview(userId, q.Limit ?? 20, q.Skip ?? 0))
+      .Then(q => q.ToDomain(userId), Errors.MapNone)
+      .ThenAwait(search => overviewService.GetOverview(search))
       .Then(items => items.ToRes(), Errors.MapNone);
 
     return this.ReturnResult(result);

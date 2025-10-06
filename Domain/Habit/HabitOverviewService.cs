@@ -1,5 +1,6 @@
 using CSharp_Result;
 using Domain.Charity;
+using Domain.Configuration;
 using Domain.Exceptions;
 
 namespace Domain.Habit;
@@ -7,73 +8,68 @@ namespace Domain.Habit;
 public class HabitOverviewService(
   IHabitService habitService,
   IHabitRepository habitRepository,
-  Domain.Configuration.IConfigurationService configurationService,
+  IConfigurationService configurationService,
   ICharityService charityService,
   IStreakService streakService,
   ITransactionManager tm
 ) : IHabitOverviewService
 {
-  public Task<Result<List<HabitOverviewItem>>> GetOverview(string userId, int limit, int skip, DateTime? nowUtc = null)
+  public Task<Result<List<HabitOverviewItem>>> GetOverview(HabitOverviewSearch search, DateTime? nowUtc = null)
   {
-    return tm.Start<List<HabitOverviewItem>>(async () =>
+    return tm.Start<List<HabitOverviewItem>>(() =>
+      habitService.SearchHabits(new HabitSearch { UserId = search.UserId, Limit = search.Limit, Skip = search.Skip })
+        .ThenAwait(habits => configurationService.GetByUserId(search.UserId)
+          .NullToError(search.UserId)
+          .Then(cfg => new { habits, userTz = cfg.Principal.Record.Timezone }, Errors.MapNone)
+        )
+        .ThenAwait(async ctx =>
+        {
+          var acc = new List<HabitOverviewItem>().ToAsyncResult();
+          foreach (var hv in ctx.habits.OrderByDescending(x => x.Version))
+          {
+            acc = acc
+              .ThenAwait(list => BuildItem(hv, search.UserId, ctx.userTz, nowUtc)
+                .Then(item => { list.Add(item); return list; }, Errors.MapNone));
+          }
+          return await acc;
+        })
+    );
+
+    Task<Result<HabitOverviewItem>> BuildItem(
+      HabitVersionPrincipal hv,
+      string userId,
+      string userTz,
+      DateTime? nowUtc)
     {
-      var habits = await habitService.SearchHabits(new HabitSearch
-      {
-        UserId = userId,
-        Limit = limit,
-        Skip = skip
-      });
-      if (!habits.IsSuccess()) return habits.FailureOrDefault();
-
-      var items = new List<HabitOverviewItem>();
-      // Resolve user's timezone from configuration (fallback to UTC if none)
-      var configRes = await configurationService.GetByUserId(userId);
-      var userTz = (configRes.IsSuccess() && configRes.Get() != null)
-        ? configRes.Get()!.Principal.Record.Timezone
-        : "UTC";
-      foreach (var hv in habits.Get().OrderByDescending(x => x.Version))
-      {
-        // Habit enabled flag
-        var habitPrincipalRes = await habitRepository.GetHabit(hv.HabitId);
-        HabitPrincipal? habitPrincipal = habitPrincipalRes;
-        if (habitPrincipal == null || habitPrincipal.UserId != userId)
-          return new NotFoundException("Habit Not Found", typeof(HabitPrincipal), hv.HabitId.ToString());
-
-        // Charity (aggregate -> principal)
-        var charityAggRes = await charityService.Get(hv.Record.CharityId);
-        Domain.Charity.Charity? charityAgg = charityAggRes;
-        if (charityAgg == null) return new NotFoundException("Charity not found", typeof(CharityPrincipal), hv.Record.CharityId.ToString());
-        var charity = charityAgg.Principal;
-
-        // Streak (user timezone for today/week; habit timezone for streak series + EOD countdown)
-        var streakRes = await streakService.GetStatusForHabit(userId, hv.HabitId, userTz, hv.Record.Timezone, hv.Record.DaysOfWeek, nowUtc);
-        if (!streakRes.IsSuccess()) return streakRes.FailureOrDefault();
-
-        // Versions (all for this habit) and active indicator
-        var versionsRes = await habitRepository.GetVersions(userId, hv.HabitId);
-        if (!versionsRes.IsSuccess()) return versionsRes.FailureOrDefault();
-        var versionsList = versionsRes.Get()
-          .Select(v => new HabitVersionMeta(v.Id, v.Version, v.Version == hv.Version))
-          .OrderByDescending(v => v.Version)
-          .ToList();
-
-        items.Add(new HabitOverviewItem(
-          hv.HabitId,
-          hv.Record.Task,
-          hv.Record.NotificationTime.ToString("HH:mm"),
-          hv.Record.Timezone,
-          hv.Record.DaysOfWeek,
-          hv.Record.Stake.Amount,
-          hv.Record.Stake.Currency.Code,
-          habitPrincipal.Record.Enabled,
-          charity,
-          streakRes.Get(),
-          streakRes.Get().TimeLeftToEodMinutes,
-          versionsList
-        ));
-      }
-
-      return items;
-    });
+      return habitRepository.GetHabit(hv.HabitId)
+        .NullToError(hv.HabitId.ToString())
+        .Then(habitPrincipal =>
+          habitPrincipal.UserId != userId
+            ? new NotFoundException("Habit Not Found", typeof(HabitPrincipal), hv.HabitId.ToString())
+            : habitPrincipal.ToResult()
+        )
+        .ThenAwait(habitPrincipal => charityService.Get(hv.Record.CharityId)
+          .NullToError(hv.Record.CharityId.ToString())
+          .Then(ch => ch.Principal, Errors.MapNone)
+          .Then(charity => new { habitPrincipal, charity }, Errors.MapNone)
+        )
+        .ThenAwait(ctx => streakService.GetStatusForHabit(userId, hv.HabitId, userTz, hv.Record.Timezone, hv.Record.DaysOfWeek, nowUtc)
+          .Then(status => new { ctx.habitPrincipal, ctx.charity, status }, Errors.MapNone)
+        )
+        .Then( ctx2 => new HabitOverviewItem(
+            hv.HabitId,
+            hv.Record.Task,
+            hv.Record.NotificationTime.ToString("HH:mm"),
+            hv.Record.Timezone,
+            hv.Record.DaysOfWeek,
+            hv.Record.Stake.Amount,
+            hv.Record.Stake.Currency.Code,
+            ctx2.habitPrincipal.Record.Enabled,
+            ctx2.charity,
+            ctx2.status,
+            ctx2.status.TimeLeftToEodMinutes,
+            new HabitVersionMeta(hv.Id, hv.Version, true)
+          ), Errors.MapNone);
+    }
   }
 }
