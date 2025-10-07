@@ -173,4 +173,41 @@ public class PaymentCustomerRepository(MainDbContext db, ILogger<PaymentCustomer
       return e;
     }
   }
+
+  public async Task<Result<PaymentCustomerPrincipal?>> DisablePaymentConsentAsync(string userId)
+  {
+    try
+    {
+      logger.LogInformation("Disabling PaymentConsent for UserId: {UserId}", userId);
+
+      var now = DateTime.UtcNow;
+      var rowsAffected = await db.PaymentCustomers
+        .Where(x => x.UserId == userId)
+        .ExecuteUpdateAsync(setter => setter
+          .SetProperty(p => p.PaymentConsentId, (string?)null)
+          .SetProperty(p => p.PaymentConsentStatus, (string?)null)
+          .SetProperty(p => p.UpdatedAt, now)
+        );
+
+      if (rowsAffected == 0)
+      {
+        logger.LogWarning("PaymentCustomer not found for UserId: {UserId}", userId);
+        return (PaymentCustomerPrincipal?)null;
+      }
+
+      logger.LogInformation("PaymentConsent disabled for UserId: {UserId}", userId);
+
+      // Fetch the updated record
+      var data = await db.PaymentCustomers
+        .Where(x => x.UserId == userId)
+        .FirstOrDefaultAsync();
+
+      return data?.ToPrincipal();
+    }
+    catch (Exception e)
+    {
+      logger.LogError(e, "Failed to disable PaymentConsent for UserId: {UserId}", userId);
+      return e;
+    }
+  }
 }

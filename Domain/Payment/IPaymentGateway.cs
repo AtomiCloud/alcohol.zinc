@@ -11,6 +11,7 @@ public interface IPaymentGateway
 
   // Payment consent operations
   Task<Result<PaymentConsentInfo[]>> GetVerifiedPaymentConsentsAsync(string customerId);
+  Task<Result<Unit>> DisablePaymentConsentAsync(string paymentConsentId);
 
   // Payment intent operations
   Task<Result<PaymentIntentResult>> CreatePaymentIntentAsync(CreatePaymentIntentRequest request);

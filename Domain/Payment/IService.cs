@@ -15,6 +15,7 @@ public interface IPaymentService
   // Payment consent operations
   Task<Result<PaymentConsentStatusResult>> GetPaymentConsentAsync(string userId);
   Task<Result<bool>> HasPaymentConsentAsync(string userId);
+  Task<Result<Unit>> DisablePaymentConsentAsync(string userId);
 
   // Payment intent operations
   Task<Result<PaymentIntentResult>> CreatePaymentIntentAsync(string userId, CreatePaymentIntentRequest request);

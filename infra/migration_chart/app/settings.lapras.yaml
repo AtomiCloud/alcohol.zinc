@@ -51,7 +51,7 @@ BlockStorage:
     EnsureBucketCreation: true
 # external
 HttpClient:
-  Airwallex:
+  AIRWALLEX:
     BaseAddress: 'https://api-demo.airwallex.com'
     Timeout: 60
 
