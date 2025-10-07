@@ -1,3 +1,10 @@
+## [1.15.4](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.15.3...v1.15.4) (2025-10-07)
+
+
+### 🐛 Bug Fixes 🐛
+
+* incorrect uri format ([a9f35e6](https://github.com/AtomiCloud/alcohol.zinc/commit/a9f35e615d277985ac3b68f658fae5fb0c4e686f))
+
 ## [1.15.3](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.15.2...v1.15.3) (2025-10-07)
 
 
