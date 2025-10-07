@@ -202,4 +202,103 @@ public class StreakRepository(MainDbContext db, ILogger<StreakRepository> logger
       throw;
     }
   }
+
+  public async Task<Result<List<Domain.Habit.HabitDebtItem>>> GetOpenDebtsForHabit(Guid habitId)
+  {
+    try
+    {
+      var rows = await (from he in db.HabitExecutions
+                        join hv in db.HabitVersions on he.HabitVersionId equals hv.Id
+                        where hv.HabitId == habitId
+                              && he.Status == App.Modules.HabitExecution.Data.HabitExecutionStatusData.Failed
+                              && he.PaymentProcessed == false
+                        select new
+                        {
+                          he.Id,
+                          he.Date,
+                          hv.HabitId,
+                          HabitVersionId = hv.Id,
+                          hv.StakeCents,
+                          hv.RatioBasisPoints,
+                          hv.StakeCurrency,
+                          hv.CharityId,
+                          hv.Task
+                        })
+        .AsNoTracking()
+        .ToListAsync();
+
+      var items = rows.Select(r =>
+      {
+        var amountCents = (long)r.StakeCents * r.RatioBasisPoints / 10_000L;
+        var amount = amountCents / 100m;
+        return new Domain.Habit.HabitDebtItem(
+          r.Id,
+          r.HabitId,
+          r.HabitVersionId,
+          r.Date,
+          amount,
+          r.StakeCurrency,
+          r.CharityId,
+          r.Task
+        );
+      }).ToList();
+
+      return items;
+    }
+    catch (Exception e)
+    {
+      logger.LogError(e, "GetOpenDebtsForHabit failed for HabitId={HabitId}", habitId);
+      throw;
+    }
+  }
+
+  public async Task<Result<List<Domain.Habit.HabitDebtItem>>> GetOpenDebtsForUser(string userId)
+  {
+    try
+    {
+      var rows = await (from he in db.HabitExecutions
+                        join hv in db.HabitVersions on he.HabitVersionId equals hv.Id
+                        join h in db.Habits on hv.HabitId equals h.Id
+                        where h.UserId == userId
+                              && he.Status == App.Modules.HabitExecution.Data.HabitExecutionStatusData.Failed
+                              && he.PaymentProcessed == false
+                        select new
+                        {
+                          he.Id,
+                          he.Date,
+                          hv.HabitId,
+                          HabitVersionId = hv.Id,
+                          hv.StakeCents,
+                          hv.RatioBasisPoints,
+                          hv.StakeCurrency,
+                          hv.CharityId,
+                          hv.Task
+                        })
+        .AsNoTracking()
+        .ToListAsync();
+
+      var items = rows.Select(r =>
+      {
+        var amountCents = (long)r.StakeCents * r.RatioBasisPoints / 10_000L;
+        var amount = amountCents / 100m;
+        return new Domain.Habit.HabitDebtItem(
+          r.Id,
+          r.HabitId,
+          r.HabitVersionId,
+          r.Date,
+          amount,
+          r.StakeCurrency,
+          r.CharityId,
+          r.Task
+        );
+      }).ToList();
+
+      return items;
+    }
+    catch (Exception e)
+    {
+      logger.LogError(e, "GetOpenDebtsForUser failed for UserId={UserId}", userId);
+      throw;
+    }
+  }
 }
