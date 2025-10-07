@@ -1,3 +1,16 @@
+## [1.14.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.13.0...v1.14.0) (2025-10-07)
+
+
+### ✨ Features ✨
+
+* check userid for payment endpoint ([d708315](https://github.com/AtomiCloud/alcohol.zinc/commit/d708315d623f88f9e0cb872ceb0304bea639347c))
+* disable payment consent ([085fde3](https://github.com/AtomiCloud/alcohol.zinc/commit/085fde341e9e03a524815830d32b91c17c67b86e))
+
+
+### 🐛 Bug Fixes 🐛
+
+* resolve conflict ([c959015](https://github.com/AtomiCloud/alcohol.zinc/commit/c95901557a21f84ea351d49cd17b05487d7bc1a7))
+
 ## [1.13.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.12.1...v1.13.0) (2025-10-06)
 
 
