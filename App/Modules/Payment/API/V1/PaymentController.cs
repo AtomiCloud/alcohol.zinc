@@ -29,7 +29,8 @@ public class PaymentController(
   [Authorize, HttpPost("{userId}/customers")]
   public async Task<ActionResult<CreateCustomerRes>> CreateCustomer(string userId)
   {
-    var result = await service.CreateCustomerAsync(userId)
+    var result = await this.GuardAsync(userId)
+      .ThenAwait(_ => service.CreateCustomerAsync(userId))
       .ThenAwait(customer => service.GenerateClientSecretAsync(userId)
         .Then(secret => customer.ToRes(secret.ClientSecret), Errors.MapNone));
 
@@ -40,7 +41,8 @@ public class PaymentController(
   [Authorize, HttpGet("{userId}/client-secret")]
   public async Task<ActionResult<ClientSecretRes>> GetClientSecret(string userId)
   {
-    var result = await service.GenerateClientSecretAsync(userId)
+    var result = await this.GuardAsync(userId)
+      .ThenAwait(_ => service.GenerateClientSecretAsync(userId))
       .Then(x => x.ToRes(), Errors.MapNone);
 
     return this.ReturnResult(result);
@@ -50,7 +52,8 @@ public class PaymentController(
   [Authorize, HttpGet("{userId}/consent")]
   public async Task<ActionResult<PaymentConsentRes>> GetPaymentConsent(string userId)
   {
-    var result = await service.GetPaymentConsentAsync(userId)
+    var result = await this.GuardAsync(userId)
+      .ThenAwait(_ => service.GetPaymentConsentAsync(userId))
       .Then(x => x.ToRes(), Errors.MapNone);
 
     return this.ReturnResult(result);
@@ -60,7 +63,8 @@ public class PaymentController(
   [Authorize, HttpDelete("{userId}/consent")]
   public async Task<ActionResult> DisablePaymentConsent(string userId)
   {
-    var result = await service.DisablePaymentConsentAsync(userId);
+    var result = await this.GuardAsync(userId)
+      .ThenAwait(_ => service.DisablePaymentConsentAsync(userId));
 
     return this.ReturnUnitResult(result);
   }
@@ -72,8 +76,8 @@ public class PaymentController(
     [FromBody] CreatePaymentIntentReq req
   )
   {
-    var result = await createPaymentIntentReqValidator
-      .ValidateAsyncResult(req, "Invalid CreatePaymentIntentReq")
+    var result = await this.GuardAsync(userId)
+      .ThenAwait(_ => createPaymentIntentReqValidator.ValidateAsyncResult(req, "Invalid CreatePaymentIntentReq"))
       .ThenAwait(r => service.CreatePaymentIntentAsync(userId, r.ToDomain(userId)))
       .Then(x => x.ToRes(), Errors.MapNone);
 
@@ -88,8 +92,8 @@ public class PaymentController(
     [FromBody] ConfirmPaymentIntentReq req
   )
   {
-    var result = await confirmPaymentIntentReqValidator
-      .ValidateAsyncResult(req, "Invalid ConfirmPaymentIntentReq")
+    var result = await this.GuardAsync(userId)
+      .ThenAwait(_ => confirmPaymentIntentReqValidator.ValidateAsyncResult(req, "Invalid ConfirmPaymentIntentReq"))
       .ThenAwait(r => service.ConfirmPaymentIntentAsync(userId, intentId, r.ToDomain(userId, intentId)))
       .Then(x => x.ToConfirmRes(), Errors.MapNone);
 
