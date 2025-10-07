@@ -42,9 +42,9 @@ HttpClient:
 Auth:
   Enabled: true
   Settings:
-    Issuer: https://api.lithium.alcohol.raichu.atomi.cloud/oidc
+    Issuer: https://api.lithium.alcohol.raichu.cluster.atomi.cloud/oidc
     Audience: https://api.zinc.alcohol.raichu
-    Domain: api.lithium.alcohol.raichu.atomi.cloud/oidc
+    Domain: api.lithium.alcohol.raichu.cluster.atomi.cloud/oidc
   Management:
     Endpoint: https://admin.lithium.alcohol.raichu.atomi.cloud
     Id: xtd72hm10b85nib956r85
