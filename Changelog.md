@@ -1,3 +1,10 @@
+## [1.15.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.14.0...v1.15.0) (2025-10-07)
+
+
+### ✨ Features ✨
+
+* debt amount ([9135c09](https://github.com/AtomiCloud/alcohol.zinc/commit/9135c09907808887e4852b649e0f1162d6c486ea))
+
 ## [1.14.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.13.0...v1.14.0) (2025-10-07)
 
 
