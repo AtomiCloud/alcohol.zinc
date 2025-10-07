@@ -236,4 +236,40 @@ public class AirwallexClient(
         ExpiresAt = DateTime.UtcNow.AddHours(1).ToString("O") // Default 1 hour expiry
       }, Errors.MapNone);
   }
+
+  public Task<Result<AirwallexPaymentConsentRes>> DisablePaymentConsentAsync(string paymentConsentId)
+  {
+    return authenticator
+      .GetToken()
+      .ThenAwait(async token =>
+      {
+        var request = new HttpRequestMessage
+        {
+          Method = HttpMethod.Post,
+          RequestUri = new Uri($"api/v1/pa/payment_consents/{paymentConsentId}/disable", UriKind.Relative),
+          Headers = { Authorization = new AuthenticationHeaderValue("Bearer", token) },
+          Content = JsonContent.Create(new { request_id = Guid.NewGuid().ToString() }),
+        };
+
+        using var response = await HttpClient.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        try
+        {
+          response.EnsureSuccessStatusCode();
+        }
+        catch (HttpRequestException e)
+        {
+          logger.LogError(e, "Failed to disable payment consent with Airwallex (HTTP Error), Response: {Body}", body);
+          return e;
+        }
+        catch (Exception e)
+        {
+          logger.LogError(e, "Failed to disable payment consent with Airwallex");
+          throw;
+        }
+
+        return body.ToObj<AirwallexPaymentConsentRes>().ToResult();
+      });
+  }
 }

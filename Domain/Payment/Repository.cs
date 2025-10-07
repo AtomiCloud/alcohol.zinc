@@ -12,4 +12,5 @@ public interface IPaymentCustomerRepository
     string airwallexCustomerId,
     string? paymentConsentId,
     PaymentConsentStatus? consentStatus);
+  Task<Result<PaymentCustomerPrincipal?>> DisablePaymentConsentAsync(string userId);
 }
