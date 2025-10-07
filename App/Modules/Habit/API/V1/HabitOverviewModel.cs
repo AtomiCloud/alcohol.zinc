@@ -2,7 +2,7 @@ namespace App.Modules.Habit.API.V1;
 
 public record OverviewQuery(int? Limit, int? Skip);
 
-public record HabitOverviewResponse(List<HabitOverviewHabitRes> Habits);
+public record HabitOverviewResponse(List<HabitOverviewHabitRes> Habits, string TotalDebt);
 
 public record HabitOverviewHabitRes(
   string Id,
@@ -15,7 +15,8 @@ public record HabitOverviewHabitRes(
   HabitCharityRefRes Charity,
   HabitStatusRes Status,
   int TimeLeftToEodMinutes,
-  HabitVersionMetaRes Version
+  HabitVersionMetaRes Version,
+  string TotalDebt
 );
 
 public record StakeRes(decimal Amount, string Currency);

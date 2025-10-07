@@ -1,11 +1,15 @@
+using System.Globalization;
 using Domain.Habit;
 
 namespace App.Modules.Habit.API.V1;
 
 public static class HabitOverviewMapper
 {
-  public static HabitOverviewResponse ToRes(this List<HabitOverviewItem> items)
-    => new(items.Select(ToRes).ToList());
+  public static HabitOverviewResponse ToRes(this HabitOverviewSummary s)
+    => new(
+      s.Items.Select(ToRes).ToList(),
+      s.TotalUserDebtAmount.ToString("F2", CultureInfo.InvariantCulture)
+    );
 
   private static HabitOverviewHabitRes ToRes(HabitOverviewItem i)
   {
@@ -20,7 +24,8 @@ public static class HabitOverviewMapper
       new HabitCharityRefRes(i.Charity.Id.ToString(), i.Charity.Record.Name, null),
       ToStatus(i.Status),
       i.TimeLeftToEodMinutes,
-      new HabitVersionMetaRes(i.Version.Id.ToString(), i.Version.Version, i.Version.IsActive)
+      new HabitVersionMetaRes(i.Version.Id.ToString(), i.Version.Version, i.Version.IsActive),
+      i.TotalDebtAmount.ToString("F2", CultureInfo.InvariantCulture)
     );
   }
 

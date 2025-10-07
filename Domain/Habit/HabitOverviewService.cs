@@ -11,16 +11,25 @@ public class HabitOverviewService(
   IConfigurationService configurationService,
   ICharityService charityService,
   IStreakService streakService,
+  IStreakRepository streakRepository,
   ITransactionManager tm
 ) : IHabitOverviewService
 {
-  public Task<Result<List<HabitOverviewItem>>> GetOverview(HabitOverviewSearch search, DateTime? nowUtc = null)
+  public Task<Result<HabitOverviewSummary>> GetOverview(HabitOverviewSearch search, DateTime? nowUtc = null)
   {
-    return tm.Start<List<HabitOverviewItem>>(() =>
+    return tm.Start<HabitOverviewSummary>(() =>
       habitService.SearchHabits(new HabitSearch { UserId = search.UserId, Limit = search.Limit, Skip = search.Skip })
         .ThenAwait(habits => configurationService.GetByUserId(search.UserId)
           .NullToError(search.UserId)
           .Then(cfg => new { habits, userTz = cfg.Principal.Record.Timezone }, Errors.MapNone)
+        )
+        .ThenAwait(ctx1 => streakRepository.GetOpenDebtsForUser(search.UserId)
+          .Then(debts => new {
+              ctx1.habits,
+              ctx1.userTz,
+              debtsByHabit = debts.GroupBy(d => d.HabitId).ToDictionary(g => g.Key, g => g.ToList()),
+              totalDebt = debts.Sum(d => d.Amount)
+            }, Errors.MapNone)
         )
         .ThenAwait(async ctx =>
         {
@@ -28,10 +37,11 @@ public class HabitOverviewService(
           foreach (var hv in ctx.habits.OrderByDescending(x => x.Version))
           {
             acc = acc
-              .ThenAwait(list => BuildItem(hv, search.UserId, ctx.userTz, nowUtc)
+              .ThenAwait(list => BuildItem(hv, search.UserId, ctx.userTz, nowUtc, ctx.debtsByHabit.TryGetValue(hv.HabitId, out var ds) ? ds : [])
                 .Then(item => { list.Add(item); return list; }, Errors.MapNone));
           }
-          return await acc;
+          return await acc
+            .Then(items => new HabitOverviewSummary(items, ctx.totalDebt), Errors.MapNone);
         })
     );
 
@@ -39,7 +49,8 @@ public class HabitOverviewService(
       HabitVersionPrincipal hv,
       string userId,
       string userTz,
-      DateTime? nowUtc)
+      DateTime? nowUtc,
+      List<HabitDebtItem> debtsForHabit)
     {
       return habitRepository.GetHabit(hv.HabitId)
         .NullToError(hv.HabitId.ToString())
@@ -56,7 +67,7 @@ public class HabitOverviewService(
         .ThenAwait(ctx => streakService.GetStatusForHabit(userId, hv.HabitId, userTz, hv.Record.Timezone, hv.Record.DaysOfWeek, nowUtc)
           .Then(status => new { ctx.habitPrincipal, ctx.charity, status }, Errors.MapNone)
         )
-        .Then( ctx2 => new HabitOverviewItem(
+        .Then(ctx2 => new HabitOverviewItem(
             hv.HabitId,
             hv.Record.Task,
             hv.Record.NotificationTime.ToString("HH:mm"),
@@ -68,7 +79,8 @@ public class HabitOverviewService(
             ctx2.charity,
             ctx2.status,
             ctx2.status.TimeLeftToEodMinutes,
-            new HabitVersionMeta(hv.Id, hv.Version, true)
+            new HabitVersionMeta(hv.Id, hv.Version, true),
+            debtsForHabit.Sum(d => d.Amount)
           ), Errors.MapNone);
     }
   }

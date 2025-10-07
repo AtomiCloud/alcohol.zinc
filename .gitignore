@@ -687,3 +687,4 @@ Temporary Items
 **/.react-email/**
 **/node_modules/**
 **/App/Templates/Email/templates/**
+scratch/
