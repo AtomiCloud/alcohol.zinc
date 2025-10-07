@@ -42,9 +42,9 @@ HttpClient:
 Auth:
   Enabled: true
   Settings:
-    Issuer: https://admin.lithium.alcohol.pikachu.atomi.cloud/oidc
+    Issuer: https://api.lithium.alcohol.pikachu.atomi.cloud/oidc
     Audience: https://api.zinc.alcohol.pikachu
-    Domain: admin.lithium.alcohol.pikachu.atomi.cloud/oidc
+    Domain: api.lithium.alcohol.pikachu.atomi.cloud/oidc
   Management:
     Endpoint: https://admin.lithium.alcohol.pikachu.atomi.cloud
     Id: me4y2umq0wtujywxi5aff

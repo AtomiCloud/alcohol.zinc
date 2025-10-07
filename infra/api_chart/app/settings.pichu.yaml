@@ -43,9 +43,9 @@ HttpClient:
 Auth:
   Enabled: true
   Settings:
-    Issuer: https://admin.lithium.alcohol.pichu.atomi.cloud/oidc
+    Issuer: https://api.lithium.alcohol.pichu.atomi.cloud/oidc
     Audience: https://api.zinc.alcohol.pichu
-    Domain: admin.lithium.alcohol.pichu.atomi.cloud/oidc
+    Domain: api.lithium.alcohol.pichu.atomi.cloud/oidc
   Management:
     Endpoint: https://admin.lithium.alcohol.pichu.atomi.cloud
     Id: q821ucbj78gyppgqsx179
