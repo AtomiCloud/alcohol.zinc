@@ -1,3 +1,10 @@
+## [1.15.1](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.15.0...v1.15.1) (2025-10-07)
+
+
+### 🐛 Bug Fixes 🐛
+
+* incorrect issuer and domain ([5349000](https://github.com/AtomiCloud/alcohol.zinc/commit/53490006620c8752cc66f5e6377d10befe8d4183))
+
 ## [1.15.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.14.0...v1.15.0) (2025-10-07)
 
 
