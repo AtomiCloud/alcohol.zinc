@@ -34,7 +34,7 @@ Cache:
 # external
 HttpClient:
   LOGTO:
-    BaseAddress: https://admin.lithium.alcohol.raichu.atomi.cloud
+    BaseAddress: https://api.lithium.alcohol.raichu.cluster.atomi.cloud
   PLEDGE:
     BaseAddress: https://api.pledge.to
     Timeout: 60
@@ -46,7 +46,6 @@ Auth:
     Audience: https://api.zinc.alcohol.raichu
     Domain: api.lithium.alcohol.raichu.cluster.atomi.cloud/oidc
   Management:
-    Endpoint: https://admin.lithium.alcohol.raichu.atomi.cloud
     Id: xtd72hm10b85nib956r85
     Secret: supersecret
     Resource: https://default.logto.app/api

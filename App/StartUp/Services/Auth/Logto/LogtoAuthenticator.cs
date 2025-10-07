@@ -38,7 +38,7 @@ public class LogtoAuthenticator(
       var request = new HttpRequestMessage
       {
         Method = HttpMethod.Post,
-        RequestUri = new Uri("oidc/token", UriKind.Relative),
+        RequestUri = new Uri("oidc/token", UriKind.Absolute),
         Headers = { Authorization = new AuthenticationHeaderValue("Basic", $"{m.Id}:{m.Secret}".ToBase64()) },
         Content = new FormUrlEncodedContent(new Dictionary<string, string>
         {

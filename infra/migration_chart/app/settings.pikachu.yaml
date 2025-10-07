@@ -34,7 +34,7 @@ Cache:
 # external
 HttpClient:
   LOGTO:
-    BaseAddress: https://admin.lithium.alcohol.pikachu.atomi.cloud
+    BaseAddress: https://api.lithium.alcohol.pikachu.cluster.atomi.cloud
   PLEDGE:
     BaseAddress: https://api.pledge.to
     Timeout: 60
@@ -46,7 +46,6 @@ Auth:
     Audience: https://api.zinc.alcohol.pikachu
     Domain: api.lithium.alcohol.pikachu.cluster.atomi.cloud/oidc
   Management:
-    Endpoint: https://admin.lithium.alcohol.pikachu.atomi.cloud
     Id: me4y2umq0wtujywxi5aff
     Secret: supersecret
     Resource: https://default.logto.app/api

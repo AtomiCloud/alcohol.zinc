@@ -12,7 +12,7 @@ type: local
 # fast mode
 # 1. does not start the cluster, automatically assumes that your cluster already created
 # 2. does not clean up resources. This makes your future starts faster
-fast: false
+fast: true
 
 # secrets - install infisical operator in the cluster
 secrets: false
