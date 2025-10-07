@@ -58,11 +58,21 @@ public static class HabitMapper
             he.Id,
             he.HabitVersionId,
             he.Record.Date.ToStandardDateFormat(),
-            he.Record.Status.ToString(),
+            MapExecutionStatus(he.Record.Status),
             he.Record.CompletedAt?.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
             he.Record.Notes,
             false  // PaymentProcessed - not exposed in domain model yet
         );
+
+    private static string MapExecutionStatus(ExecutionStatus s) => s switch
+    {
+        ExecutionStatus.Completed => "succeeded",
+        ExecutionStatus.Failed => "failed",
+        ExecutionStatus.Skipped => "skip",
+        ExecutionStatus.Freeze => "frozen",
+        ExecutionStatus.Vacation => "vacation",
+        _ => "failed"
+    };
   
     public static HabitExecutionSearch ToDomain(this SearchHabitExecutionQuery query) =>
       new ()
@@ -83,4 +93,7 @@ public static class HabitMapper
         Limit = query.Limit ?? 20, 
         Skip = query.Skip ?? 0
       };
+
+    public static HabitOverviewSearch ToDomain(this OverviewQuery query, string userId) =>
+      new(userId, query.Limit ?? 20, query.Skip ?? 0);
 }

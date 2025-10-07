@@ -4,7 +4,7 @@ namespace App.StartUp.Services.Auth.Logto;
 
 public class LogtoAssignRoleReq
 {
-  [JsonPropertyName("roleIds")] public string[] RoleIds { get; set; }
+  [JsonPropertyName("roleIds")] public string[] RoleIds { get; set; } = [];
 }
 
 public record LogtoTokenRes

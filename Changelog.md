@@ -1,3 +1,39 @@
+## [1.13.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.12.1...v1.13.0) (2025-10-06)
+
+
+### ✨ Features ✨
+
+* better configuration controller ([3f94dd5](https://github.com/AtomiCloud/alcohol.zinc/commit/3f94dd5b3e5d3f2f4ed568c766319fd8759335fc))
+* habit with more streaks ([59470e4](https://github.com/AtomiCloud/alcohol.zinc/commit/59470e4d8961dc2c6808fd6553aaccae6dd8f3f1))
+* initial working habits overview ([5fe947d](https://github.com/AtomiCloud/alcohol.zinc/commit/5fe947d9c7e94ffb243993c33f89f1ccf299a6d1))
+
+
+### 🐛 Bug Fixes 🐛
+
+* error and unique ([b6a3746](https://github.com/AtomiCloud/alcohol.zinc/commit/b6a3746fb90e0deb82b3bf44f2c397481af0c02c))
+* incorrect service method used ([b4543a7](https://github.com/AtomiCloud/alcohol.zinc/commit/b4543a74cd400c4f5394a8861c541a9b569896ef))
+* PR comments ([e01fb0d](https://github.com/AtomiCloud/alcohol.zinc/commit/e01fb0d9d1024bdc7cde696c071fdfb7df9f0a98))
+
+## [1.12.1](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.12.0...v1.12.1) (2025-10-06)
+
+
+### 🐛 Bug Fixes 🐛
+
+* PR problems ([74cf8ed](https://github.com/AtomiCloud/alcohol.zinc/commit/74cf8ede8140bda96b40a7e2f732423645daa86c))
+
+## [1.12.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.11.0...v1.12.0) (2025-10-06)
+
+
+### ✨ Features ✨
+
+* charity API and sync ([5dbc1a8](https://github.com/AtomiCloud/alcohol.zinc/commit/5dbc1a8e3f3c09fbceb19cdba38991ed64d1d35f))
+* merge from main ([4cb8e2e](https://github.com/AtomiCloud/alcohol.zinc/commit/4cb8e2e72ec0b7d9ec579bb50eda5bb0bdc1e7c1))
+
+
+### 🐛 Bug Fixes 🐛
+
+* PR problems ([4e310e7](https://github.com/AtomiCloud/alcohol.zinc/commit/4e310e7e725719bb51b17d31afd4ff199d0ce9d7))
+
 ## [1.11.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.10.0...v1.11.0) (2025-10-05)
 
 

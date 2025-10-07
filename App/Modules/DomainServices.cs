@@ -1,4 +1,6 @@
+using App.Modules.Causes.Data;
 using App.Modules.Charities.Data;
+using App.Modules.Charities.Sync;
 using App.Modules.Configurations.Data;
 using App.Modules.Habit.Data;
 using App.Modules.Payment.Airwallex;
@@ -7,6 +9,7 @@ using App.Modules.System;
 using App.Modules.Users.Data;
 using App.StartUp.Services;
 using Domain;
+using Domain.Cause;
 using Domain.Charity;
 using Domain.Configuration;
 using Domain.Habit;
@@ -33,6 +36,13 @@ public static class DomainServices
     s.AddScoped<ICharityRepository, CharityRepository>()
       .AutoTrace<ICharityRepository>();
 
+    // CAUSE
+    s.AddScoped<ICauseService, CauseService>()
+      .AutoTrace<ICauseService>();
+
+    s.AddScoped<ICauseRepository, CauseRepository>()
+      .AutoTrace<ICauseRepository>();
+
     // CONFIGURATION
     s.AddScoped<IConfigurationService, ConfigurationService>()
       .AutoTrace<IConfigurationService>();
@@ -47,6 +57,15 @@ public static class DomainServices
     s.AddScoped<IHabitRepository, HabitRepository>()
       .AutoTrace<IHabitRepository>();
 
+    // HABIT: Overview
+    s.AddScoped<IHabitOverviewService, HabitOverviewService>()
+      .AutoTrace<IHabitOverviewService>();
+
+    // HABIT: Streaks
+    s.AddScoped<IStreakService, StreakService>()
+      .AutoTrace<IStreakService>();
+    s.AddScoped<IStreakRepository, StreakRepository>()
+      .AutoTrace<IStreakRepository>();
     // PAYMENT
     s.AddScoped<IPaymentService, PaymentService>()
       .AutoTrace<IPaymentService>();
@@ -69,6 +88,12 @@ public static class DomainServices
 
     s.AddScoped<IEncryptor, Encryptor>()
       .AutoTrace<IEncryptor>();
+
+    // Pledge sync
+    s.AddScoped<IPledgeClient, PledgeClient>()
+      .AutoTrace<IPledgeClient>();
+    s.AddScoped<IPledgeSyncService, PledgeSyncService>()
+      .AutoTrace<IPledgeSyncService>();
 
 
 

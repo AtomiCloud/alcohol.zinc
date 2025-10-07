@@ -4,6 +4,25 @@ namespace App.Modules.HabitExecution.Data
 {
   public static class HabitExecutionMapper
   {
+    private static ExecutionStatus ToDomainStatus(this HabitExecutionStatusData s) => s switch
+    {
+      HabitExecutionStatusData.Completed => ExecutionStatus.Completed,
+      HabitExecutionStatusData.Failed => ExecutionStatus.Failed,
+      HabitExecutionStatusData.Skipped => ExecutionStatus.Skipped,
+      HabitExecutionStatusData.Frozen => ExecutionStatus.Freeze,
+      HabitExecutionStatusData.Vacation => ExecutionStatus.Vacation,
+      _ => ExecutionStatus.Failed // defaulting unknown to failed is conservative for domain; adjust as needed
+    };
+
+    private static HabitExecutionStatusData ToDataStatus(this ExecutionStatus s) => s switch
+    {
+      ExecutionStatus.Completed => HabitExecutionStatusData.Completed,
+      ExecutionStatus.Failed => HabitExecutionStatusData.Failed,
+      ExecutionStatus.Skipped => HabitExecutionStatusData.Skipped,
+      ExecutionStatus.Freeze => HabitExecutionStatusData.Frozen,
+      ExecutionStatus.Vacation => HabitExecutionStatusData.Vacation,
+      _ => HabitExecutionStatusData.Unknown
+    };
     public static HabitExecutionPrincipal ToPrincipal(this HabitExecutionData data)
     {
       return new HabitExecutionPrincipal
@@ -13,7 +32,7 @@ namespace App.Modules.HabitExecution.Data
         Record = new HabitExecutionRecord
         {
           Date = data.Date,
-          Status = data.Status,
+          Status = data.Status.ToDomainStatus(),
           CompletedAt = data.CompletedAt,
           Notes = data.Notes
         }
@@ -27,7 +46,7 @@ namespace App.Modules.HabitExecution.Data
         Id = principal.Id,
         HabitVersionId = principal.HabitVersionId,
         Date = principal.Record.Date,
-        Status = principal.Record.Status,
+        Status = principal.Record.Status.ToDataStatus(),
         CompletedAt = principal.Record.CompletedAt,
         Notes = principal.Record.Notes
       };
