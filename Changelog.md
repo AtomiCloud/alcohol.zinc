@@ -1,3 +1,10 @@
+## [1.15.3](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.15.2...v1.15.3) (2025-10-07)
+
+
+### 🐛 Bug Fixes 🐛
+
+* incorrect management client api for logto ([b967376](https://github.com/AtomiCloud/alcohol.zinc/commit/b967376c9460ef3e0cacfdffdbe15e6564f2785b))
+
 ## [1.15.2](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.15.1...v1.15.2) (2025-10-07)
 
 
