@@ -73,6 +73,9 @@ public static class DomainServices
     s.AddScoped<IPaymentCustomerRepository, PaymentCustomerRepository>()
       .AutoTrace<IPaymentCustomerRepository>();
 
+    s.AddScoped<IPaymentIntentRepository, PaymentIntentRepository>()
+      .AutoTrace<IPaymentIntentRepository>();
+
     s.AddScoped<IPaymentGateway, AirwallexGateway>()
       .AutoTrace<IPaymentGateway>();
 

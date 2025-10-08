@@ -5,6 +5,7 @@ namespace Domain.Payment;
 
 public class PaymentService(
   IPaymentCustomerRepository repo,
+  IPaymentIntentRepository intentRepo,
   IPaymentGateway gateway
 ) : IPaymentService
 {
@@ -123,26 +124,72 @@ public class PaymentService(
 
   public Task<Result<PaymentIntentResult>> CreatePaymentIntentAsync(string userId, CreatePaymentIntentRequest request)
   {
-    throw new NotImplementedException();
+    return gateway.CreatePaymentIntentAsync(request)
+      .ThenAwait(gatewayResult =>
+      {
+        // Save payment intent to database
+        var record = new PaymentIntentRecord
+        {
+          UserId = userId,
+          AirwallexPaymentIntentId = gatewayResult.Id,
+          AirwallexCustomerId = request.CustomerId,
+          Amount = request.Amount,
+          Currency = request.Currency,
+          CapturedAmount = 0m,
+          Status = ParsePaymentIntentStatus(gatewayResult.Status),
+          MerchantOrderId = gatewayResult.MerchantOrderId
+        };
+
+        return intentRepo.Create(record)
+          .Then(_ => gatewayResult, Errors.MapNone);
+      });
   }
 
   public Task<Result<PaymentIntentResult>> ConfirmPaymentIntentAsync(string userId, string intentId, ConfirmPaymentIntentRequest request)
   {
-    throw new NotImplementedException();
+    return intentRepo.GetByAirwallexId(intentId)
+      .Then(intent =>
+        intent == null
+          ? new NotFoundException($"Payment intent not found: {intentId}", typeof(PaymentIntent), intentId)
+          : intent.ToResult()
+      )
+      .Then(intent =>
+        intent.Principal.Record.UserId != userId
+          ? new NotFoundException($"Payment intent does not belong to user: {userId}", typeof(PaymentIntent), userId)
+          : intent.ToResult()
+      )
+      .ThenAwait(intent =>
+        gateway.ConfirmPaymentIntentAsync(intentId, request.PaymentConsentId, intent.Principal.Record.AirwallexCustomerId)
+          .ThenAwait(gatewayResult =>
+          {
+            // Update payment intent status in database
+            var status = ParsePaymentIntentStatus(gatewayResult.Status);
+            return intentRepo.UpdateStatus(intentId, status, 0m)
+              .Then(_ => gatewayResult, Errors.MapNone);
+          })
+      );
   }
 
-  public Task<Result<PaymentCustomer?>> GetCustomerById(Guid id)
+  public Task<Result<PaymentIntentPrincipal?>> UpdatePaymentIntentStatusAsync(
+    string airwallexPaymentIntentId,
+    PaymentIntentStatus status,
+    decimal capturedAmount)
   {
-    throw new NotImplementedException();
+    return intentRepo.UpdateStatus(airwallexPaymentIntentId, status, capturedAmount);
   }
 
-  public Task<Result<Unit>> CompletePaymentAsync(Guid requestId, PaymentRecord record)
+  private static PaymentIntentStatus ParsePaymentIntentStatus(string status)
   {
-    throw new NotImplementedException();
+    return status.ToUpperInvariant() switch
+    {
+      "REQUIRES_PAYMENT_METHOD" => PaymentIntentStatus.RequiresPaymentMethod,
+      "REQUIRES_CUSTOMER_ACTION" => PaymentIntentStatus.RequiresCustomerAction,
+      "REQUIRES_CAPTURE" => PaymentIntentStatus.RequiresCapture,
+      "PENDING" => PaymentIntentStatus.Pending,
+      "SUCCEEDED" => PaymentIntentStatus.Succeeded,
+      "CANCELLED" => PaymentIntentStatus.Cancelled,
+      _ => throw new ArgumentException($"Unknown payment intent status: {status}")
+    }; 
   }
 
-  public Task<Result<Unit>> UpdatePaymentStatusAsync(Guid requestId, PaymentRecord record)
-  {
-    throw new NotImplementedException();
-  }
 }

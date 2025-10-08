@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Domain.Payment;
 
 namespace App.Modules.Payment.Airwallex;
@@ -5,30 +6,34 @@ namespace App.Modules.Payment.Airwallex;
 public class AirwallexEventAdapter
 {
   // Process payment intent events (for habit execution payments)
-  public (Guid, PaymentRecord, bool) ProcessPaymentIntentEvent(AirwallexEvent evt)
+  public (string PaymentIntentId, PaymentIntentStatus Status, decimal CapturedAmount) ProcessPaymentIntentEvent(AirwallexEvent evt)
   {
-    var id = evt.Data.Object.RequestId;
-    var record = new PaymentRecord
+    var intentObj = evt.Data.Object.Deserialize<PaymentIntentEventObject>()
+      ?? throw new InvalidOperationException("Failed to deserialize PaymentIntentEventObject");
+
+    // Parse Airwallex status string to enum
+    PaymentIntentStatus status = intentObj.Status switch
     {
-      Amount = evt.Data.Object.Amount,
-      CapturedAmount = evt.Data.Object.CapturedAmount,
-      Currency = evt.Data.Object.Currency,
-      LastUpdated = DateTime.UtcNow,
-      Status = evt.Data.Object.Status
+      "REQUIRES_PAYMENT_METHOD" => PaymentIntentStatus.RequiresPaymentMethod,
+      "REQUIRES_CUSTOMER_ACTION" => PaymentIntentStatus.RequiresCustomerAction,
+      "REQUIRES_CAPTURE" => PaymentIntentStatus.RequiresCapture,
+      "PENDING" => PaymentIntentStatus.Pending,
+      "SUCCEEDED" => PaymentIntentStatus.Succeeded,
+      "CANCELLED" => PaymentIntentStatus.Cancelled,
+      _ => throw new ArgumentException($"Unknown payment intent status: {intentObj.Status}")
     };
-    var complete = evt.Data.Object.Status == "SUCCEEDED";
-    return (id, record, complete);
+
+    return (intentObj.Id, status, intentObj.CapturedAmount);
   }
 
   // Process payment consent events (for consent verification)
   public (string CustomerId, string? ConsentId, PaymentConsentStatus? Status) ProcessPaymentConsentEvent(AirwallexEvent evt)
   {
-    var customerId = evt.Data.Object.CustomerId;
-    var consentId = evt.Data.Object.Id;
-    var statusString = evt.Data.Object.Status;
+    var consentObj = evt.Data.Object.Deserialize<PaymentConsentEventObject>()
+      ?? throw new InvalidOperationException("Failed to deserialize PaymentConsentEventObject");
 
     // Parse Airwallex status string to enum
-    PaymentConsentStatus? status = statusString switch
+    PaymentConsentStatus? status = consentObj.Status switch
     {
       "VERIFIED" => PaymentConsentStatus.Verified,
       "REQUIRES_PAYMENT_METHOD" => PaymentConsentStatus.RequiresPaymentMethod,
@@ -36,6 +41,6 @@ public class AirwallexEventAdapter
       _ => null
     };
 
-    return (customerId, consentId, status);
+    return (consentObj.CustomerId, consentObj.Id, status);
   }
 }
