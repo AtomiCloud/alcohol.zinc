@@ -42,6 +42,9 @@ public class AirwallexWebhookService(
     return evt.Name switch
     {
       "payment_consent.verified" or "payment_consent.verification_failed" => this.ProcessPaymentConsentEvent(evt),
+      "payment_intent.created" or "payment_intent.succeeded" or "payment_intent.cancelled" or "payment_intent.pending" or
+        "payment_intent.requires_payment_method" or "payment_intent.requires_customer_action"
+        => this.ProcessPaymentIntentEvent(evt),
       _ => this.LogUnknownEvent(evt)
     };
   }
@@ -69,17 +72,17 @@ public class AirwallexWebhookService(
       });
   }
 
-  // private Task<Result<Unit>> ProcessPaymentIntentEvent(AirwallexEvent evt)
-  // {
-  //   var (guid, record, complete) = adapter.ProcessPaymentIntentEvent(evt);
-  //   logger.LogInformation(
-  //     "Processing payment intent event: {EventName}, RequestId: {RequestId}, Status: {Status}, Complete: {Complete}",
-  //     evt.Name, guid, record.Status, complete);
-  //
-  //   return complete
-  //     ? paymentService.CompletePaymentAsync(guid, record).Then(_ => new Unit(), Errors.MapNone)
-  //     : paymentService.UpdatePaymentStatusAsync(guid, record).Then(_ => new Unit(), Errors.MapNone);
-  // }
+  private Task<Result<Unit>> ProcessPaymentIntentEvent(AirwallexEvent evt)
+  {
+    var (paymentIntentId, status, capturedAmount) = adapter.ProcessPaymentIntentEvent(evt);
+    logger.LogInformation(
+      "Processing payment intent event: {EventName}, PaymentIntentId: {PaymentIntentId}, Status: {Status}, CapturedAmount: {CapturedAmount}",
+      evt.Name, paymentIntentId, status, capturedAmount);
+
+    return paymentService
+      .UpdatePaymentIntentStatusAsync(paymentIntentId, status, capturedAmount)
+      .Then(_ => new Unit(), Errors.MapNone);
+  }
 
   private Task<Result<Unit>> LogUnknownEvent(AirwallexEvent evt)
   {

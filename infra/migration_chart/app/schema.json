@@ -1053,11 +1053,6 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "Endpoint": {
-              "type": "string",
-              "format": "uri",
-              "minLength": 1
-            },
             "Id": {
               "type": "string",
               "minLength": 1

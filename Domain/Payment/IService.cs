@@ -20,13 +20,12 @@ public interface IPaymentService
   // Payment intent operations
   Task<Result<PaymentIntentResult>> CreatePaymentIntentAsync(string userId, CreatePaymentIntentRequest request);
   Task<Result<PaymentIntentResult>> ConfirmPaymentIntentAsync(string userId, string intentId, ConfirmPaymentIntentRequest request);
+  Task<Result<PaymentIntentPrincipal?>> UpdatePaymentIntentStatusAsync(
+    string airwallexPaymentIntentId,
+    PaymentIntentStatus status,
+    decimal capturedAmount);
 
   // Query operations
   Task<Result<IEnumerable<PaymentCustomerPrincipal>>> SearchCustomers(PaymentCustomerSearch search);
   Task<Result<PaymentCustomer?>> GetCustomerByUserId(string userId);
-  Task<Result<PaymentCustomer?>> GetCustomerById(Guid id);
-
-  // Payment completion and status updates
-  Task<Result<Unit>> CompletePaymentAsync(Guid requestId, PaymentRecord record);
-  Task<Result<Unit>> UpdatePaymentStatusAsync(Guid requestId, PaymentRecord record);
 }

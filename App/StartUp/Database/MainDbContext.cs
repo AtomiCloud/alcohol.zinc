@@ -30,6 +30,7 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
   public DbSet<HabitVersionData> HabitVersions { get; set; }
   public DbSet<HabitExecutionData> HabitExecutions { get; set; }
   public DbSet<PaymentCustomerData> PaymentCustomers { get; set; }
+  public DbSet<PaymentIntentData> PaymentIntents { get; set; }
   // public DbSet<CompletionData> Completions { get; set; }
   // public DbSet<StatsData> Stats { get; set; }
 
@@ -106,6 +107,13 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
     var paymentCustomer = modelBuilder.Entity<PaymentCustomerData>();
     paymentCustomer.HasIndex(x => x.UserId).IsUnique();  // One payment customer per user
     paymentCustomer.HasIndex(x => x.AirwallexCustomerId);
+
+    // PaymentIntent configuration
+    var paymentIntent = modelBuilder.Entity<PaymentIntentData>();
+    paymentIntent.HasIndex(x => x.UserId);
+    paymentIntent.HasIndex(x => x.AirwallexPaymentIntentId).IsUnique();
+    paymentIntent.HasIndex(x => x.Status);
+    paymentIntent.HasIndex(x => x.MerchantOrderId);
 
   }
 }

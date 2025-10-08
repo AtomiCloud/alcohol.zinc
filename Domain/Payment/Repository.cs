@@ -14,3 +14,15 @@ public interface IPaymentCustomerRepository
     PaymentConsentStatus? consentStatus);
   Task<Result<PaymentCustomerPrincipal?>> DisablePaymentConsentAsync(string userId);
 }
+
+public interface IPaymentIntentRepository
+{
+  Task<Result<PaymentIntent?>> GetByAirwallexId(string airwallexPaymentIntentId);
+  Task<Result<PaymentIntent?>> GetByMerchantOrderId(string merchantOrderId);
+  Task<Result<IEnumerable<PaymentIntentPrincipal>>> GetByUserId(string userId);
+  Task<Result<PaymentIntentPrincipal>> Create(PaymentIntentRecord record);
+  Task<Result<PaymentIntentPrincipal?>> UpdateStatus(
+    string airwallexPaymentIntentId,
+    PaymentIntentStatus status,
+    decimal capturedAmount);
+}
