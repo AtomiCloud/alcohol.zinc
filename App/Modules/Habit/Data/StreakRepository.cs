@@ -301,4 +301,55 @@ public class StreakRepository(MainDbContext db, ILogger<StreakRepository> logger
       throw;
     }
   }
+
+  public async Task<Result<int>> GetUserMaxStreakAcrossHabits(string userId)
+  {
+    try
+    {
+      // For each habit of user, compute max streak and take the max
+      var habitIds = await (from h in db.Habits
+                            where h.UserId == userId && h.DeletedAt == null
+                            select h.Id)
+        .ToListAsync();
+      if (habitIds.Count == 0) return 0;
+
+      // Preload executions ordered by habit/date
+      var events = await (from he in db.HabitExecutions
+                          join hv in db.HabitVersions on he.HabitVersionId equals hv.Id
+                          join h in db.Habits on hv.HabitId equals h.Id
+                          where h.UserId == userId && h.DeletedAt == null
+                          orderby hv.HabitId, he.Date
+                          select new { hv.HabitId, he.Date, he.Status })
+        .AsNoTracking()
+        .ToListAsync();
+
+      int globalMax = 0;
+      Guid currentHabit = Guid.Empty;
+      int cur = 0, max = 0;
+      foreach (var e in events)
+      {
+        if (e.HabitId != currentHabit)
+        {
+          if (max > globalMax) globalMax = max;
+          currentHabit = e.HabitId;
+          cur = 0; max = 0;
+        }
+        if (e.Status == App.Modules.HabitExecution.Data.HabitExecutionStatusData.Completed)
+        {
+          cur++; if (cur > max) max = cur;
+        }
+        else if (e.Status == App.Modules.HabitExecution.Data.HabitExecutionStatusData.Failed)
+        {
+          cur = 0;
+        }
+      }
+      if (max > globalMax) globalMax = max;
+      return globalMax;
+    }
+    catch (Exception e)
+    {
+      logger.LogError(e, "GetUserMaxStreakAcrossHabits failed for UserId={UserId}", userId);
+      throw;
+    }
+  }
 }

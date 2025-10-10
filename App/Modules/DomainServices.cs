@@ -14,7 +14,10 @@ using Domain.Charity;
 using Domain.Configuration;
 using Domain.Habit;
 using Domain.Payment;
+using Domain.Protection;
+using Domain.Subscription;
 using Domain.User;
+using Domain.Vacation;
 
 namespace App.Modules;
 
@@ -66,6 +69,12 @@ public static class DomainServices
       .AutoTrace<IStreakService>();
     s.AddScoped<IStreakRepository, StreakRepository>()
       .AutoTrace<IStreakRepository>();
+
+    // Protections & Vacation
+    s.AddScoped<IProtectionRepository, App.Modules.Protection.Data.ProtectionRepository>()
+      .AutoTrace<IProtectionRepository>();
+    s.AddScoped<IVacationRepository, App.Modules.Vacation.Data.VacationRepository>()
+      .AutoTrace<IVacationRepository>();
     // PAYMENT
     s.AddScoped<IPaymentService, PaymentService>()
       .AutoTrace<IPaymentService>();

@@ -24,5 +24,10 @@ namespace Domain.Habit
 
         // Additional helpers for overview
         Task<Result<List<HabitVersionPrincipal>>> GetVersions(string userId, Guid habitId);
+
+        // Auxiliary for entitlements & protections
+        Task<Result<int>> CountHabitsForUser(string userId);
+        Task<Result<int>> CountUserSkipsForMonth(string userId, DateOnly monthStart, DateOnly monthEnd);
+        Task<Result<List<HabitVersionPrincipal>>> GetActiveHabitVersionsByIds(List<Guid> habitIds, DateOnly date);
     }
 }

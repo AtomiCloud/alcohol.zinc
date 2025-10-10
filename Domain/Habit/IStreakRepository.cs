@@ -13,4 +13,5 @@ public interface IStreakRepository
   Task<Result<List<HabitExecutionRecord>>> GetExecutionsInHabitDateRange(Guid habitId, DateOnly start, DateOnly end);
   Task<Result<List<HabitDebtItem>>> GetOpenDebtsForHabit(Guid habitId);
   Task<Result<List<HabitDebtItem>>> GetOpenDebtsForUser(string userId);
+  Task<Result<int>> GetUserMaxStreakAcrossHabits(string userId);
 }

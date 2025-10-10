@@ -51,6 +51,8 @@ Controller Endpoints (new)
   - Search with pagination; no GetAll without filters.
 - DELETE /api/v1/users/{userId}/vacations/{id}
   - Allow delete if window not started.
+- PATCH /api/v1/users/{userId}/vacations/{id}/end-today
+  - Shorten an active vacation window by setting EndDate to the user-local today; validate EndDate >= StartDate.
 - POST /api/v1/habits/{userId}/{habitVersionId}/executions/skip
   - Today-only; verify habit ownership and scheduling; enforce monthly bucket (ent.skips.monthly) using user-local month boundaries; upsert Skipped for today.
 - GET /api/v1/users/{userId}/protections
@@ -92,13 +94,13 @@ Upgrade/Downgrade Behavior
 - Habits per tier: block new creations beyond ent.habits.max; existing habits remain unchanged.
 - Skips per month: apply new allowance forward; no retroactive changes.
 - Vacation windows: existing windows remain; new windows must respect current annual allowance.
-- Freeze cap changes: on award or balance read, clamp to current cap; do not delete existing rows.
+- Freeze cap changes: on downgrade, immediately truncate the user-level freeze balance to the new cap (ClampFreezeToCap); continue to clamp on award/consumption.
 
 Data/Repository Additions (summary)
 
 - Habit repository: CountHabitsForUser; CountUserSkipsForMonth; InsertSkip; GetActiveHabitVersions(userId, date); GetActiveHabitVersionsByIds(ids, date).
 - Vacation repository: Create/Update/Delete/Search/ListActiveForUserOnDate.
-- Protection repository: Get/Upsert protection; TryConsumeFreeze(userId, date); TryAwardFreeze(userId, habitId, weekStart); GetUserMaxStreakAcrossHabits.
+- Protection repository: Get/Upsert protection; TryConsumeFreeze(userId, date) for atomic ledger + decrement; IncrementFreeze; ClampFreezeToCap (downgrades); award ledger; GetUserMaxStreakAcrossHabits.
 
 API/DTO/Mapper Conventions
 
