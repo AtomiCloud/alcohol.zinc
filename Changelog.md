@@ -1,3 +1,17 @@
+## [1.16.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.15.4...v1.16.0) (2025-10-10)
+
+
+### ✨ Features ✨
+
+* baseline for streak protection mechanism ([c6560f6](https://github.com/AtomiCloud/alcohol.zinc/commit/c6560f6546c4f5b0ad367e349b5e98b329f0c78e))
+* delete user endpoint ([258f3cb](https://github.com/AtomiCloud/alcohol.zinc/commit/258f3cb5944b1b46c5b17c925cb0048211ef5261))
+* protection basics ([18fd0c0](https://github.com/AtomiCloud/alcohol.zinc/commit/18fd0c075459bf03582e5731ac623f73c75e1207))
+
+
+### 🐛 Bug Fixes 🐛
+
+* basic seeding ([994d518](https://github.com/AtomiCloud/alcohol.zinc/commit/994d5188710361415f1c6f69830cda9f4a722af5))
+
 ## [1.15.4](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.15.3...v1.15.4) (2025-10-07)
 
 
