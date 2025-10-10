@@ -41,4 +41,9 @@ public class UserService(
   {
     return repo.Delete(id);
   }
+
+  public Task<Result<Unit?>> DeleteAllRemnants(string id)
+  {
+    return tm.Start(() => repo.DeleteAllRemnants(id));
+  }
 }

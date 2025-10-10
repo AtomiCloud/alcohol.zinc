@@ -129,8 +129,14 @@ public class UserController(
   [Authorize(Policy = AuthPolicies.OnlyAdmin), HttpDelete("{id}")]
   public async Task<ActionResult> Delete(string id)
   {
-    var user = await service.Delete(id);
-    return this.ReturnUnitNullableResult(user, new EntityNotFound(
+    // Delete user from Logto first (if exists - it handles 404 gracefully)
+    // We don't fail the operation if Logto deletion fails - we still want to clean up the database
+    await authManagement.DeleteUser(id);
+
+    // Delete all remnants from database (habits, habit versions, executions, configurations, payment customers, and user)
+    var dbResult = await service.DeleteAllRemnants(id);
+
+    return this.ReturnUnitNullableResult(dbResult, new EntityNotFound(
       "User Not Found", typeof(UserPrincipal), id));
   }
 }
