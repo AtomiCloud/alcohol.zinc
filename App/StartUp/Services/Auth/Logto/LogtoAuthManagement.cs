@@ -132,4 +132,39 @@ public class LogtoAuthManagement(
         }
       }, Errors.MapNone);
   }
+
+  public Task<Result<Unit>> DeleteUser(string userId)
+  {
+    logger.LogInformation("Deleting user {UserId} from Logto", userId);
+    return authenticator.BearerToken()
+      .ThenAwait(async bearer =>
+      {
+        try
+        {
+          var request = new HttpRequestMessage
+          {
+            Method = HttpMethod.Delete,
+            RequestUri = new Uri($"api/users/{userId}", UriKind.Relative),
+            Headers = { Authorization = new AuthenticationHeaderValue("Bearer", bearer), },
+          };
+          using var response = await this.HttpClient.SendAsync(request);
+
+          // If user doesn't exist (404), consider it successful since the end result is the same
+          if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+          {
+            logger.LogInformation("User {UserId} not found in Logto (already deleted or never existed)", userId);
+            return new Unit();
+          }
+
+          response.EnsureSuccessStatusCode();
+          logger.LogInformation("User {UserId} deleted from Logto", userId);
+          return new Unit();
+        }
+        catch (Exception e)
+        {
+          logger.LogError(e, "Failed to delete user {UserId} from Logto", userId);
+          throw;
+        }
+      }, Errors.MapNone);
+  }
 }

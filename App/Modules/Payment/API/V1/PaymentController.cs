@@ -3,6 +3,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using App.Modules.Common;
 using App.Modules.Payment.Airwallex;
+using App.StartUp.Registry;
 using App.StartUp.Services.Auth;
 using App.Utility;
 using Asp.Versioning;
@@ -22,11 +23,12 @@ public class PaymentController(
   CreatePaymentIntentReqValidator createPaymentIntentReqValidator,
   ConfirmPaymentIntentReqValidator confirmPaymentIntentReqValidator,
   AirwallexWebhookService webhookService,
+  IAuthManagement authManagement,
   IAuthHelper authHelper
 ) : AtomiControllerBase(authHelper)
 {
-  // 1. POST /api/v1/payment/{userId}/customers
-  [Authorize, HttpPost("{userId}/customers")]
+  // 1. PUT /api/v1/payment/{userId}/customers
+  [Authorize, HttpPut("{userId}/customers")]
   public async Task<ActionResult<CreateCustomerRes>> CreateCustomer(string userId)
   {
     var result = await this.GuardAsync(userId)

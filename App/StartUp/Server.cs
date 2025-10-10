@@ -10,6 +10,7 @@ using App.StartUp.Options.Auth;
 using App.StartUp.Options.Logging;
 using App.StartUp.Options.Metrics;
 using App.StartUp.Options.Traces;
+using App.StartUp.Seeding;
 using App.StartUp.Services;
 using App.StartUp.Services.Swagger;
 using App.Utility;
@@ -147,6 +148,9 @@ public class Server(
 
 
     services.AddDomainServices();
+
+    // Data seeding for development (lapras only)
+    services.AddHostedService<DataSeederHostedService>();
     /*----------------------------------------*/
     // Pipeline
     var webapp = builder.Build();

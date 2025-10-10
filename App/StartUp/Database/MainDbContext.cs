@@ -5,7 +5,9 @@ using App.Modules.Habit.Data;
 using App.Modules.HabitExecution.Data;
 using App.Modules.HabitVersion.Data;
 using App.Modules.Payment.Data;
+using App.Modules.Protection.Data;
 using App.Modules.Users.Data;
+using App.Modules.Vacation.Data;
 using App.StartUp.Options;
 using App.StartUp.Services;
 using EntityFramework.Exceptions.PostgreSQL;
@@ -30,6 +32,11 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
   public DbSet<HabitVersionData> HabitVersions { get; set; }
   public DbSet<HabitExecutionData> HabitExecutions { get; set; }
   public DbSet<PaymentCustomerData> PaymentCustomers { get; set; }
+  // Protections & Vacation
+  public DbSet<VacationPeriodData> VacationPeriods { get; set; }
+  public DbSet<UserProtectionData> UserProtections { get; set; }
+  public DbSet<FreezeAwardData> FreezeAwards { get; set; }
+  public DbSet<FreezeConsumptionData> FreezeConsumptions { get; set; }
   // public DbSet<CompletionData> Completions { get; set; }
   // public DbSet<StatsData> Stats { get; set; }
 
@@ -106,6 +113,21 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
     var paymentCustomer = modelBuilder.Entity<PaymentCustomerData>();
     paymentCustomer.HasIndex(x => x.UserId).IsUnique();  // One payment customer per user
     paymentCustomer.HasIndex(x => x.AirwallexCustomerId);
+
+    // VacationPeriods
+    var vacation = modelBuilder.Entity<VacationPeriodData>();
+    vacation.HasIndex(x => x.UserId);
+    vacation.HasIndex(x => new { x.UserId, x.StartDate });
+
+    // Protections
+    var protection = modelBuilder.Entity<UserProtectionData>();
+    protection.HasKey(x => x.UserId);
+
+    var award = modelBuilder.Entity<FreezeAwardData>();
+    award.HasIndex(x => new { x.HabitId, x.WeekStart }).IsUnique();
+
+    var consume = modelBuilder.Entity<FreezeConsumptionData>();
+    consume.HasIndex(x => new { x.UserId, x.Date }).IsUnique();
 
   }
 }

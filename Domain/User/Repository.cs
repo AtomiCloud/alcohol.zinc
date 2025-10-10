@@ -15,4 +15,6 @@ public interface IUserRepository
   Task<Result<UserPrincipal?>> Update(string id, UserRecord record);
 
   Task<Result<Unit?>> Delete(string id);
+
+  Task<Result<Unit?>> DeleteAllRemnants(string id);
 }

@@ -14,4 +14,5 @@ public interface IUserService
   Task<Result<UserPrincipal?>> Update(string id, UserRecord record, Func<Task<Result<Unit>>>? sync);
 
   Task<Result<Unit?>> Delete(string id);
+  Task<Result<Unit?>> DeleteAllRemnants(string id);
 }

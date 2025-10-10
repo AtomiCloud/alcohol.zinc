@@ -162,4 +162,97 @@ public class UserRepository(MainDbContext db, ILogger<UserRepository> logger) : 
       throw;
     }
   }
+
+  public async Task<Result<Unit?>> DeleteAllRemnants(string id)
+  {
+    try
+    {
+      logger.LogInformation("Deleting all remnants for User '{Id}'", id);
+
+      // Check if user exists
+      var user = await db.Users
+        .Where(x => x.Id == id)
+        .FirstOrDefaultAsync();
+      if (user == null) return (Unit?)null;
+
+      // Get all habits for this user
+      var userHabits = await db.Habits
+        .Where(h => h.UserId == id)
+        .ToListAsync();
+
+      var habitIds = userHabits.Select(h => h.Id).ToList();
+
+      if (habitIds.Any())
+      {
+        // Get all habit versions for these habits
+        var habitVersionIds = await db.HabitVersions
+          .Where(hv => habitIds.Contains(hv.HabitId))
+          .Select(hv => hv.Id)
+          .ToListAsync();
+
+        if (habitVersionIds.Any())
+        {
+          // Delete all habit executions for these habit versions
+          var habitExecutions = await db.HabitExecutions
+            .Where(he => habitVersionIds.Contains(he.HabitVersionId))
+            .ToListAsync();
+
+          if (habitExecutions.Any())
+          {
+            logger.LogInformation("Deleting {Count} habit executions for User '{Id}'", habitExecutions.Count, id);
+            db.HabitExecutions.RemoveRange(habitExecutions);
+          }
+
+          // Delete all habit versions
+          var habitVersions = await db.HabitVersions
+            .Where(hv => habitIds.Contains(hv.HabitId))
+            .ToListAsync();
+
+          logger.LogInformation("Deleting {Count} habit versions for User '{Id}'", habitVersions.Count, id);
+          db.HabitVersions.RemoveRange(habitVersions);
+        }
+
+        // Delete all habits
+        logger.LogInformation("Deleting {Count} habits for User '{Id}'", userHabits.Count, id);
+        db.Habits.RemoveRange(userHabits);
+      }
+
+      // Delete configuration if exists
+      var configuration = await db.Configurations
+        .Where(c => c.UserId == id)
+        .FirstOrDefaultAsync();
+
+      if (configuration != null)
+      {
+        logger.LogInformation("Deleting configuration for User '{Id}'", id);
+        db.Configurations.Remove(configuration);
+      }
+
+      // Delete payment customer if exists
+      var paymentCustomer = await db.PaymentCustomers
+        .Where(pc => pc.UserId == id)
+        .FirstOrDefaultAsync();
+
+      if (paymentCustomer != null)
+      {
+        logger.LogInformation("Deleting payment customer for User '{Id}'", id);
+        db.PaymentCustomers.Remove(paymentCustomer);
+      }
+
+      // Finally, delete the user
+      logger.LogInformation("Deleting User '{Id}'", id);
+      db.Users.Remove(user);
+
+      // Save all changes
+      await db.SaveChangesAsync();
+      logger.LogInformation("Successfully deleted all remnants for User '{Id}'", id);
+
+      return new Unit();
+    }
+    catch (Exception e)
+    {
+      logger.LogError(e, "Failed to delete all remnants for User with ID '{Id}'", id);
+      throw;
+    }
+  }
 }

@@ -241,8 +241,8 @@ namespace App.Migrations
                     b.Property<bool>("PaymentProcessed")
                         .HasColumnType("boolean");
 
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
+                    b.Property<byte>("Status")
+                        .HasColumnType("smallint");
 
                     b.HasKey("Id");
 
@@ -343,6 +343,77 @@ namespace App.Migrations
                     b.ToTable("PaymentCustomers");
                 });
 
+            modelBuilder.Entity("App.Modules.Protection.Data.FreezeAwardData", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("AwardedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("HabitId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("WeekStart")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HabitId", "WeekStart")
+                        .IsUnique();
+
+                    b.ToTable("FreezeAwards");
+                });
+
+            modelBuilder.Entity("App.Modules.Protection.Data.FreezeConsumptionData", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ConsumedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "Date")
+                        .IsUnique();
+
+                    b.ToTable("FreezeConsumptions");
+                });
+
+            modelBuilder.Entity("App.Modules.Protection.Data.UserProtectionData", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int>("FreezeCurrent")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UserId1")
+                        .IsRequired()
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("UserId");
+
+                    b.HasIndex("UserId1");
+
+                    b.ToTable("UserProtections");
+                });
+
             modelBuilder.Entity("App.Modules.Users.Data.UserData", b =>
                 {
                     b.Property<string>("Id")
@@ -375,6 +446,40 @@ namespace App.Migrations
                         .IsUnique();
 
                     b.ToTable("Users");
+                });
+
+            modelBuilder.Entity("App.Modules.Vacation.Data.VacationPeriodData", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly>("EndDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Timezone")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("UserId", "StartDate");
+
+                    b.ToTable("VacationPeriods");
                 });
 
             modelBuilder.Entity("App.Modules.Charities.Data.CharityCauseData", b =>
@@ -440,6 +545,50 @@ namespace App.Migrations
                     b.Navigation("Charity");
 
                     b.Navigation("Habit");
+                });
+
+            modelBuilder.Entity("App.Modules.Protection.Data.FreezeAwardData", b =>
+                {
+                    b.HasOne("App.Modules.Habit.Data.HabitData", "Habit")
+                        .WithMany()
+                        .HasForeignKey("HabitId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Habit");
+                });
+
+            modelBuilder.Entity("App.Modules.Protection.Data.FreezeConsumptionData", b =>
+                {
+                    b.HasOne("App.Modules.Users.Data.UserData", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("App.Modules.Protection.Data.UserProtectionData", b =>
+                {
+                    b.HasOne("App.Modules.Users.Data.UserData", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId1")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("App.Modules.Vacation.Data.VacationPeriodData", b =>
+                {
+                    b.HasOne("App.Modules.Users.Data.UserData", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("App.Modules.Habit.Data.HabitData", b =>

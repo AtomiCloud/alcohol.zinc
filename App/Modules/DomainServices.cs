@@ -1,20 +1,31 @@
+using App.Modules.Allowance;
 using App.Modules.Causes.Data;
 using App.Modules.Charities.Data;
 using App.Modules.Charities.Sync;
 using App.Modules.Configurations.Data;
+using App.Modules.Entitlement;
 using App.Modules.Habit.Data;
 using App.Modules.Payment.Airwallex;
 using App.Modules.Payment.Data;
+using App.Modules.Protection.Data;
 using App.Modules.System;
 using App.Modules.Users.Data;
+using App.Modules.Vacation;
+using App.Modules.Vacation.Data;
 using App.StartUp.Services;
+using App.StartUp.Services.Subscription;
 using Domain;
+using Domain.Allowance;
 using Domain.Cause;
 using Domain.Charity;
 using Domain.Configuration;
+using Domain.Entitlement;
 using Domain.Habit;
 using Domain.Payment;
+using Domain.Protection;
+using Domain.Subscription;
 using Domain.User;
+using Domain.Vacation;
 
 namespace App.Modules;
 
@@ -66,6 +77,25 @@ public static class DomainServices
       .AutoTrace<IStreakService>();
     s.AddScoped<IStreakRepository, StreakRepository>()
       .AutoTrace<IStreakRepository>();
+
+    // Protections & Vacation
+    s.AddScoped<IProtectionRepository, ProtectionRepository>()
+      .AutoTrace<IProtectionRepository>();
+    s.AddScoped<IVacationRepository, VacationRepository>()
+      .AutoTrace<IVacationRepository>();
+    s.AddScoped<IVacationService, VacationService>()
+      .AutoTrace<IVacationService>();
+
+    // Allowance utilities
+    s.AddScoped<IAllowanceService, AllowanceService>()
+      .AutoTrace<IAllowanceService>();
+
+    s.AddScoped<IEntitlementService, EntitlementService>()
+      .AutoTrace<IEntitlementService>();
+
+    // SUBSCRIPTION (temporary stub until Lagos integration)
+    s.AddScoped<ISubscriptionService, NullSubscriptionService>()
+      .AutoTrace<ISubscriptionService>();
     // PAYMENT
     s.AddScoped<IPaymentService, PaymentService>()
       .AutoTrace<IPaymentService>();
