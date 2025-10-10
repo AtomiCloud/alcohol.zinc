@@ -14,7 +14,7 @@ namespace App.Modules.HabitExecution.Data
       _ => ExecutionStatus.Failed // defaulting unknown to failed is conservative for domain; adjust as needed
     };
 
-    private static HabitExecutionStatusData ToDataStatus(this ExecutionStatus s) => s switch
+    public static HabitExecutionStatusData ToDataStatus(this ExecutionStatus s) => s switch
     {
       ExecutionStatus.Completed => HabitExecutionStatusData.Completed,
       ExecutionStatus.Failed => HabitExecutionStatusData.Failed,

@@ -15,10 +15,12 @@ namespace Domain.Habit
         Task<Result<HabitVersionPrincipal?>> Update(Guid habitId, string userId, HabitVersionRecord versionRecord, bool enabled);
         Task<Result<Unit?>> Delete(Guid habitId, string userId);                              // Soft delete habit
         Task<Result<int>> CreateFailedExecutions(List<Guid> habitIds, DateOnly date);        // Batch create failed executions
+        Task<Result<int>> CreateExecutionsForVersionsWithStatus(List<Guid> habitVersionIds, DateOnly date, ExecutionStatus status);
 
         // Habit Execution Methods
         Task<Result<DateOnly>> GetUserCurrentDate(string userId, Guid habitVersionId);                    // Get current date in user's timezone
         Task<Result<HabitExecutionPrincipal>> CompleteHabit(string userId, Guid habitVersionId, DateOnly date, string? notes);
+        Task<Result<HabitExecutionPrincipal>> SkipHabit(string userId, Guid habitVersionId, DateOnly date, string? notes);
         Task<Result<List<HabitExecutionPrincipal>>> SearchHabitExecutions(string userId, 
           HabitExecutionSearch habitExecutionSearch);
 
@@ -29,5 +31,6 @@ namespace Domain.Habit
         Task<Result<int>> CountHabitsForUser(string userId);
         Task<Result<int>> CountUserSkipsForMonth(string userId, DateOnly monthStart, DateOnly monthEnd);
         Task<Result<List<HabitVersionPrincipal>>> GetActiveHabitVersionsByIds(List<Guid> habitIds, DateOnly date);
+        Task<Result<List<HabitPrincipal>>> GetHabitsByIds(List<Guid> habitIds);
     }
 }

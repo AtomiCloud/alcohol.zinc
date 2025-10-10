@@ -7,6 +7,36 @@ namespace App.Modules.Vacation.Data;
 
 public class VacationRepository(MainDbContext db, ILogger<VacationRepository> logger) : IVacationRepository
 {
+  public async Task<Result<VacationPrincipal?>> Get(Guid id)
+  {
+    try
+    {
+      var data = await db.VacationPeriods.AsNoTracking().Where(x => x.Id == id).FirstOrDefaultAsync();
+      return data?.ToPrincipal();
+    }
+    catch (Exception e)
+    {
+      logger.LogError(e, "Get vacation failed for Id={Id}", id);
+      throw;
+    }
+  }
+
+  public async Task<Result<VacationPrincipal?>> Get(Guid id, string? userId)
+  {
+    try
+    {
+      var q = db.VacationPeriods.AsNoTracking().Where(x => x.Id == id);
+      if (!string.IsNullOrEmpty(userId)) q = q.Where(x => x.UserId == userId);
+      var data = await q.FirstOrDefaultAsync();
+      return data?.ToPrincipal();
+    }
+    catch (Exception e)
+    {
+      logger.LogError(e, "Get vacation failed for Id={Id} UserId={UserId}", id, userId);
+      throw;
+    }
+  }
+
   public async Task<Result<VacationPrincipal>> Create(string userId, VacationRecord record)
   {
     try
@@ -97,5 +127,35 @@ public class VacationRepository(MainDbContext db, ILogger<VacationRepository> lo
       throw;
     }
   }
-}
 
+  public async Task<Result<int>> CountWindowsForYear(string userId, int year)
+  {
+    try
+    {
+      var count = await db.VacationPeriods.AsNoTracking()
+        .Where(x => x.UserId == userId && (x.StartDate.Year == year || x.EndDate.Year == year))
+        .CountAsync();
+      return count;
+    }
+    catch (Exception e)
+    {
+      logger.LogError(e, "CountWindowsForYear failed for UserId={UserId} Year={Year}", userId, year);
+      throw;
+    }
+  }
+
+  public async Task<Result<bool>> HasOverlap(string userId, DateOnly start, DateOnly end)
+  {
+    try
+    {
+      var overlap = await db.VacationPeriods.AsNoTracking()
+        .AnyAsync(x => x.UserId == userId && start <= x.EndDate && end >= x.StartDate);
+      return overlap;
+    }
+    catch (Exception e)
+    {
+      logger.LogError(e, "HasOverlap failed for UserId={UserId} Start={Start} End={End}", userId, start, end);
+      throw;
+    }
+  }
+}

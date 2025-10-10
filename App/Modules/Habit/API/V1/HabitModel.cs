@@ -46,6 +46,10 @@ public record CompleteHabitReq(
     string? Notes            // Optional notes
 );
 
+public record SkipHabitReq(
+    string? Notes
+);
+
 public record HabitExecutionRes(
     Guid Id,                 // Execution ID
     Guid HabitVersionId,     // References habit version

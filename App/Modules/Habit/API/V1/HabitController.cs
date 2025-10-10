@@ -6,6 +6,7 @@ using App.StartUp.Services.Auth;
 using App.Utility;
 using Asp.Versioning;
 using CSharp_Result;
+using Domain;
 using Domain.Habit;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -19,6 +20,9 @@ namespace App.Modules.Habit.API.V1;
 public class HabitController(
     IHabitService service,
     IHabitOverviewService overviewService,
+    Domain.Configuration.IConfigurationService configurationService,
+    Domain.Allowance.IAllowanceService allowanceService,
+    Domain.Entitlement.IEntitlementService entitlementService,
     IAuthHelper authHelper,
     CreateHabitReqValidator createHabitReqValidator,
     UpdateHabitReqValidator updateHabitReqValidator,
@@ -87,6 +91,19 @@ public class HabitController(
   {
     var result = await this.GuardAsync(userId)
       .ThenAwait(_ => service.CompleteHabit(userId, habitVersionId, req.Notes))
+      .Then(execution => execution.ToRes(), Errors.MapNone);
+
+    return this.ReturnResult(result);
+  }
+
+  [Authorize, HttpPost("{userId}/{habitVersionId:guid}/executions/skip")]
+  public async Task<ActionResult<HabitExecutionRes>> SkipHabit(string userId, Guid habitVersionId, [FromBody] SkipHabitReq req)
+  {
+    var result = await this.GuardAsync(userId)
+      // User-local month window via allowance service
+      .ThenAwait(_ => allowanceService.GetUserMonthWindow(userId))
+      .ThenAwait(w => entitlementService.EnsureSkipsAllowed(userId, w.MonthStart, w.MonthEnd))
+      .ThenAwait(_ => service.SkipHabit(userId, habitVersionId, req.Notes))
       .Then(execution => execution.ToRes(), Errors.MapNone);
 
     return this.ReturnResult(result);
