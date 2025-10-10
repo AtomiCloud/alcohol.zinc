@@ -1,5 +1,6 @@
 using App.Error.Common;
 using App.Error.V1;
+using App.StartUp.Registry;
 using App.StartUp.Services.Auth;
 using App.Utility;
 using CSharp_Result;
@@ -62,7 +63,7 @@ public class AirwallexWebhookService(
         {
           logger.LogInformation("Payment consent verified, updating Logto custom claim for userId: {UserId}", customer.Record.UserId);
           return authManagement
-            .SetClaim(customer.Record.UserId, "hasPaymentConsent", "true")
+            .SetClaim(customer.Record.UserId, LogtoClaims.HasPaymentConsent, "true")
             .Then(_ => new Unit(), Errors.MapNone);
         }
         return new Unit().ToAsyncResult();
