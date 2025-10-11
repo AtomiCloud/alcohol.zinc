@@ -1,6 +1,7 @@
 using App.StartUp.Database;
 using CSharp_Result;
 using Domain.Habit;
+using Domain.Payment;
 using Microsoft.EntityFrameworkCore;
 
 namespace App.Modules.Habit.Data;
@@ -203,55 +204,6 @@ public class StreakRepository(MainDbContext db, ILogger<StreakRepository> logger
     }
   }
 
-  public async Task<Result<List<Domain.Habit.HabitDebtItem>>> GetOpenDebtsForHabit(Guid habitId)
-  {
-    try
-    {
-      var rows = await (from he in db.HabitExecutions
-                        join hv in db.HabitVersions on he.HabitVersionId equals hv.Id
-                        where hv.HabitId == habitId
-                              && he.Status == App.Modules.HabitExecution.Data.HabitExecutionStatusData.Failed
-                              && he.PaymentProcessed == false
-                        select new
-                        {
-                          he.Id,
-                          he.Date,
-                          hv.HabitId,
-                          HabitVersionId = hv.Id,
-                          hv.StakeCents,
-                          hv.RatioBasisPoints,
-                          hv.StakeCurrency,
-                          hv.CharityId,
-                          hv.Task
-                        })
-        .AsNoTracking()
-        .ToListAsync();
-
-      var items = rows.Select(r =>
-      {
-        var amountCents = (long)r.StakeCents * r.RatioBasisPoints / 10_000L;
-        var amount = amountCents / 100m;
-        return new Domain.Habit.HabitDebtItem(
-          r.Id,
-          r.HabitId,
-          r.HabitVersionId,
-          r.Date,
-          amount,
-          r.StakeCurrency,
-          r.CharityId,
-          r.Task
-        );
-      }).ToList();
-
-      return items;
-    }
-    catch (Exception e)
-    {
-      logger.LogError(e, "GetOpenDebtsForHabit failed for HabitId={HabitId}", habitId);
-      throw;
-    }
-  }
-
   public async Task<Result<List<Domain.Habit.HabitDebtItem>>> GetOpenDebtsForUser(string userId)
   {
     try
@@ -259,9 +211,11 @@ public class StreakRepository(MainDbContext db, ILogger<StreakRepository> logger
       var rows = await (from he in db.HabitExecutions
                         join hv in db.HabitVersions on he.HabitVersionId equals hv.Id
                         join h in db.Habits on hv.HabitId equals h.Id
+                        join pie in db.PaymentIntentExecutions on he.Id equals pie.HabitExecutionId
+                        join pi in db.PaymentIntents on pie.PaymentIntentId equals pi.Id
                         where h.UserId == userId
-                              && he.Status == App.Modules.HabitExecution.Data.HabitExecutionStatusData.Failed
-                              && he.PaymentProcessed == false
+                              && he.Status == HabitExecution.Data.HabitExecutionStatusData.Failed
+                              && pi.Status != PaymentIntentStatus.Succeeded
                         select new
                         {
                           he.Id,
@@ -281,7 +235,7 @@ public class StreakRepository(MainDbContext db, ILogger<StreakRepository> logger
       {
         var amountCents = (long)r.StakeCents * r.RatioBasisPoints / 10_000L;
         var amount = amountCents / 100m;
-        return new Domain.Habit.HabitDebtItem(
+        return new HabitDebtItem(
           r.Id,
           r.HabitId,
           r.HabitVersionId,

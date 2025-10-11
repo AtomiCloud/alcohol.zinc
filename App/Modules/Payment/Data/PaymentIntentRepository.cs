@@ -80,23 +80,23 @@ public class PaymentIntentRepository(MainDbContext db, ILogger<PaymentIntentRepo
     }
   }
 
-  public async Task<Result<PaymentIntentPrincipal>> Create(PaymentIntentRecord record)
+  public async Task<Result<PaymentIntentPrincipal>> Create(Guid id, PaymentIntentRecord record)
   {
     try
     {
-      logger.LogInformation("Creating PaymentIntent for UserId: {UserId}", record.UserId);
+      logger.LogInformation("Creating PaymentIntent with Id: {Id} for UserId: {UserId}", id, record.UserId);
 
       var now = DateTime.UtcNow;
       var data = new PaymentIntentData
       {
-        Id = Guid.NewGuid(),
+        Id = id,
         UserId = record.UserId,
         AirwallexPaymentIntentId = record.AirwallexPaymentIntentId,
         AirwallexCustomerId = record.AirwallexCustomerId,
         AmountCents = (long)(record.Amount * 100),  // Convert decimal to cents
         Currency = record.Currency,
         CapturedAmountCents = (long)(record.CapturedAmount * 100),  // Convert decimal to cents
-        Status = PaymentIntentMapper.IntentStatusToString(record.Status),
+        Status = record.Status,
         MerchantOrderId = record.MerchantOrderId,
         CreatedAt = now,
         UpdatedAt = now
@@ -111,7 +111,7 @@ public class PaymentIntentRepository(MainDbContext db, ILogger<PaymentIntentRepo
     }
     catch (Exception e)
     {
-      logger.LogError(e, "Failed to create PaymentIntent for UserId: {UserId}", record.UserId);
+      logger.LogError(e, "Failed to create PaymentIntent with Id: {Id} for UserId: {UserId}", id, record.UserId);
       return e;
     }
   }
@@ -136,7 +136,7 @@ public class PaymentIntentRepository(MainDbContext db, ILogger<PaymentIntentRepo
         return (PaymentIntentPrincipal?)null;
       }
 
-      data.Status = PaymentIntentMapper.IntentStatusToString(status);
+      data.Status = status;
       data.CapturedAmountCents = (long)(capturedAmount * 100);  // Convert decimal to cents
       data.UpdatedAt = DateTime.UtcNow;
 
@@ -150,6 +150,57 @@ public class PaymentIntentRepository(MainDbContext db, ILogger<PaymentIntentRepo
     catch (Exception e)
     {
       logger.LogError(e, "Failed to update PaymentIntent status for AirwallexPaymentIntentId: {AirwallexPaymentIntentId}", airwallexPaymentIntentId);
+      return e;
+    }
+  }
+
+  public async Task<Result<Unit>> LinkExecutions(Guid paymentIntentId, IEnumerable<Guid> habitExecutionIds)
+  {
+    try
+    {
+      logger.LogInformation("Linking {Count} habit executions to PaymentIntent: {PaymentIntentId}", habitExecutionIds.Count(), paymentIntentId);
+
+      var now = DateTime.UtcNow;
+      var links = habitExecutionIds.Select(executionId => new PaymentIntentExecutionData
+      {
+        PaymentIntentId = paymentIntentId,
+        HabitExecutionId = executionId,
+        CreatedAt = now
+      });
+
+      db.PaymentIntentExecutions.AddRange(links);
+      await db.SaveChangesAsync();
+
+      logger.LogInformation("Successfully linked {Count} habit executions to PaymentIntent: {PaymentIntentId}", habitExecutionIds.Count(), paymentIntentId);
+
+      return new Unit();
+    }
+    catch (Exception e)
+    {
+      logger.LogError(e, "Failed to link habit executions to PaymentIntent: {PaymentIntentId}", paymentIntentId);
+      return e;
+    }
+  }
+
+  public async Task<Result<IEnumerable<Guid>>> GetLinkedExecutions(Guid paymentIntentId)
+  {
+    try
+    {
+      logger.LogInformation("Retrieving linked habit executions for PaymentIntent: {PaymentIntentId}", paymentIntentId);
+
+      var executionIds = await db
+        .PaymentIntentExecutions
+        .Where(x => x.PaymentIntentId == paymentIntentId)
+        .Select(x => x.HabitExecutionId)
+        .ToListAsync();
+
+      logger.LogInformation("Found {Count} linked habit executions for PaymentIntent: {PaymentIntentId}", executionIds.Count, paymentIntentId);
+
+      return executionIds;
+    }
+    catch (Exception e)
+    {
+      logger.LogError(e, "Failed to retrieve linked habit executions for PaymentIntent: {PaymentIntentId}", paymentIntentId);
       return e;
     }
   }

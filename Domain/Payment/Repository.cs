@@ -20,9 +20,11 @@ public interface IPaymentIntentRepository
   Task<Result<PaymentIntent?>> GetByAirwallexId(string airwallexPaymentIntentId);
   Task<Result<PaymentIntent?>> GetByMerchantOrderId(string merchantOrderId);
   Task<Result<IEnumerable<PaymentIntentPrincipal>>> GetByUserId(string userId);
-  Task<Result<PaymentIntentPrincipal>> Create(PaymentIntentRecord record);
+  Task<Result<PaymentIntentPrincipal>> Create(Guid id, PaymentIntentRecord record);
   Task<Result<PaymentIntentPrincipal?>> UpdateStatus(
     string airwallexPaymentIntentId,
     PaymentIntentStatus status,
     decimal capturedAmount);
+  Task<Result<Unit>> LinkExecutions(Guid paymentIntentId, IEnumerable<Guid> habitExecutionIds);
+  Task<Result<IEnumerable<Guid>>> GetLinkedExecutions(Guid paymentIntentId);
 }

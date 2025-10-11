@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using App.Modules.HabitVersion.Data;
+using App.Modules.Payment.Data;
 
 namespace App.Modules.HabitExecution.Data
 {
@@ -13,9 +14,11 @@ namespace App.Modules.HabitExecution.Data
         public required HabitExecutionStatusData Status { get; set; }
         public DateTime? CompletedAt { get; set; }
         public string? Notes { get; set; }
-        public bool PaymentProcessed { get; set; } = false;  // For penalty tracking
 
-        // Navigation property
+        // Navigation properties
         public virtual HabitVersionData? HabitVersion { get; set; }
+
+        // Many-to-many relationship with PaymentIntents
+        public virtual ICollection<PaymentIntentExecutionData> PaymentIntentExecutions { get; set; } = [];
     }
 }

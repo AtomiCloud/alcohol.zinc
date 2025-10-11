@@ -88,6 +88,7 @@ public record CreatePaymentIntentRequest
   public required decimal Amount { get; init; }
   public required string Currency { get; init; }
   public required string Description { get; init; }
+  public string? MerchantOrderId { get; init; }
 }
 
 public record ConfirmPaymentIntentRequest

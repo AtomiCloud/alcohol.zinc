@@ -62,7 +62,7 @@ public class AirwallexGateway(AirwallexClient client) : IPaymentGateway
       Amount = request.Amount,
       Currency = request.Currency,
       CustomerId = request.CustomerId,
-      MerchantOrderId = Guid.NewGuid().ToString()
+      MerchantOrderId = request.MerchantOrderId ?? Guid.NewGuid().ToString()
     };
 
     return await client

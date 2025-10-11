@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Domain.Payment;
 
 namespace App.Modules.Payment.Data;
 
@@ -23,13 +24,15 @@ public class PaymentIntentData
 
   public required long CapturedAmountCents { get; set; }
 
-  [MaxLength(50)]
-  public required string Status { get; set; }
-
+  public required PaymentIntentStatus Status { get; set; }
+  
   [MaxLength(128)]
   public required string MerchantOrderId { get; set; }
 
   public required DateTime CreatedAt { get; set; }
 
   public required DateTime UpdatedAt { get; set; }
+
+  // Navigation property for many-to-many relationship with HabitExecutions
+  public virtual ICollection<PaymentIntentExecutionData> PaymentIntentExecutions { get; set; } = [];
 }

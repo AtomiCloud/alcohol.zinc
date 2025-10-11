@@ -31,6 +31,7 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
   public DbSet<HabitExecutionData> HabitExecutions { get; set; }
   public DbSet<PaymentCustomerData> PaymentCustomers { get; set; }
   public DbSet<PaymentIntentData> PaymentIntents { get; set; }
+  public DbSet<PaymentIntentExecutionData> PaymentIntentExecutions { get; set; }
   // public DbSet<CompletionData> Completions { get; set; }
   // public DbSet<StatsData> Stats { get; set; }
 
@@ -114,6 +115,18 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
     paymentIntent.HasIndex(x => x.AirwallexPaymentIntentId).IsUnique();
     paymentIntent.HasIndex(x => x.Status);
     paymentIntent.HasIndex(x => x.MerchantOrderId);
+
+    // PaymentIntentExecution configuration (many-to-many junction table)
+    var paymentIntentExecution = modelBuilder.Entity<PaymentIntentExecutionData>();
+    paymentIntentExecution.HasIndex(x => new { x.PaymentIntentId, x.HabitExecutionId }).IsUnique();
+    paymentIntentExecution.HasOne(pie => pie.PaymentIntent)
+                          .WithMany(pi => pi.PaymentIntentExecutions)
+                          .HasForeignKey(pie => pie.PaymentIntentId)
+                          .OnDelete(DeleteBehavior.Cascade);
+    paymentIntentExecution.HasOne(pie => pie.HabitExecution)
+                          .WithMany(he => he.PaymentIntentExecutions)
+                          .HasForeignKey(pie => pie.HabitExecutionId)
+                          .OnDelete(DeleteBehavior.Cascade);
 
   }
 }

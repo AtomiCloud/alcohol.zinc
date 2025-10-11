@@ -11,6 +11,5 @@ public interface IStreakRepository
   Task<Result<bool>> HasCompletionBetweenUtc(Guid habitId, DateTime startUtc, DateTime endUtc);
   Task<Result<List<DateTime>>> GetCompletionsBetweenUtc(Guid habitId, DateTime startUtc, DateTime endUtc);
   Task<Result<List<HabitExecutionRecord>>> GetExecutionsInHabitDateRange(Guid habitId, DateOnly start, DateOnly end);
-  Task<Result<List<HabitDebtItem>>> GetOpenDebtsForHabit(Guid habitId);
   Task<Result<List<HabitDebtItem>>> GetOpenDebtsForUser(string userId);
 }

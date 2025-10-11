@@ -124,23 +124,27 @@ public class PaymentService(
 
   public Task<Result<PaymentIntentResult>> CreatePaymentIntentAsync(string userId, CreatePaymentIntentRequest request)
   {
-    return gateway.CreatePaymentIntentAsync(request)
+    // Generate ID before calling Airwallex so we can use it as merchant_order_id
+    var paymentIntentId = Guid.NewGuid();
+    var requestWithMerchantOrderId = request with { MerchantOrderId = paymentIntentId.ToString() };
+
+    return gateway.CreatePaymentIntentAsync(requestWithMerchantOrderId)
       .ThenAwait(gatewayResult =>
       {
-        // Save payment intent to database
+        // Save payment intent to database with the pre-generated ID
         var record = new PaymentIntentRecord
         {
           UserId = userId,
           AirwallexPaymentIntentId = gatewayResult.Id,
-          AirwallexCustomerId = request.CustomerId,
-          Amount = request.Amount,
-          Currency = request.Currency,
+          AirwallexCustomerId = requestWithMerchantOrderId.CustomerId,
+          Amount = requestWithMerchantOrderId.Amount,
+          Currency = requestWithMerchantOrderId.Currency,
           CapturedAmount = 0m,
           Status = ParsePaymentIntentStatus(gatewayResult.Status),
           MerchantOrderId = gatewayResult.MerchantOrderId
         };
 
-        return intentRepo.Create(record)
+        return intentRepo.Create(paymentIntentId, record)
           .Then(_ => gatewayResult, Errors.MapNone);
       });
   }
