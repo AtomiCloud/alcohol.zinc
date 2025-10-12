@@ -1,3 +1,10 @@
+## [1.16.1](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.16.0...v1.16.1) (2025-10-12)
+
+
+### 🐛 Bug Fixes 🐛
+
+* set paymentconsent to false ([ec0745d](https://github.com/AtomiCloud/alcohol.zinc/commit/ec0745d70104356707f9484b4ca1484d0ee6e6dd))
+
 ## [1.16.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.15.4...v1.16.0) (2025-10-10)
 
 
