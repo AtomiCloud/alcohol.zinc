@@ -211,11 +211,14 @@ public class StreakRepository(MainDbContext db, ILogger<StreakRepository> logger
       var rows = await (from he in db.HabitExecutions
                         join hv in db.HabitVersions on he.HabitVersionId equals hv.Id
                         join h in db.Habits on hv.HabitId equals h.Id
-                        join pie in db.PaymentIntentExecutions on he.Id equals pie.HabitExecutionId
-                        join pi in db.PaymentIntents on pie.PaymentIntentId equals pi.Id
                         where h.UserId == userId
                               && he.Status == HabitExecution.Data.HabitExecutionStatusData.Failed
-                              && pi.Status != PaymentIntentStatus.Succeeded
+                              && !db.PaymentIntentExecutions
+                                    .Join(db.PaymentIntents,
+                                          pie => pie.PaymentIntentId,
+                                          pi => pi.Id,
+                                          (pie, pi) => new { pie.HabitExecutionId, pi.Status })
+                                    .Any(x => x.HabitExecutionId == he.Id && x.Status == PaymentIntentStatus.Succeeded)
                         select new
                         {
                           he.Id,
