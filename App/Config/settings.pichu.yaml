@@ -40,6 +40,10 @@ HttpClient:
     BaseAddress: https://api.pledge.to
     Timeout: 60
     BearerAuth: supersecret
+  AIRWALLEX:
+    BaseAddress: 'https://api-demo.airwallex.com'
+    Timeout: 60
+
 Auth:
   Enabled: true
   Settings:
