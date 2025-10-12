@@ -1,3 +1,17 @@
+## [1.17.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.16.1...v1.17.0) (2025-10-12)
+
+
+### ✨ Features ✨
+
+* add log, compress migration ([fe932e5](https://github.com/AtomiCloud/alcohol.zinc/commit/fe932e5624019e615795d7ecda8ff1a25d80a4d2))
+* overview endpoint add totalskip and useddkip ([0b2a617](https://github.com/AtomiCloud/alcohol.zinc/commit/0b2a6178ff1a9f9348c6269a206d30dd794d38a9))
+* skip, freeze, vacation and monthly ([32f8d04](https://github.com/AtomiCloud/alcohol.zinc/commit/32f8d0405e305bae0965b119d1581c27ceafa07e))
+
+
+### 🐛 Bug Fixes 🐛
+
+* incorrect restore ([66ed02c](https://github.com/AtomiCloud/alcohol.zinc/commit/66ed02c40eb1abd58512b2c6ede9c4adb2fe3cee))
+
 ## [1.16.1](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.16.0...v1.16.1) (2025-10-12)
 
 
