@@ -1,3 +1,10 @@
+## [1.17.1](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.17.0...v1.17.1) (2025-10-12)
+
+
+### 🐛 Bug Fixes 🐛
+
+* fix payment url ([672957e](https://github.com/AtomiCloud/alcohol.zinc/commit/672957ec2a6e870523c6f08067efb9b668caacfd))
+
 ## [1.17.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.16.1...v1.17.0) (2025-10-12)
 
 
