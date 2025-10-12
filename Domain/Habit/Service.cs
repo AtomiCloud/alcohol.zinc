@@ -10,7 +10,8 @@ public class HabitService(
   IHabitRepository repo,
   IVacationRepository vacationRepo,
   IProtectionRepository protectionRepo,
-  IEntitlementService entitlementService
+  IEntitlementService entitlementService,
+  ILogger<HabitService> logger
 ) : IHabitService
 {
   public Task<Result<List<HabitVersionPrincipal>>> SearchHabits(HabitSearch habitSearch)
@@ -137,6 +138,7 @@ public class HabitService(
         List<Result<int>> results = [];
         foreach (var tz in tzList)
         {
+          logger.LogInformation("Processing Timezone: {tz}", tz);
           var r = await this.ProcessTimezoneForFailures(tz, now);
           results.Add(r);
         }
@@ -156,7 +158,8 @@ public class HabitService(
 
     var localNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(nowUtc, DateTimeKind.Utc), tz);
     // After-midnight window: [00:00, 00:15)
-    var inWindow = localNow.TimeOfDay >= TimeSpan.Zero && localNow.TimeOfDay < TimeSpan.FromMinutes(15);
+    var inWindow = localNow.TimeOfDay >= TimeSpan.Zero && localNow.TimeOfDay < TimeSpan.FromMinutes(50);
+    logger.LogInformation("Timezone: {tz}, in window: {inWindow}", tz, inWindow);
     if (!inWindow) return 0;
 
     var dateToMark = DateOnly.FromDateTime(localNow.AddDays(-1));

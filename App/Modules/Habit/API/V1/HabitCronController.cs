@@ -4,7 +4,6 @@ using App.StartUp.Registry;
 using App.StartUp.Services.Auth;
 using Asp.Versioning;
 using CSharp_Result;
-using CSharp_Result;
 using Domain.Habit;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;

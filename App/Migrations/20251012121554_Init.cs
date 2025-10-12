@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace App.Migrations
 {
     /// <inheritdoc />
-    public partial class InitialCreate : Migration
+    public partial class Init : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -32,16 +32,11 @@ namespace App.Migrations
                     Name = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
                     Slug = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
                     Mission = table.Column<string>(type: "character varying(8192)", maxLength: 8192, nullable: true),
-                    Description = table.Column<string>(type: "character varying(2048)", maxLength: 2048, nullable: true),
                     Countries = table.Column<string[]>(type: "text[]", nullable: false),
                     PrimaryRegistrationNumber = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
                     PrimaryRegistrationCountry = table.Column<string>(type: "character varying(2)", maxLength: 2, nullable: true),
                     WebsiteUrl = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
-                    LogoUrl = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
-                    IsVerified = table.Column<bool>(type: "boolean", nullable: true),
-                    VerificationSource = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
-                    LastVerifiedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    DonationEnabled = table.Column<bool>(type: "boolean", nullable: true)
+                    LogoUrl = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -166,6 +161,26 @@ namespace App.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "FreezeAwards",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    WeekStart = table.Column<DateOnly>(type: "date", nullable: false),
+                    AwardedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    HabitId = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_FreezeAwards", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_FreezeAwards_Habits_HabitId",
+                        column: x => x.HabitId,
+                        principalTable: "Habits",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "HabitVersions",
                 columns: table => new
                 {
@@ -199,13 +214,75 @@ namespace App.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "FreezeConsumptions",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Date = table.Column<DateOnly>(type: "date", nullable: false),
+                    ConsumedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UserId = table.Column<string>(type: "character varying(128)", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_FreezeConsumptions", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_FreezeConsumptions_Users_UserId",
+                        column: x => x.UserId,
+                        principalTable: "Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "UserProtections",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    FreezeCurrent = table.Column<int>(type: "integer", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UserId = table.Column<string>(type: "character varying(128)", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_UserProtections", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_UserProtections_Users_UserId",
+                        column: x => x.UserId,
+                        principalTable: "Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "VacationPeriods",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    StartDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    EndDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    Timezone = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UserId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_VacationPeriods", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_VacationPeriods_Users_UserId",
+                        column: x => x.UserId,
+                        principalTable: "Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "HabitExecutions",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     HabitVersionId = table.Column<Guid>(type: "uuid", nullable: false),
                     Date = table.Column<DateOnly>(type: "date", nullable: false),
-                    Status = table.Column<int>(type: "integer", nullable: false),
+                    Status = table.Column<byte>(type: "smallint", nullable: false),
                     CompletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     Notes = table.Column<string>(type: "text", nullable: true),
                     PaymentProcessed = table.Column<bool>(type: "boolean", nullable: false)
@@ -234,16 +311,6 @@ namespace App.Migrations
                 .Annotation("Npgsql:IndexMethod", "gin");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Charities_DonationEnabled",
-                table: "Charities",
-                column: "DonationEnabled");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Charities_IsVerified",
-                table: "Charities",
-                column: "IsVerified");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_Charities_Name",
                 table: "Charities",
                 column: "Name");
@@ -251,7 +318,7 @@ namespace App.Migrations
             migrationBuilder.CreateIndex(
                 name: "IX_Charities_PrimaryRegistrationCountry_PrimaryRegistrationNum~",
                 table: "Charities",
-                columns: ["PrimaryRegistrationCountry", "PrimaryRegistrationNumber"]);
+                columns: [ "PrimaryRegistrationCountry", "PrimaryRegistrationNumber" ]);
 
             migrationBuilder.CreateIndex(
                 name: "IX_CharityCauses_CauseId",
@@ -261,13 +328,19 @@ namespace App.Migrations
             migrationBuilder.CreateIndex(
                 name: "IX_CharityCauses_CharityId_CauseId",
                 table: "CharityCauses",
-                columns: ["CharityId", "CauseId"],
+                columns: [ "CharityId", "CauseId" ],
                 unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_Configurations_DefaultCharityId",
                 table: "Configurations",
                 column: "DefaultCharityId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Configurations_UserId",
+                table: "Configurations",
+                column: "UserId",
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_ExternalIds_CharityId",
@@ -277,13 +350,25 @@ namespace App.Migrations
             migrationBuilder.CreateIndex(
                 name: "IX_ExternalIds_Source_ExternalKey",
                 table: "ExternalIds",
-                columns: ["Source", "ExternalKey"],
+                columns: [ "Source", "ExternalKey" ],
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_FreezeAwards_HabitId_WeekStart",
+                table: "FreezeAwards",
+                columns: [ "HabitId", "WeekStart" ],
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_FreezeConsumptions_UserId_Date",
+                table: "FreezeConsumptions",
+                columns: [ "UserId", "Date" ],
                 unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_HabitExecutions_HabitVersionId_Date",
                 table: "HabitExecutions",
-                columns: ["HabitVersionId", "Date"],
+                columns: [ "HabitVersionId", "Date" ],
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -304,7 +389,7 @@ namespace App.Migrations
             migrationBuilder.CreateIndex(
                 name: "IX_HabitVersions_HabitId_Version",
                 table: "HabitVersions",
-                columns: ["HabitId", "Version"],
+                columns: [ "HabitId", "Version" ],
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -319,10 +404,25 @@ namespace App.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_UserProtections_UserId",
+                table: "UserProtections",
+                column: "UserId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Users_Username",
                 table: "Users",
                 column: "Username",
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_VacationPeriods_UserId",
+                table: "VacationPeriods",
+                column: "UserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_VacationPeriods_UserId_StartDate",
+                table: "VacationPeriods",
+                columns: [ "UserId", "StartDate" ]);
         }
 
         /// <inheritdoc />
@@ -338,19 +438,31 @@ namespace App.Migrations
                 name: "ExternalIds");
 
             migrationBuilder.DropTable(
+                name: "FreezeAwards");
+
+            migrationBuilder.DropTable(
+                name: "FreezeConsumptions");
+
+            migrationBuilder.DropTable(
                 name: "HabitExecutions");
 
             migrationBuilder.DropTable(
                 name: "PaymentCustomers");
 
             migrationBuilder.DropTable(
-                name: "Users");
+                name: "UserProtections");
+
+            migrationBuilder.DropTable(
+                name: "VacationPeriods");
 
             migrationBuilder.DropTable(
                 name: "Causes");
 
             migrationBuilder.DropTable(
                 name: "HabitVersions");
+
+            migrationBuilder.DropTable(
+                name: "Users");
 
             migrationBuilder.DropTable(
                 name: "Charities");
