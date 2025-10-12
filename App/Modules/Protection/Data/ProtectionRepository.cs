@@ -115,7 +115,7 @@ public class ProtectionRepository(MainDbContext db, ILogger<ProtectionRepository
       // insert if not exists via unique index
       var exists = await db.FreezeAwards.AsNoTracking()
         .AnyAsync(x => x.HabitId == habitId && x.WeekStart == weekStart);
-      if (exists) return true;
+      if (exists) return false;
       db.FreezeAwards.Add(new FreezeAwardData { HabitId = habitId, WeekStart = weekStart });
       await db.SaveChangesAsync();
       return true;

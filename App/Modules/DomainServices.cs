@@ -81,6 +81,10 @@ public static class DomainServices
     // Protections & Vacation
     s.AddScoped<IProtectionRepository, ProtectionRepository>()
       .AutoTrace<IProtectionRepository>();
+    s.AddScoped<IFreezePolicy, App.Modules.Protection.FreezePolicy>()
+      .AutoTrace<IFreezePolicy>();
+    s.AddScoped<Domain.Protection.IProtectionAwardService, App.Modules.Protection.ProtectionAwardService>()
+      .AutoTrace<Domain.Protection.IProtectionAwardService>();
     s.AddScoped<IVacationRepository, VacationRepository>()
       .AutoTrace<IVacationRepository>();
     s.AddScoped<IVacationService, VacationService>()

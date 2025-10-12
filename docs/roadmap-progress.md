@@ -5,7 +5,7 @@ Overview
 - Scope: Skip (monthly allowance), Freeze Days (user-level), Vacation Windows (periods), Tier/Entitlements, Habit limits, and related controllers/services.
 - Enforcement Location: Controllers (tier/entitlements), with dedicated services for allowance/time, entitlement checks, and business persistence.
 
-Status Summary (2025-10-10)
+Status Summary (2025-10-12)
 
 - Phase 0 — Base Infrastructure: COMPLETED
 
@@ -31,19 +31,19 @@ Status Summary (2025-10-10)
   - EntitlementService: EnsureSkipsAllowed(userId, monthStart, monthEnd)
   - Repo: SkipHabit(userId, habitVersionId, date, notes) idempotent insert; CountUserSkipsForMonth(userId, window)
 
-- Phase 3 — Freeze Days (User-Level): PENDING
+- Phase 3 — Freeze Days (User-Level): COMPLETED
 
-  - Implement consumption (user-level freeze day) across all scheduled habits via daily failure orchestration
-  - GET protections endpoint for balance/cap
-  - Tier cap enforcement in controller (EntitlementService extension): ComputeFreezeMax via tier + max streak
+  - Daily failure flow consumes one user-level freeze day (if available) and inserts Frozen executions for all scheduled habits when no completion/skip exists (Domain/Habit/Service.cs:84–107, App/Modules/Habit/Data/HabitRepository.cs:483–516, 340–460).
+  - GET protections endpoint returns balance and cap; cap now computed using tier base + user max streak (App/Modules/Protection/API/V1/ProtectionController.cs:1–200, App/Modules/Entitlement/EntitlementService.cs:1–120, App/Modules/Habit/Data/StreakRepository.cs:300–380).
+  - Protection repository supports idempotent consumption and award ledgers (App/Modules/Protection/Data/ProtectionRepository.cs:1–200).
 
-- Phase 4 — Habit Limit by Tier: PENDING
+- Phase 4 — Habit Limit by Tier: COMPLETED
 
-  - Enforce entitlements (EntitlementKeys.HabitsMax) on create/enable; controller-only, service remains pure CRUD
+  - Enforce EntitlementKeys.HabitsMax on habit create and enable toggle in controller via EntitlementService.EnsureHabitsAllowed (App/Modules/Habit/API/V1/HabitController.cs:1–200, App/Modules/Entitlement/EntitlementService.cs:1–120).
 
-- Phase 5 — Weekly Award Job: PENDING
-  - Award +1 freeze for per-habit perfect week; record ledger (FreezeAwardData) to avoid duplicates
-  - Clamp to cap at award time using EntitlementService
+- Phase 5 — Weekly Award Job: COMPLETED (now event-driven)
+  - External event triggers per-user award via `POST /api/v1/Protection/award-weekly`.
+  - Server evaluates prior week and awards +1 freeze per perfect habit week using FreezeAwardData ledger; clamps to cap via EntitlementService (App/Modules/Protection/ProtectionAwardService.cs, ProtectionController, Startup DI).
 
 Key Services & Responsibilities
 
@@ -94,20 +94,9 @@ Centralized Mapping
 
 Open Items / Next Steps
 
-- Phase 3: Freeze Days
-
-  - Consumption on daily-failure job: If no completion/skip and user freeze day available, freeze all scheduled habits (user-level)
-  - Controller endpoint for protections (GET balance/cap)
-  - EntitlementService: EnsureFreezeAllowed(userId) with tier cap + clamp helper
-
-- Phase 4: Habit Limits
-
-  - EntitlementService.EnsureHabitsAllowed(userId) using repo.CountHabitsForUser + tier limit
-  - Apply on habit create/enable
-
-- Phase 5: Weekly Awards
-  - Background job: award per-habit perfect week; use FreezeAwardData ledger; clamp to cap
-  - Ensure cap via EntitlementService (tier + policy)
+- Monitor weekly award job performance and add backoff/retry if needed.
+- Consider moving MarkDailyFailures to per-user API to avoid partial effects.
+- Tighten metrics around freeze consumption vs. failures for visibility.
 
 Testing & Ops
 

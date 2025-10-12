@@ -2,6 +2,7 @@ namespace Domain.Protection;
 
 public interface IFreezePolicy
 {
-  int ComputeFreezeMax(string tier, int userMaxStreak);
+  // Computes the maximum freeze cap using a base entitlement cap
+  // and the user's max streak-derived bonus. Pure function.
+  int ComputeFreezeMax(int baseCap, int userMaxStreak);
 }
-

@@ -52,6 +52,14 @@ tasks:
     desc: Builds application
     cmds:
       - dotnet build --no-restore
+  test:int:e2e:
+    desc: Run in-memory E2E integration test (TestServer)
+    env:
+      RUN_IT_E2E: '1'
+      MSBUILDDISABLENODEREUSE: '1'
+    cmds:
+      - mkdir -p .dotnet_home
+      - DOTNET_CLI_HOME=.dotnet_home dotnet test IntTest/IntTest.csproj -nr:false --filter "FullyQualifiedName~HabitProtectionsIntegrationTests.CreateHabit_Skip_Vacation_EndToday_Protections_EndToEnd"
   tear:
     desc: Tears down the local development cluster
     cmds:
