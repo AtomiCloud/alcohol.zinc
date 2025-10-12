@@ -10,6 +10,44 @@ namespace App.Modules.Habit.Data
 {
     public class HabitRepository(MainDbContext db, ILogger<HabitRepository> logger) : IHabitRepository
     {
+        public async Task<Result<List<string>>> GetDistinctTimezonesForEnabledHabits()
+        {
+            try
+            {
+                var tzs = await (from h in db.Habits
+                                 join hv in db.HabitVersions on new { h.Id, h.Version } equals new { Id = hv.HabitId, hv.Version }
+                                 where h.Enabled == true && h.DeletedAt == null
+                                 select hv.Timezone)
+                    .Distinct()
+                    .AsNoTracking()
+                    .ToListAsync();
+                return tzs;
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "GetDistinctTimezonesForEnabledHabits failed");
+                throw;
+            }
+        }
+
+        public async Task<Result<List<Guid>>> GetEnabledHabitIdsByTimezone(string timezone)
+        {
+            try
+            {
+                var ids = await (from h in db.Habits
+                                 join hv in db.HabitVersions on new { h.Id, h.Version } equals new { Id = hv.HabitId, hv.Version }
+                                 where h.Enabled == true && h.DeletedAt == null && hv.Timezone == timezone
+                                 select h.Id)
+                    .Distinct()
+                    .ToListAsync();
+                return ids;
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "GetEnabledHabitIdsByTimezone failed for {Timezone}", timezone);
+                throw;
+            }
+        }
         public async Task<Result<int>> CountHabitsForUser(string userId)
         {
             try
@@ -106,6 +144,26 @@ namespace App.Modules.Habit.Data
                 logger.LogError(e, "GetHabitsByIds failed");
                 throw;
             }
+        }
+        public async Task<Result<bool>> HasAnyCompletedOrSkippedForVersions(List<Guid> habitVersionIds, DateOnly date)
+        {
+          try
+          {
+            if (habitVersionIds.Count == 0) return false;
+
+            var any = await db.HabitExecutions.AsNoTracking()
+              .Where(he => habitVersionIds.Contains(he.HabitVersionId)
+                           && he.Date == date
+                           && (he.Status == HabitExecutionStatusData.Completed ||
+                               he.Status == HabitExecutionStatusData.Skipped))
+              .AnyAsync();
+            return any;
+          }
+          catch (Exception e)
+          {
+            logger.LogError(e, "HasAnyCompletedOrSkippedForVersions failed");
+            throw;
+          }
         }
         public async Task<Result<List<HabitVersionPrincipal>>> GetActiveHabitVersions(string userId, DateOnly date)
         {

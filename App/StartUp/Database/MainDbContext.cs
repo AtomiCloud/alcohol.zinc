@@ -121,7 +121,7 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
 
     // Protections
     var protection = modelBuilder.Entity<UserProtectionData>();
-    protection.HasKey(x => x.UserId);
+    protection.HasKey(x => x.Id);
 
     var award = modelBuilder.Entity<FreezeAwardData>();
     award.HasIndex(x => new { x.HabitId, x.WeekStart }).IsUnique();

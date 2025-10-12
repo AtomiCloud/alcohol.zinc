@@ -19,7 +19,9 @@ public record HabitOverviewItem
   HabitStreakStatus Status,
   int TimeLeftToEodMinutes,
   HabitVersionMeta Version,
-  decimal TotalDebtAmount
+  decimal TotalDebtAmount,
+  int UsedSkip,
+  int TotalSkip
 );
 
 public record HabitOverviewSearch(string UserId, int Limit, int Skip);
@@ -31,5 +33,5 @@ public record HabitOverviewSummary(
 
 public interface IHabitOverviewService
 {
-  Task<Result<HabitOverviewSummary>> GetOverview(HabitOverviewSearch search, DateTime? nowUtc = null);
+  Task<Result<HabitOverviewSummary>> GetOverview(HabitOverviewSearch search, string skipsMonthlyKey, DateTime? nowUtc = null);
 }

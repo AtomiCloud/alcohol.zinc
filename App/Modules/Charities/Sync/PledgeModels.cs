@@ -50,7 +50,7 @@ public record PledgeOrganizationsPage
   [JsonPropertyName("per")] public int PerPage { get; init; }
   [JsonPropertyName("total_count")] public int TotalCount { get; init; }
 
-  [JsonPropertyName("uri")] public string Uri { get; init; }
+  [JsonPropertyName("uri")] public string Uri { get; init; } = string.Empty;
   [JsonPropertyName("next")] public string? NextUri { get; init; }
   [JsonPropertyName("previous")] public string? PreviousUri { get; init; }
   [JsonPropertyName("results")] public PledgeOrganizationDto[] Data { get; init; } = [];

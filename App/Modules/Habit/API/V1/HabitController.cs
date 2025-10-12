@@ -58,7 +58,8 @@ public class HabitController(
   {
     var result = await this.GuardAsync(userId)
       .ThenAwait(_ => createHabitReqValidator.ValidateAsyncResult(req, "Invalid CreateHabitReq"))
-      .ThenAwait(x => service.Create(userId, x.ToVersionRecord()))
+      .ThenAwait(_ => entitlementService.EnsureHabitsAllowed(userId))
+      .ThenAwait(x => service.Create(userId, req.ToVersionRecord()))
       .Then(h => h.ToRes(), Errors.MapNone);
 
     return this.ReturnResult(result);
@@ -69,7 +70,12 @@ public class HabitController(
   {
     var result = await this.GuardAsync(userId)
         .ThenAwait(_ => updateHabitReqValidator.ValidateAsyncResult(req, "Invalid UpdateHabitReq"))
-        .ThenAwait(x => service.Update(userId, id, x.ToVersionRecord(), req.Enabled))
+        .ThenAwait(validReq =>
+        {
+          if (!req.Enabled) return Task.FromResult((Result<UpdateHabitReq>)validReq);
+          return entitlementService.EnsureHabitsAllowed(userId).Then(_ => validReq, Errors.MapNone);
+        })
+        .ThenAwait(validReq => service.Update(userId, id, validReq.ToVersionRecord(), req.Enabled))
         .Then(h => h?.ToRes(), Errors.MapNone);
 
     return this.ReturnNullableResult(result, new EntityNotFound(
@@ -126,7 +132,7 @@ public class HabitController(
     var result = await this.GuardAsync(userId)
       .ThenAwait(_ => searchOverviewQueryValidator.ValidateAsyncResult(query, "Invalid Overview Query"))
       .Then(q => q.ToDomain(userId), Errors.MapNone)
-      .ThenAwait(search => overviewService.GetOverview(search))
+      .ThenAwait(search => overviewService.GetOverview(search, EntitlementKeys.SkipsMonthly))
       .Then(summary => summary.ToRes(), Errors.MapNone);
 
     return this.ReturnResult(result);
@@ -134,12 +140,12 @@ public class HabitController(
 
   [Authorize(Policy = AuthPolicies.OnlyAdmin), HttpPost("executions/mark-daily-failures")]
   public async Task<ActionResult<int>> MarkDailyFailures([FromBody] MarkDailyFailuresReq req)
-  {
-    // todo change input from userid to list of habit id
+  { 
     var result = await markDailyFailuresReqValidator
         .ValidateAsyncResult(req, "Invalid MarkDailyFailuresReq")
         .ThenAwait(x => service.MarkDailyFailures(x.HabitIds, x.Date.ToDate()));
 
     return this.ReturnResult(result);
   }
+
 }

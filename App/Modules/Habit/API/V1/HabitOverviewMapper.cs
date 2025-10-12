@@ -25,7 +25,9 @@ public static class HabitOverviewMapper
       ToStatus(i.Status),
       i.TimeLeftToEodMinutes,
       new HabitVersionMetaRes(i.Version.Id.ToString(), i.Version.Version, i.Version.IsActive),
-      i.TotalDebtAmount.ToString("F2", CultureInfo.InvariantCulture)
+      i.TotalDebtAmount.ToString("F2", CultureInfo.InvariantCulture),
+      i.UsedSkip,
+      i.TotalSkip
     );
   }
 

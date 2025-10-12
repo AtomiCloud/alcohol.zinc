@@ -11,7 +11,6 @@ public class FreezeConsumptionData
   public DateTime ConsumedAt { get; set; } = DateTime.UtcNow;
 
   // FK + Navigation (grouped at bottom)
-  [MaxLength(128)]
   public required string UserId { get; set; }
   public virtual UserData? User { get; set; }
 }

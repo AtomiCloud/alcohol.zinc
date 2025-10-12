@@ -1,6 +1,7 @@
 using System.Reflection;
 using App.Modules;
 using App.Modules.Common;
+using App.Modules.Habit;
 using App.StartUp.BlockStorage;
 using App.StartUp.Database;
 using App.StartUp.Email;
@@ -148,6 +149,9 @@ public class Server(
 
 
     services.AddDomainServices();
+
+    // Background jobs
+    services.AddHostedService<HabitDailyFailureHostedService>();
 
     // Data seeding for development (lapras only)
     services.AddHostedService<DataSeederHostedService>();

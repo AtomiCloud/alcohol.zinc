@@ -39,7 +39,11 @@ public record HabitVersionRes(
 
 public record MarkDailyFailuresReq(
     string Date,             // string (e.g. "31-08-2025")
-    List<Guid> HabitIds     // List of user IDs to process
+    List<Guid> HabitIds     // List of habit IDs to process
+);
+
+public record MarkDailyFailuresCronRes(
+    int TotalMarked
 );
 
 public record CompleteHabitReq(
