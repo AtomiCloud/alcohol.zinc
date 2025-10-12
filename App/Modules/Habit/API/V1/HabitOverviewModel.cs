@@ -16,7 +16,9 @@ public record HabitOverviewHabitRes(
   HabitStatusRes Status,
   int TimeLeftToEodMinutes,
   HabitVersionMetaRes Version,
-  string TotalDebt
+  string TotalDebt,
+  int UsedSkip,
+  int TotalSkip
 );
 
 public record StakeRes(decimal Amount, string Currency);

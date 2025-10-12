@@ -132,7 +132,7 @@ public class HabitController(
     var result = await this.GuardAsync(userId)
       .ThenAwait(_ => searchOverviewQueryValidator.ValidateAsyncResult(query, "Invalid Overview Query"))
       .Then(q => q.ToDomain(userId), Errors.MapNone)
-      .ThenAwait(search => overviewService.GetOverview(search))
+      .ThenAwait(search => overviewService.GetOverview(search, EntitlementKeys.SkipsMonthly))
       .Then(summary => summary.ToRes(), Errors.MapNone);
 
     return this.ReturnResult(result);
