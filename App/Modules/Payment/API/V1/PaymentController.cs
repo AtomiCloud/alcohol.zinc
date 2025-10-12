@@ -66,7 +66,8 @@ public class PaymentController(
   public async Task<ActionResult> DisablePaymentConsent(string userId)
   {
     var result = await this.GuardAsync(userId)
-      .ThenAwait(_ => service.DisablePaymentConsentAsync(userId));
+      .ThenAwait(_ => service.DisablePaymentConsentAsync(userId))
+      .ThenAwait(_ => authManagement.SetClaim(userId, LogtoClaims.HasPaymentConsent, "false"));
 
     return this.ReturnUnitResult(result);
   }
