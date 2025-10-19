@@ -8,7 +8,9 @@ public static class HabitOverviewMapper
   public static HabitOverviewResponse ToRes(this HabitOverviewSummary s)
     => new(
       s.Items.Select(ToRes).ToList(),
-      s.TotalUserDebtAmount.ToString("F2", CultureInfo.InvariantCulture)
+      s.TotalUserDebtAmount.ToString("F2", CultureInfo.InvariantCulture),
+      s.UsedSkip,
+      s.TotalSkip
     );
 
   private static HabitOverviewHabitRes ToRes(HabitOverviewItem i)
@@ -25,9 +27,7 @@ public static class HabitOverviewMapper
       ToStatus(i.Status),
       i.TimeLeftToEodMinutes,
       new HabitVersionMetaRes(i.Version.Id.ToString(), i.Version.Version, i.Version.IsActive),
-      i.TotalDebtAmount.ToString("F2", CultureInfo.InvariantCulture),
-      i.UsedSkip,
-      i.TotalSkip
+      i.TotalDebtAmount.ToString("F2", CultureInfo.InvariantCulture)
     );
   }
 
