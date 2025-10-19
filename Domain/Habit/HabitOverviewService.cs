@@ -72,11 +72,11 @@ public class HabitOverviewService(
           foreach (var hv in ctx.habits.OrderByDescending(x => x.Version))
           {
             acc = acc
-              .ThenAwait(list => BuildItem(hv, search.UserId, ctx.userTz, nowUtc, ctx.debtsByHabit.TryGetValue(hv.HabitId, out var ds) ? ds : [], ctx.usedSkip, ctx.totalSkip)
+              .ThenAwait(list => BuildItem(hv, search.UserId, ctx.userTz, nowUtc, ctx.debtsByHabit.TryGetValue(hv.HabitId, out var ds) ? ds : [])
                 .Then(item => { list.Add(item); return list; }, Errors.MapNone));
           }
           return await acc
-            .Then(items => new HabitOverviewSummary(items, ctx.totalDebt), Errors.MapNone);
+            .Then(items => new HabitOverviewSummary(items, ctx.totalDebt, ctx.usedSkip, ctx.totalSkip), Errors.MapNone);
         })
     );
 
@@ -85,9 +85,7 @@ public class HabitOverviewService(
       string userId,
       string userTz,
       DateTime? nowUtc,
-      List<HabitDebtItem> debtsForHabit,
-      int usedSkip,
-      int totalSkip)
+      List<HabitDebtItem> debtsForHabit)
     {
       return habitRepository.GetHabit(hv.HabitId)
         .NullToError(hv.HabitId.ToString())
@@ -117,9 +115,7 @@ public class HabitOverviewService(
             ctx2.status,
             ctx2.status.TimeLeftToEodMinutes,
             new HabitVersionMeta(hv.Id, hv.Version, true),
-            debtsForHabit.Sum(d => d.Amount),
-            usedSkip,
-            totalSkip
+            debtsForHabit.Sum(d => d.Amount)
           ), Errors.MapNone);
     }
   }

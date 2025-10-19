@@ -19,16 +19,16 @@ public record HabitOverviewItem
   HabitStreakStatus Status,
   int TimeLeftToEodMinutes,
   HabitVersionMeta Version,
-  decimal TotalDebtAmount,
-  int UsedSkip,
-  int TotalSkip
+  decimal TotalDebtAmount
 );
 
 public record HabitOverviewSearch(string UserId, int Limit, int Skip);
 
 public record HabitOverviewSummary(
   List<HabitOverviewItem> Items,
-  decimal TotalUserDebtAmount
+  decimal TotalUserDebtAmount,
+  int UsedSkip,
+  int TotalSkip
 );
 
 public interface IHabitOverviewService
