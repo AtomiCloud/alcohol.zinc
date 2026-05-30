@@ -45,22 +45,18 @@ public class PenaltyService(
     {
       var intent = chargeResult.Get();
       if (intent.Status == "SUCCEEDED")
-      {
-        // Terminal success: charge + atomic charity credit.
-        await repo.MarkCharged(p.Id, intent.Id);
-        return 1;
-      }
+        // Terminal success: charge + atomic charity credit. Propagate a
+        // persistence/transition failure (e.g. charity currency mismatch
+        // rollback) instead of silently counting it as success.
+        return await repo.MarkCharged(p.Id, intent.Id).Then(_ => 1, Errors.MapAll);
 
       // REQUIRES_PAYMENT_METHOD / REQUIRES_CUSTOMER_ACTION / REQUIRES_CAPTURE -> not yet settled, retry.
       var attempts = rec.Attempts + 1;
       if (attempts >= maxAttempts)
-      {
-        await repo.MarkFailed(p.Id, $"Max attempts reached, last status {intent.Status}");
-        return 1;
-      }
+        return await repo.MarkFailed(p.Id, $"Max attempts reached, last status {intent.Status}")
+          .Then(_ => 1, Errors.MapAll);
 
-      await repo.MarkPending(p.Id, intent.Id, attempts);
-      return 0;
+      return await repo.MarkPending(p.Id, intent.Id, attempts).Then(_ => 0, Errors.MapAll);
     }
 
     // Failure branch.
@@ -68,19 +64,12 @@ public class PenaltyService(
 
     // No verified consent -> Skipped (typed NotFoundException(PaymentCustomer) from ChargeStoredConsentAsync).
     if (ex is NotFoundException)
-    {
-      await repo.MarkSkipped(p.Id);
-      return 1;
-    }
+      return await repo.MarkSkipped(p.Id).Then(_ => 1, Errors.MapAll);
 
     // Transient/other error -> bump; exhaust to Failed.
     if (rec.Attempts + 1 >= maxAttempts)
-    {
-      await repo.MarkFailed(p.Id, ex?.Message ?? "charge error");
-      return 1;
-    }
+      return await repo.MarkFailed(p.Id, ex?.Message ?? "charge error").Then(_ => 1, Errors.MapAll);
 
-    await repo.Bump(p.Id, ex?.Message ?? "charge error");
-    return 0;
+    return await repo.Bump(p.Id, ex?.Message ?? "charge error").Then(_ => 0, Errors.MapAll);
   }
 }

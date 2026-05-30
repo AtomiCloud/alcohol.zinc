@@ -10,6 +10,7 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
 {
   public async Task<Result<bool>> EnqueuePending(PenaltyRecord record)
   {
+    PenaltyData? data = null;
     try
     {
       // Idempotent insert via unique(HabitExecutionId): no-op on conflict.
@@ -22,17 +23,23 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
       var exists = await db.Penalties.AsNoTracking()
         .AnyAsync(x => x.HabitExecutionId == record.HabitExecutionId);
       if (exists) return false;
-      db.Penalties.Add(record.ToData());
+      data = record.ToData();
+      db.Penalties.Add(data);
       await db.SaveChangesAsync();
       return true;
     }
     catch (UniqueConstraintException)
     {
-      // Lost the race: another pass already enqueued this execution. No-op.
+      // Lost the race: another pass already enqueued this execution. Detach the
+      // failed entity (still tracked as Added) so the caller's enqueue loop, which
+      // reuses this scoped DbContext, does not keep re-attempting the same insert
+      // on the next SaveChangesAsync and silently drop subsequent legitimate rows.
+      if (data != null) db.Entry(data).State = EntityState.Detached;
       return false;
     }
     catch (Exception e)
     {
+      if (data != null) db.Entry(data).State = EntityState.Detached;
       logger.LogError(e, "EnqueuePending failed for HabitExecutionId={HabitExecutionId}", record.HabitExecutionId);
       throw;
     }

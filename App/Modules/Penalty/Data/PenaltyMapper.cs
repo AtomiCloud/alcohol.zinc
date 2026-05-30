@@ -9,7 +9,8 @@ public static class PenaltyMapper
   {
     return new PenaltyData
     {
-      Id = Guid.NewGuid(),
+      // Id is intentionally unset: EF/Npgsql generates it on add
+      // (ValueGeneratedOnAdd), keeping this mapper identity-free.
       HabitExecutionId = record.HabitExecutionId,
       AmountCents = (int)(record.Amount.Amount * 100),
       Currency = record.Amount.Currency.Code,

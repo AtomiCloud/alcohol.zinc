@@ -202,7 +202,12 @@ public class PaymentService(
         };
         return gateway.CreatePaymentIntentAsync(createReq)
           .ThenAwait(intent =>
-            gateway.ConfirmPaymentIntentAsync(intent.Id, r.PaymentConsentId!, r.AirwallexCustomerId));
+            intent.Status == "SUCCEEDED"
+              // Idempotent replay (same IdempotencyKey -> Airwallex request_id)
+              // returned the already-settled intent from a prior attempt: do not
+              // re-confirm, which would otherwise move money a second time.
+              ? intent.ToAsyncResult()
+              : gateway.ConfirmPaymentIntentAsync(intent.Id, r.PaymentConsentId!, r.AirwallexCustomerId));
       });
   }
 

@@ -56,7 +56,7 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
   {
     var user = modelBuilder.Entity<UserData>();
     user.HasIndex(x => x.Username).IsUnique();
-    
+
     // Configuration
     var configuration = modelBuilder.Entity<ConfigurationData>();
     configuration.HasIndex(c => c.UserId).IsUnique(); // One configuration per user
@@ -68,7 +68,7 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
     habit.HasMany(h => h.Versions)
          .WithOne(hv => hv.Habit)
          .HasForeignKey(hv => hv.HabitId);
-    
+
     // HabitVersion configuration (versioned details)
     var habitVersion = modelBuilder.Entity<HabitVersionData>();
     habitVersion.HasIndex(x => new { x.HabitId, x.Version }).IsUnique();  // Unique version per habit
@@ -78,7 +78,7 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
     habitVersion.HasMany(hv => hv.Executions)
                 .WithOne(he => he.HabitVersion)
                 .HasForeignKey(he => he.HabitVersionId);
-    
+
     // HabitExecution configuration
     var habitExecution = modelBuilder.Entity<HabitExecutionData>();
     habitExecution.HasIndex(x => new { x.HabitVersionId, x.Date }).IsUnique();  // One execution per version per day
@@ -137,14 +137,14 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
     var penalty = modelBuilder.Entity<PenaltyData>();
     penalty.HasIndex(x => x.HabitExecutionId).IsUnique();   // exactly-once per execution
     penalty.HasIndex(x => new { x.Status, x.Attempts });    // drain query: GetPending
-    penalty.HasOne<CharityData>()
+    penalty.HasOne(x => x.Charity)
            .WithMany()
            .HasForeignKey(x => x.CharityId)
            .OnDelete(DeleteBehavior.Cascade);
 
     var charityBalance = modelBuilder.Entity<CharityBalanceData>();
     charityBalance.HasIndex(x => x.CharityId).IsUnique();
-    charityBalance.HasOne<CharityData>()
+    charityBalance.HasOne(x => x.Charity)
                   .WithMany()
                   .HasForeignKey(x => x.CharityId)
                   .OnDelete(DeleteBehavior.Cascade);
