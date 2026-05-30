@@ -56,17 +56,38 @@ public class AirwallexGateway(AirwallexClient client) : IPaymentGateway
 
   public async Task<Result<PaymentIntentResult>> CreatePaymentIntentAsync(CreatePaymentIntentRequest request)
   {
+    // Deterministic idempotency: when the caller supplies a stable key (e.g. the
+    // penalty Id) reuse it for BOTH request_id and merchant_order_id so Airwallex
+    // dedupes retried/concurrent attempts onto the same intent. Otherwise mint
+    // fresh GUIDs (interactive flows that intend a brand-new intent each call).
+    var requestId = request.IdempotencyKey ?? Guid.NewGuid().ToString();
+    var merchantOrderId = request.IdempotencyKey ?? Guid.NewGuid().ToString();
     var req = new AirwallexCreatePaymentIntentReq
     {
-      RequestId = Guid.NewGuid().ToString(),
+      RequestId = requestId,
       Amount = request.Amount,
       Currency = request.Currency,
       CustomerId = request.CustomerId,
-      MerchantOrderId = Guid.NewGuid().ToString()
+      MerchantOrderId = merchantOrderId
     };
 
     return await client
       .CreatePaymentIntentAsync(req)
+      .Then(res => new PaymentIntentResult
+      {
+        Id = res.Id,
+        Status = res.Status,
+        Amount = res.Amount,
+        Currency = res.Currency,
+        CustomerId = res.CustomerId,
+        MerchantOrderId = res.MerchantOrderId
+      }, Errors.MapNone);
+  }
+
+  public async Task<Result<PaymentIntentResult>> RetrievePaymentIntentAsync(string paymentIntentId)
+  {
+    return await client
+      .GetPaymentIntentAsync(paymentIntentId)
       .Then(res => new PaymentIntentResult
       {
         Id = res.Id,

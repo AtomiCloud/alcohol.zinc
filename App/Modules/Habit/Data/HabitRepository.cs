@@ -397,7 +397,7 @@ namespace App.Modules.Habit.Data
             }
         }
 
-        public async Task<Result<int>> CreateFailedExecutions(List<Guid> habitIds, DateOnly date)
+        public async Task<Result<List<FailedExecutionRow>>> CreateFailedExecutions(List<Guid> habitIds, DateOnly date)
         {
             try
             {
@@ -409,7 +409,7 @@ namespace App.Modules.Habit.Data
 
                 // Single atomic INSERT ... SELECT with LEFT JOIN to prevent race conditions
                 // Using PostgreSQL array contains operator (@>) for DaysOfWeek array
-                var affectedRows = await db.Database.ExecuteSqlAsync($@"
+                await db.Database.ExecuteSqlAsync($@"
                     INSERT INTO ""HabitExecutions"" (""Id"", ""HabitVersionId"", ""Date"", ""Status"", ""PaymentProcessed"")
                     SELECT gen_random_uuid(), hv.""Id"", {date}, {(int)App.Modules.HabitExecution.Data.HabitExecutionStatusData.Failed}, false
                     FROM ""Habits"" h
@@ -422,8 +422,20 @@ namespace App.Modules.Habit.Data
                       AND he.""Id"" IS NULL
                 ");
 
-                logger.LogInformation("Created {Count} failed executions for date: {Date} ({DayOfWeek})", affectedRows, date, dayOfWeek);
-                return affectedRows;
+                // Re-project the failed-this-date executions so the service can enqueue penalties.
+                // Mirror StreakRepository join+projection shape.
+                var rows = await (from he in db.HabitExecutions
+                                  join hv in db.HabitVersions on he.HabitVersionId equals hv.Id
+                                  join h in db.Habits on new { hv.HabitId, hv.Version } equals new { HabitId = h.Id, h.Version }
+                                  where he.Date == date
+                                        && he.Status == App.Modules.HabitExecution.Data.HabitExecutionStatusData.Failed
+                                        && habitIds.Contains(h.Id)
+                                  select new FailedExecutionRow(he.Id, h.UserId, hv.CharityId, hv.StakeCents, hv.StakeCurrency, hv.RatioBasisPoints))
+                    .AsNoTracking()
+                    .ToListAsync();
+
+                logger.LogInformation("Created {Count} failed executions for date: {Date} ({DayOfWeek})", rows.Count, date, dayOfWeek);
+                return rows;
             }
             catch (Exception e)
             {

@@ -7,6 +7,7 @@ using App.Modules.Entitlement;
 using App.Modules.Habit.Data;
 using App.Modules.Payment.Airwallex;
 using App.Modules.Payment.Data;
+using App.Modules.Penalty.Data;
 using App.Modules.Protection.Data;
 using App.Modules.System;
 using App.Modules.Users.Data;
@@ -22,6 +23,7 @@ using Domain.Configuration;
 using Domain.Entitlement;
 using Domain.Habit;
 using Domain.Payment;
+using Domain.Penalty;
 using Domain.Protection;
 using Domain.Subscription;
 using Domain.User;
@@ -89,6 +91,12 @@ public static class DomainServices
       .AutoTrace<IVacationRepository>();
     s.AddScoped<IVacationService, VacationService>()
       .AutoTrace<IVacationService>();
+
+    // PENALTY
+    s.AddScoped<IPenaltyService, PenaltyService>()
+      .AutoTrace<IPenaltyService>();
+    s.AddScoped<IPenaltyRepository, PenaltyRepository>()
+      .AutoTrace<IPenaltyRepository>();
 
     // Allowance utilities
     s.AddScoped<IAllowanceService, AllowanceService>()

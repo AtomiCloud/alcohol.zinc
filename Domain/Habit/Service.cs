@@ -1,8 +1,10 @@
 using CSharp_Result;
 using Domain.Entitlement;
+using Domain.Penalty;
 using Domain.Protection;
 using Domain.Vacation;
 using Microsoft.Extensions.Logging;
+using NodaMoney;
 
 namespace Domain.Habit;
 
@@ -11,6 +13,7 @@ public class HabitService(
   IVacationRepository vacationRepo,
   IProtectionRepository protectionRepo,
   IEntitlementService entitlementService,
+  IPenaltyRepository penaltyRepo,
   ILogger<HabitService> logger
 ) : IHabitService
 {
@@ -105,8 +108,32 @@ public class HabitService(
     }
 
     // 5) Fail remaining scheduled executions (LEFT JOIN prevents double-insert)
-    var failed = await repo.CreateFailedExecutions(habitIds, date);
-    return (int)failed + totalProtected + totalFrozen;
+    var failedResult = await repo.CreateFailedExecutions(habitIds, date);
+    var failedRows = (List<FailedExecutionRow>)failedResult;
+
+    // 6) Enqueue a Pending penalty per failed row (idempotent via unique HabitExecutionId)
+    foreach (var row in failedRows)
+    {
+      // Exact cents math (mirror StreakRepository): cents * bps / 10000
+      var amountCents = (long)row.StakeCents * row.RatioBasisPoints / 10_000L;
+      if (amountCents <= 0) continue; // skip zero/negative penalties
+
+      var amount = new Money(amountCents / 100m, Currency.FromCode(row.StakeCurrency));
+      var record = new PenaltyRecord
+      {
+        HabitExecutionId = row.ExecutionId,
+        UserId = row.UserId,
+        CharityId = row.CharityId,
+        Amount = amount,
+        Status = PenaltyStatus.Pending,
+        PaymentIntentId = null,
+        Attempts = 0,
+        LastError = null
+      };
+      await penaltyRepo.EnqueuePending(record); // idempotent; no-op if execution already enqueued
+    }
+
+    return failedRows.Count + totalProtected + totalFrozen;
   }
 
   public Task<Result<HabitExecutionPrincipal>> CompleteHabit(string userId, Guid habitVersionId, string? notes)
@@ -157,7 +184,12 @@ public class HabitService(
     catch { return 0; }
 
     var localNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(nowUtc, DateTimeKind.Utc), tz);
-    // After-midnight window: [00:00, 00:15)
+    // After-midnight window: [00:00, 00:50). Deliberately wider than the 15-min
+    // timer interval so a tick is guaranteed to land in-window even if one is
+    // delayed/skipped. Overlapping passes within the window are safe: the daily
+    // job's only side effect is EnqueuePending, which is idempotent (no-op on the
+    // unique HabitExecutionId), so re-projecting already-Failed rows cannot
+    // double-enqueue or abort the batch.
     var inWindow = localNow.TimeOfDay >= TimeSpan.Zero && localNow.TimeOfDay < TimeSpan.FromMinutes(50);
     logger.LogInformation("Timezone: {tz}, in window: {inWindow}", tz, inWindow);
     if (!inWindow) return 0;

@@ -5,6 +5,7 @@ using App.Modules.Habit.Data;
 using App.Modules.HabitExecution.Data;
 using App.Modules.HabitVersion.Data;
 using App.Modules.Payment.Data;
+using App.Modules.Penalty.Data;
 using App.Modules.Protection.Data;
 using App.Modules.Users.Data;
 using App.Modules.Vacation.Data;
@@ -37,6 +38,9 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
   public DbSet<UserProtectionData> UserProtections { get; set; }
   public DbSet<FreezeAwardData> FreezeAwards { get; set; }
   public DbSet<FreezeConsumptionData> FreezeConsumptions { get; set; }
+  // Penalty
+  public DbSet<PenaltyData> Penalties { get; set; }
+  public DbSet<CharityBalanceData> CharityBalances { get; set; }
   // public DbSet<CompletionData> Completions { get; set; }
   // public DbSet<StatsData> Stats { get; set; }
 
@@ -128,6 +132,22 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
 
     var consume = modelBuilder.Entity<FreezeConsumptionData>();
     consume.HasIndex(x => new { x.UserId, x.Date }).IsUnique();
+
+    // Penalty
+    var penalty = modelBuilder.Entity<PenaltyData>();
+    penalty.HasIndex(x => x.HabitExecutionId).IsUnique();   // exactly-once per execution
+    penalty.HasIndex(x => new { x.Status, x.Attempts });    // drain query: GetPending
+    penalty.HasOne<CharityData>()
+           .WithMany()
+           .HasForeignKey(x => x.CharityId)
+           .OnDelete(DeleteBehavior.Cascade);
+
+    var charityBalance = modelBuilder.Entity<CharityBalanceData>();
+    charityBalance.HasIndex(x => x.CharityId).IsUnique();
+    charityBalance.HasOne<CharityData>()
+                  .WithMany()
+                  .HasForeignKey(x => x.CharityId)
+                  .OnDelete(DeleteBehavior.Cascade);
 
   }
 }

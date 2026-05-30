@@ -191,6 +191,41 @@ public class AirwallexClient(
       });
   }
 
+  public Task<Result<AirwallexPaymentIntentRes>> GetPaymentIntentAsync(string intentId)
+  {
+    return authenticator
+      .GetToken()
+      .ThenAwait(async token =>
+      {
+        var request = new HttpRequestMessage
+        {
+          Method = HttpMethod.Get,
+          RequestUri = new Uri($"api/v1/pa/payment_intents/{intentId}", UriKind.Relative),
+          Headers = { Authorization = new AuthenticationHeaderValue("Bearer", token) },
+        };
+
+        using var response = await HttpClient.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        try
+        {
+          response.EnsureSuccessStatusCode();
+        }
+        catch (HttpRequestException e)
+        {
+          logger.LogError(e, "Failed to get payment intent with Airwallex (HTTP Error), Response: {Body}", body);
+          return e;
+        }
+        catch (Exception e)
+        {
+          logger.LogError(e, "Failed to get payment intent with Airwallex");
+          throw;
+        }
+
+        return body.ToObj<AirwallexPaymentIntentRes>().ToResult();
+      });
+  }
+
   public Task<Result<AirwallexPaymentIntentRes>> ConfirmPaymentIntentAsync(string intentId, AirwallexConfirmPaymentIntentReq req)
   {
     return authenticator
