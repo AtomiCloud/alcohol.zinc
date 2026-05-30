@@ -7,6 +7,11 @@ namespace App.Modules.Payment.Data;
 
 public class AirwallexGateway(AirwallexClient client) : IPaymentGateway
 {
+  // Off-session MIT charges never redirect, but Airwallex's confirm schema still
+  // requires a syntactically valid return_url.
+  private const string ReturnUrl = "https://atomi.cloud";
+
+
   public async Task<Result<string?>> GetCustomerIdByMerchantIdAsync(string merchantCustomerId)
   {
     return await client
@@ -105,7 +110,10 @@ public class AirwallexGateway(AirwallexClient client) : IPaymentGateway
     {
       RequestId = Guid.NewGuid().ToString(),
       PaymentConsentId = paymentConsentId,
-      CustomerId = customerId
+      CustomerId = customerId,
+      ReturnUrl = ReturnUrl,
+      // TriggeredBy ("merchant") and PaymentMethodOptions (final_auth + auto_capture)
+      // use their MIT defaults so the off-session penalty charge actually captures.
     };
 
     return await client
