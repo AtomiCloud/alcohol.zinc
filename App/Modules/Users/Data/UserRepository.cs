@@ -184,6 +184,16 @@ public class UserRepository(MainDbContext db, ILogger<UserRepository> logger) : 
 
       if (habitIds.Any())
       {
+        // Delete freeze awards (the freeze-grant ledger is keyed by HabitId, not UserId)
+        var freezeAwards = await db.FreezeAwards
+          .Where(fa => habitIds.Contains(fa.HabitId))
+          .ToListAsync();
+        if (freezeAwards.Any())
+        {
+          logger.LogInformation("Deleting {Count} freeze awards for User '{Id}'", freezeAwards.Count, id);
+          db.FreezeAwards.RemoveRange(freezeAwards);
+        }
+
         // Get all habit versions for these habits
         var habitVersionIds = await db.HabitVersions
           .Where(hv => habitIds.Contains(hv.HabitId))
@@ -216,6 +226,39 @@ public class UserRepository(MainDbContext db, ILogger<UserRepository> logger) : 
         logger.LogInformation("Deleting {Count} habits for User '{Id}'", userHabits.Count, id);
         db.Habits.RemoveRange(userHabits);
       }
+
+      // Delete vacation periods
+      var vacationPeriods = await db.VacationPeriods
+        .Where(v => v.UserId == id)
+        .ToListAsync();
+      if (vacationPeriods.Any())
+      {
+        logger.LogInformation("Deleting {Count} vacation periods for User '{Id}'", vacationPeriods.Count, id);
+        db.VacationPeriods.RemoveRange(vacationPeriods);
+      }
+
+      // Delete protection freeze balance
+      var userProtections = await db.UserProtections
+        .Where(p => p.UserId == id)
+        .ToListAsync();
+      if (userProtections.Any())
+      {
+        logger.LogInformation("Deleting {Count} protection records for User '{Id}'", userProtections.Count, id);
+        db.UserProtections.RemoveRange(userProtections);
+      }
+
+      // Delete freeze consumptions (the freeze-spend ledger, keyed by UserId)
+      var freezeConsumptions = await db.FreezeConsumptions
+        .Where(fc => fc.UserId == id)
+        .ToListAsync();
+      if (freezeConsumptions.Any())
+      {
+        logger.LogInformation("Deleting {Count} freeze consumptions for User '{Id}'", freezeConsumptions.Count, id);
+        db.FreezeConsumptions.RemoveRange(freezeConsumptions);
+      }
+
+      // Anonymize-retain the donation/charge ledger (penalty charges + charity donations).
+      AnonymizePenaltyLedger(id);
 
       // Delete configuration if exists
       var configuration = await db.Configurations
@@ -254,5 +297,23 @@ public class UserRepository(MainDbContext db, ILogger<UserRepository> logger) : 
       logger.LogError(e, "Failed to delete all remnants for User with ID '{Id}'", id);
       throw;
     }
+  }
+
+  // ── Penalty anonymize-retain seam ─────────────────────────────────────────────────────────────
+  // The Penalty module (PenaltyData / CharityBalanceData) does NOT exist on `main` yet — it lives on
+  // the unmerged `Yek-Khan/habit-penalty-feature` branch — so there are no penalty rows to act on and
+  // this is intentionally a no-op for now (safe: zero penalty PII exists on this branch).
+  //
+  // TODO(account-deletion): when the Penalty module merges to main, ANONYMIZE-RETAIN here instead of
+  // hard-deleting. For every PenaltyData row where UserId == id:
+  //   - set UserId = a sentinel (e.g. "deleted-user") to DETACH the person from the financial record;
+  //   - KEEP AmountCents, Currency, CharityId, CreatedAt and PaymentIntentId (accounting/legal record);
+  //   - do NOT delete the row; CharityBalanceData holds no user PII and stays untouched.
+  // It must mutate tracked entities so the single SaveChangesAsync below (same transaction) persists it.
+  // A skipped unit test already asserts the expected behavior — un-skip it once the module exists.
+  private void AnonymizePenaltyLedger(string id)
+  {
+    logger.LogDebug(
+      "Penalty anonymize-retain seam for User '{Id}': no-op until the Penalty module merges to main", id);
   }
 }

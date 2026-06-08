@@ -21,6 +21,11 @@ public class AppOption
 
   [Required] public bool EnableSwagger { get; set; } = true;
 
+  // When true, self-service account deletion is rejected (409) while the user has an outstanding
+  // debt. Defaults to true (safe/prod default); override per-landscape via settings.{landscape}.yaml
+  // or the Atomi__App__BlockAccountDeletionOnDebt environment variable.
+  [Required] public bool BlockAccountDeletionOnDebt { get; set; } = true;
+
   [Required, MinLength(1)] public string DefaultCors { get; set; } = string.Empty;
 
   [Required, AllowedValues("Server", "Migration")]

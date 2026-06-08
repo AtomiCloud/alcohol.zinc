@@ -44,6 +44,8 @@ public class AtomiControllerBase(IAuthHelper h) : ControllerBase
       },
       NotFoundException nfe => this.Error(HttpStatusCode.NotFound,
         new EntityNotFound(nfe.Message, nfe.Type, nfe.RequestIdentifier)),
+      AccountDeletionBlockedException adb => this.Error(HttpStatusCode.Conflict,
+        new AccountDeletionBlocked(adb.TotalDebt, adb.Currency)),
       _ => throw new AggregateException("Unhandled Exception", e),
     };
   }

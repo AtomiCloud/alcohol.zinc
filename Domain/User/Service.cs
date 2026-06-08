@@ -1,9 +1,12 @@
 using CSharp_Result;
+using Domain.Exceptions;
+using Domain.Habit;
 
 namespace Domain.User;
 
 public class UserService(
   IUserRepository repo,
+  IStreakRepository streakRepo,
   ITransactionManager tm
 ) : IUserService
 {
@@ -45,5 +48,28 @@ public class UserService(
   public Task<Result<Unit?>> DeleteAllRemnants(string id)
   {
     return tm.Start(() => repo.DeleteAllRemnants(id));
+  }
+
+  public Task<Result<Unit?>> DeleteAccount(string id, bool blockOnDebt)
+  {
+    // Whole thing is one transaction: the debt gate runs BEFORE any destructive write, so a
+    // blocked deletion rolls back to a clean no-op. DeleteAllRemnants is idempotent (null when
+    // the user is already gone), which keeps a retry after a partial failure safe.
+    return tm.Start<Unit?>(() =>
+      GuardNoDebt(id, blockOnDebt)
+        .ThenAwait(_ => repo.DeleteAllRemnants(id)));
+  }
+
+  // Returns success when the gate is off or the user owes nothing; otherwise fails with
+  // AccountDeletionBlockedException carrying the outstanding amount (mapped to 409 by the App layer).
+  private Task<Result<Unit>> GuardNoDebt(string id, bool blockOnDebt)
+  {
+    if (!blockOnDebt) return new Unit().ToAsyncResult();
+    return streakRepo.GetOpenDebtsForUser(id)
+      .Then(debts => (Total: debts.Sum(d => d.Amount),
+        Currency: debts.FirstOrDefault()?.Currency ?? string.Empty), Errors.MapAll)
+      .Then<(decimal Total, string Currency), Unit>(d => d.Total > 0
+        ? new AccountDeletionBlockedException(d.Total, d.Currency)
+        : new Unit());
   }
 }
