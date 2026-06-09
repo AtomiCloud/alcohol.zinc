@@ -91,6 +91,46 @@ public class DeleteAccountTests
     result.Get().Should().BeNull("a missing user is treated as already-deleted, not a 404 error");
   }
 
+  [Fact]
+  public async Task OnBeforePurge_RunsAfterGate_ButBeforeAnyDataIsDeleted()
+  {
+    var repo = new FakeUserRepository();
+    var streak = new FakeStreakRepository();
+    var sut = Build(repo, streak);
+
+    var purgeCountWhenCallbackRan = -1;
+    var result = await sut.DeleteAccount("user-1", blockOnDebt: true, onBeforePurge: () =>
+    {
+      purgeCountWhenCallbackRan = repo.DeleteAllRemnantsCalls.Count;
+      return new Unit().ToAsyncResult();
+    });
+
+    result.IsSuccess().Should().BeTrue();
+    purgeCountWhenCallbackRan.Should().Be(0, "onBeforePurge must run before any data is deleted");
+    repo.DeleteAllRemnantsCalls.Should().ContainSingle("the purge still runs after the callback");
+  }
+
+  [Fact]
+  public async Task BlockedByDebt_DoesNotRunOnBeforePurge()
+  {
+    // The Airwallex revoke (onBeforePurge) must NOT fire when deletion is blocked by debt —
+    // otherwise we'd disable a paying user's payment method while refusing to delete the account.
+    var repo = new FakeUserRepository();
+    var streak = new FakeStreakRepository { OpenDebts = { FakeStreakRepository.Debt(5m) } };
+    var sut = Build(repo, streak);
+
+    var callbackRan = false;
+    var result = await sut.DeleteAccount("user-1", blockOnDebt: true, onBeforePurge: () =>
+    {
+      callbackRan = true;
+      return new Unit().ToAsyncResult();
+    });
+
+    result.IsSuccess().Should().BeFalse();
+    callbackRan.Should().BeFalse("provider cleanup must not run when the deletion is blocked");
+    repo.DeleteAllRemnantsCalls.Should().BeEmpty();
+  }
+
   [Fact(Skip = "Penalty module is not on main yet (lives on Yek-Khan/habit-penalty-feature). " +
               "Un-skip once it merges: deletion must ANONYMIZE-RETAIN penalty/charity-donation rows " +
               "(set UserId -> sentinel, keep amount/currency/charity/timestamp/PaymentIntentId), NOT delete them.")]

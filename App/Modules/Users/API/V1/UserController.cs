@@ -8,6 +8,7 @@ using App.StartUp.Services.Auth;
 using App.Utility;
 using Asp.Versioning;
 using CSharp_Result;
+using Domain.Payment;
 using Domain.User;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -27,6 +28,7 @@ public class UserController(
   UserSearchQueryValidator userSearchQueryValidator,
   ITokenDataExtractor tokenDataExtractor,
   IOptions<AppOption> appOption,
+  IPaymentService paymentService,
   IAuthHelper h
 ) : AtomiControllerBase(h)
 {
@@ -144,7 +146,14 @@ public class UserController(
     //     success). If Logto fails, the request errors but the next retry no-ops the DB and finishes
     //     the Logto purge — no orphaned, unrecoverable PII.
     var result = await this.GuardAsync(sub)
-      .ThenAwait(_ => service.DeleteAccount(sub!, appOption.Value.BlockAccountDeletionOnDebt))
+      .ThenAwait(_ => service.DeleteAccount(sub!, appOption.Value.BlockAccountDeletionOnDebt, async () =>
+      {
+        // Best-effort: revoke the stored Airwallex payment consent/mandate before the payment row
+        // is purged (runs only after the debt gate passes). A missing consent (most users) or a
+        // provider error must NOT block deletion, so we ignore the outcome and always succeed.
+        await paymentService.DisablePaymentConsentAsync(sub!);
+        return new Unit();
+      }))
       .Then(_ => new Unit(), Errors.MapAll)
       .DoAwait(DoType.MapErrors, _ => authManagement.DeleteUser(sub!));
 

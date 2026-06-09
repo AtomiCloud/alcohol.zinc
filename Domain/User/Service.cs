@@ -50,13 +50,16 @@ public class UserService(
     return tm.Start(() => repo.DeleteAllRemnants(id));
   }
 
-  public Task<Result<Unit?>> DeleteAccount(string id, bool blockOnDebt)
+  public Task<Result<Unit?>> DeleteAccount(string id, bool blockOnDebt, Func<Task<Result<Unit>>>? onBeforePurge = null)
   {
     // Whole thing is one transaction: the debt gate runs BEFORE any destructive write, so a
-    // blocked deletion rolls back to a clean no-op. DeleteAllRemnants is idempotent (null when
-    // the user is already gone), which keeps a retry after a partial failure safe.
+    // blocked deletion rolls back to a clean no-op. onBeforePurge (best-effort provider cleanup,
+    // e.g. Airwallex consent revocation) runs only AFTER the gate passes and BEFORE the purge, so
+    // a blocked deletion never touches the user's payment method. DeleteAllRemnants is idempotent
+    // (null when the user is already gone), which keeps a retry after a partial failure safe.
     return tm.Start<Unit?>(() =>
       GuardNoDebt(id, blockOnDebt)
+        .ThenAwait(_ => onBeforePurge?.Invoke() ?? new Unit().ToAsyncResult())
         .ThenAwait(_ => repo.DeleteAllRemnants(id)));
   }
 
