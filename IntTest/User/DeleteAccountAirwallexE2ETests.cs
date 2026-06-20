@@ -4,6 +4,7 @@ using System.Text.Json;
 using App.Modules.Habit.Data;
 using App.Modules.Payment.Airwallex;
 using App.Modules.Payment.Data;
+using App.Modules.System;
 using App.Modules.Users.Data;
 using App.StartUp.Database;
 using App.StartUp.Options;
@@ -104,7 +105,9 @@ public class DeleteAccountAirwallexE2ETests : IAsyncLifetime
     var userService = new UserService(
       userRepo,
       new StreakRepository(_db, NullLogger<StreakRepository>.Instance),
-      new ImmediateTransactionManager());
+      // The REAL TransactionManager (TransactionScope) — exercises the production transaction path,
+      // so a regression that put external work back inside the scope would surface here.
+      new TransactionManager(NullLogger<TransactionManager>.Instance));
 
     (await ConsentStatus(authenticator)).Should().Be("VERIFIED", "precondition: supply a VERIFIED throwaway consent");
 
@@ -158,10 +161,4 @@ internal sealed class SandboxAirwallexAuthenticator(HttpClient http, string clie
     var json = await res.Content.ReadFromJsonAsync<JsonElement>();
     return json.GetProperty("token").GetString()!;
   }
-}
-
-/// <summary>Runs the unit-of-work immediately (no TransactionScope — avoids Npgsql ambient-tx quirks).</summary>
-internal sealed class ImmediateTransactionManager : ITransactionManager
-{
-  public Task<Result<T>> Start<T>(Func<Task<Result<T>>> func) => func();
 }

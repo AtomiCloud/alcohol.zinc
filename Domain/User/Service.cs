@@ -52,15 +52,17 @@ public class UserService(
 
   public Task<Result<Unit?>> DeleteAccount(string id, bool blockOnDebt, Func<Task<Result<Unit>>>? onBeforePurge = null)
   {
-    // Whole thing is one transaction: the debt gate runs BEFORE any destructive write, so a
-    // blocked deletion rolls back to a clean no-op. onBeforePurge (best-effort provider cleanup,
-    // e.g. Airwallex consent revocation) runs only AFTER the gate passes and BEFORE the purge, so
-    // a blocked deletion never touches the user's payment method. DeleteAllRemnants is idempotent
-    // (null when the user is already gone), which keeps a retry after a partial failure safe.
-    return tm.Start<Unit?>(() =>
-      GuardNoDebt(id, blockOnDebt)
-        .ThenAwait(_ => onBeforePurge?.Invoke() ?? new Unit().ToAsyncResult())
-        .ThenAwait(_ => repo.DeleteAllRemnants(id)));
+    // Ordering: debt gate -> onBeforePurge -> purge. The gate (a read) and onBeforePurge run BEFORE
+    // and OUTSIDE the DB transaction; only the purge is wrapped in tm.Start. onBeforePurge is
+    // best-effort external provider cleanup (e.g. an Airwallex consent revoke that does an HTTP call
+    // AND its own DB write) — running it inside the purge's TransactionScope would hold DB locks
+    // across the HTTP round-trip and could force a multi-connection distributed-transaction promotion
+    // (which Npgsql does not support). The gate still runs before any destructive action, so a
+    // blocked deletion never touches the payment method. DeleteAllRemnants is idempotent (null when
+    // the user is already gone), keeping a retry after a partial failure safe.
+    return GuardNoDebt(id, blockOnDebt)
+      .ThenAwait(_ => onBeforePurge?.Invoke() ?? new Unit().ToAsyncResult())
+      .ThenAwait(_ => tm.Start(() => repo.DeleteAllRemnants(id)));
   }
 
   // Returns success when the gate is off or the user owes nothing; otherwise fails with

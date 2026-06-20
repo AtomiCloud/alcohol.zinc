@@ -164,10 +164,12 @@ public class UserController(
   public async Task<ActionResult> Delete(string id)
   {
     // DB-first, then Logto (mirrors DeleteMe's safe ordering): never leave DB PII orphaned behind a
-    // deleted Logto identity. Delete all DB remnants first; only once that commits do we clean up the
-    // Logto identity (best-effort — DeleteUser treats 404 as success and we don't fail the op on it).
+    // deleted Logto identity. Delete all DB remnants first; then clean up the Logto identity
+    // (best-effort — DeleteUser treats 404 as success and we don't fail the op on it). We attempt the
+    // Logto purge even when the DB row was already gone, so an orphaned Logto identity (DB deleted but
+    // Logto not) is still cleaned up by this endpoint.
     var dbResult = await service.DeleteAllRemnants(id);
-    if (dbResult.IsSuccess() && dbResult.Get() is not null)
+    if (dbResult.IsSuccess())
       await authManagement.DeleteUser(id);
 
     return this.ReturnUnitNullableResult(dbResult, new EntityNotFound(

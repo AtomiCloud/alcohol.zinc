@@ -5,10 +5,13 @@ using App.Modules.HabitExecution.Data;
 using App.Modules.HabitVersion.Data;
 using App.Modules.Payment.Data;
 using App.Modules.Protection.Data;
+using App.Modules.System;
 using App.Modules.Users.Data;
 using App.Modules.Vacation.Data;
 using App.StartUp.Database;
 using App.StartUp.Options;
+using CSharp_Result;
+using Domain.User;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -123,6 +126,35 @@ public class DeleteAllRemnantsIntegrationTests : IAsyncLifetime
     (await repo.DeleteAllRemnants("user-A")).Get().Should().NotBeNull("first delete removes the real user");
     (await repo.DeleteAllRemnants("user-A")).Get().Should().BeNull("a second delete of an absent user is an idempotent no-op");
     (await repo.DeleteAllRemnants("never-existed")).Get().Should().BeNull("deleting an unknown user is also a no-op");
+  }
+
+  [Fact]
+  public async Task DeleteAccount_RealTransactionManager_DbWritingCallback_DoesNotPromoteOrThrow()
+  {
+    // Regression guard for the bug where onBeforePurge (the Airwallex consent revoke, which does its
+    // own DB write) ran INSIDE the purge's TransactionScope: a second DB op + the purge's
+    // SaveChangesAsync in one scope can force an unsupported Npgsql distributed-transaction promotion.
+    // This uses the REAL TransactionManager and a DB-writing callback; it throws against the old code
+    // and passes only when onBeforePurge runs OUTSIDE the transaction.
+    if (!_enabled) return;
+
+    _db.Users.Add(new UserData { Id = "user-tx", Username = "u_tx", Email = "tx@test.local", Active = true });
+    await _db.SaveChangesAsync();
+
+    var service = new UserService(
+      new UserRepository(_db, NullLogger<UserRepository>.Instance),
+      new StreakRepository(_db, NullLogger<StreakRepository>.Instance),
+      new TransactionManager(NullLogger<TransactionManager>.Instance));
+
+    var result = await service.DeleteAccount("user-tx", blockOnDebt: false, onBeforePurge: async () =>
+    {
+      // Mirrors what PaymentService.DisablePaymentConsentAsync does: a real DB write.
+      await _db.Users.Where(u => u.Id == "user-tx").ExecuteUpdateAsync(s => s.SetProperty(u => u.Active, false));
+      return new Unit();
+    });
+
+    result.IsSuccess().Should().BeTrue("the real-transaction delete path must not throw");
+    (await _db.Users.CountAsync(u => u.Id == "user-tx")).Should().Be(0);
   }
 
   private async Task SeedFullUser(string id, Guid charityId)
