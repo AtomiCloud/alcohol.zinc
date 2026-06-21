@@ -27,6 +27,9 @@ App:
   Version: 1.0.0
   EnableSwagger: true
   GenerateConfig: false
+  # Reject self-service account deletion (409) while the user has outstanding debt.
+  # Applies to all landscapes unless overridden in settings.{landscape}.yaml.
+  BlockAccountDeletionOnDebt: true
 Swagger:
   Title: Lapras Alcohol Zinc API
   Description: 'Alcohol-Zinc: API for LazyTax'

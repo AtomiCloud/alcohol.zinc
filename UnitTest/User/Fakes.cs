@@ -26,7 +26,7 @@ public sealed class FakeUserRepository : IUserRepository
   public Exception? DeleteAllRemnantsThrows { get; set; }
 
   // Recorded calls
-  public readonly List<string> DeleteAllRemnantsCalls = new();
+  public readonly List<string> DeleteAllRemnantsCalls = [];
 
   public Task<Result<Unit?>> DeleteAllRemnants(string id)
   {
@@ -52,9 +52,9 @@ public sealed class FakeUserRepository : IUserRepository
 /// </summary>
 public sealed class FakeStreakRepository : IStreakRepository
 {
-  public List<HabitDebtItem> OpenDebts { get; set; } = new();
+  public List<HabitDebtItem> OpenDebts { get; set; } = [];
   public Exception? GetOpenDebtsThrows { get; set; }
-  public readonly List<string> GetOpenDebtsForUserCalls = new();
+  public readonly List<string> GetOpenDebtsForUserCalls = [];
 
   public Task<Result<List<HabitDebtItem>>> GetOpenDebtsForUser(string userId)
   {

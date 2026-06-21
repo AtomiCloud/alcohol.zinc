@@ -60,6 +60,7 @@
         "Version",
         "GenerateConfig",
         "EnableSwagger",
+        "BlockAccountDeletionOnDebt",
         "DefaultCors",
         "Mode"
       ],
@@ -89,6 +90,9 @@
           "type": "boolean"
         },
         "EnableSwagger": {
+          "type": "boolean"
+        },
+        "BlockAccountDeletionOnDebt": {
           "type": "boolean"
         },
         "DefaultCors": {
