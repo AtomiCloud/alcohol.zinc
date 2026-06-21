@@ -1,3 +1,23 @@
+## [1.20.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.19.0...v1.20.0) (2026-06-21)
+
+
+### ✨ Features ✨
+
+* revoke Airwallex consent on account deletion (best-effort) ([dcbf9a5](https://github.com/AtomiCloud/alcohol.zinc/commit/dcbf9a5acfb8ab34922d216cf0f02dec52ebd9a4))
+* self-service account deletion (DELETE /User/Me) ([eb80938](https://github.com/AtomiCloud/alcohol.zinc/commit/eb8093802944c627e8302f38cf5e690c248b140e))
+
+
+### 🐛 Bug Fixes 🐛
+
+* guarantee best-effort Airwallex revoke + report skipped int tests ([8e35c16](https://github.com/AtomiCloud/alcohol.zinc/commit/8e35c16ddf3926cf5d1267f57ddc81a8084d2808)), closes [#49](https://github.com/AtomiCloud/alcohol.zinc/issues/49)
+* run deletion provider-cleanup outside the DB transaction ([9d2d8b2](https://github.com/AtomiCloud/alcohol.zinc/commit/9d2d8b20d9e647d4d6897be6f7c3f67623e1526e))
+
+
+### 🧪 Tests 🧪
+
+* in-app E2E for Airwallex consent revoke on deletion ([29ab6db](https://github.com/AtomiCloud/alcohol.zinc/commit/29ab6db6b2eef2c3f25d3a24e5e5b06c69d736ac))
+* real-DB integration test for account-deletion purge ([a3cdbe0](https://github.com/AtomiCloud/alcohol.zinc/commit/a3cdbe018a2fac9e69abd974cf166f1b18cc276f))
+
 ## [1.19.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.18.0...v1.19.0) (2025-10-19)
 
 
