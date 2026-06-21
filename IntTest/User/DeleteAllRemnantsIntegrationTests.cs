@@ -63,10 +63,10 @@ public class DeleteAllRemnantsIntegrationTests : IAsyncLifetime
     await _db.DisposeAsync();
   }
 
-  [Fact]
+  [SkippableFact]
   public async Task DeleteAllRemnants_PurgesEveryUserTable_NoOrphans_AndLeavesOtherUserIntact()
   {
-    if (!_enabled) return; // skipped without a provisioned DB
+    Skip.IfNot(_enabled, "requires ZINC_DELETE_TEST_DB (a Postgres host)");
 
     // Shared, global charity catalog row — must survive deletion (it is not personal data).
     var charity = new CharityData { Name = "Test Charity" };
@@ -111,10 +111,10 @@ public class DeleteAllRemnantsIntegrationTests : IAsyncLifetime
     (await _db.Charities.CountAsync()).Should().Be(1);
   }
 
-  [Fact]
+  [SkippableFact]
   public async Task DeleteAllRemnants_IsIdempotent_SecondCallNoOps()
   {
-    if (!_enabled) return;
+    Skip.IfNot(_enabled, "requires ZINC_DELETE_TEST_DB (a Postgres host)");
 
     var charity = new CharityData { Name = "Test Charity" };
     _db.Charities.Add(charity);
@@ -128,7 +128,7 @@ public class DeleteAllRemnantsIntegrationTests : IAsyncLifetime
     (await repo.DeleteAllRemnants("never-existed")).Get().Should().BeNull("deleting an unknown user is also a no-op");
   }
 
-  [Fact]
+  [SkippableFact]
   public async Task DeleteAccount_RealTransactionManager_DbWritingCallback_DoesNotPromoteOrThrow()
   {
     // Regression guard for the bug where onBeforePurge (the Airwallex consent revoke, which does its
@@ -136,7 +136,7 @@ public class DeleteAllRemnantsIntegrationTests : IAsyncLifetime
     // SaveChangesAsync in one scope can force an unsupported Npgsql distributed-transaction promotion.
     // This uses the REAL TransactionManager and a DB-writing callback; it throws against the old code
     // and passes only when onBeforePurge runs OUTSIDE the transaction.
-    if (!_enabled) return;
+    Skip.IfNot(_enabled, "requires ZINC_DELETE_TEST_DB (a Postgres host)");
 
     _db.Users.Add(new UserData { Id = "user-tx", Username = "u_tx", Email = "tx@test.local", Active = true });
     await _db.SaveChangesAsync();

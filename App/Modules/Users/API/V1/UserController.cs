@@ -150,8 +150,11 @@ public class UserController(
       {
         // Best-effort: revoke the stored Airwallex payment consent/mandate before the payment row
         // is purged (runs only after the debt gate passes). A missing consent (most users) or a
-        // provider error must NOT block deletion, so we ignore the outcome and always succeed.
-        await paymentService.DisablePaymentConsentAsync(sub!);
+        // provider error must NOT block deletion. DisablePaymentConsentAsync can THROW on transient
+        // failures (e.g. an Airwallex timeout the gateway rethrows), so we swallow it here — the
+        // gateway already logs the error — and always resolve to success.
+        try { await paymentService.DisablePaymentConsentAsync(sub!); }
+        catch { /* best-effort — failure already logged downstream; never block deletion */ }
         return new Unit();
       }))
       .Then(_ => new Unit(), Errors.MapAll)

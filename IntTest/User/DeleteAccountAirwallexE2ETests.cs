@@ -73,10 +73,10 @@ public class DeleteAccountAirwallexE2ETests : IAsyncLifetime
     await _db.DisposeAsync();
   }
 
-  [Fact]
+  [SkippableFact]
   public async Task DeleteAccount_RevokesAirwallexConsentInSandbox_AndPurgesData()
   {
-    if (!_enabled) return; // skipped unless DB + Airwallex sandbox + a real consent are provided
+    Skip.IfNot(_enabled, "requires ZINC_DELETE_TEST_DB + Airwallex sandbox creds + a throwaway consent");
 
     // Seed the user + a PaymentCustomer pointing at the real sandbox consent.
     _db.Users.Add(new UserData { Id = "user-A", Username = "awx_e2e", Email = "awx_e2e@test.local", Active = true });
