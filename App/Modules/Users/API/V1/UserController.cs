@@ -2,14 +2,17 @@ using System.Net.Mime;
 using App.Error;
 using App.Error.V1;
 using App.Modules.Common;
+using App.StartUp.Options;
 using App.StartUp.Registry;
 using App.StartUp.Services.Auth;
 using App.Utility;
 using Asp.Versioning;
 using CSharp_Result;
+using Domain.Payment;
 using Domain.User;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace App.Modules.Users.API.V1;
 
@@ -24,6 +27,8 @@ public class UserController(
   UpdateUserReqValidator updateUserReqValidator,
   UserSearchQueryValidator userSearchQueryValidator,
   ITokenDataExtractor tokenDataExtractor,
+  IOptions<AppOption> appOption,
+  IPaymentService paymentService,
   IAuthHelper h
 ) : AtomiControllerBase(h)
 {
@@ -126,15 +131,49 @@ public class UserController(
       "User Not Found", typeof(UserPrincipal), id));
   }
 
+  [Authorize, HttpDelete("Me")]
+  public async Task<ActionResult> DeleteMe()
+  {
+    // Self-service account deletion: the user id is taken from the token (Sub), never a route
+    // param, so a caller can only ever delete THEIR OWN account.
+    var sub = this.Sub();
+
+    // DB-first, then Logto (safe partial-failure ordering):
+    //  1. DeleteAccount enforces the debt gate BEFORE any destructive write, then hard-deletes all
+    //     personal data + anonymize-retains the donation ledger in one transaction. It is idempotent
+    //     (a missing user is treated as success), so a retry after a partial failure re-runs cleanly.
+    //  2. Only after the DB side commits do we purge the Logto identity (DeleteUser treats 404 as
+    //     success). If Logto fails, the request errors but the next retry no-ops the DB and finishes
+    //     the Logto purge — no orphaned, unrecoverable PII.
+    var result = await this.GuardAsync(sub)
+      .ThenAwait(_ => service.DeleteAccount(sub!, appOption.Value.BlockAccountDeletionOnDebt, async () =>
+      {
+        // Best-effort: revoke the stored Airwallex payment consent/mandate before the payment row
+        // is purged (runs only after the debt gate passes). A missing consent (most users) or a
+        // provider error must NOT block deletion. DisablePaymentConsentAsync can THROW on transient
+        // failures (e.g. an Airwallex timeout the gateway rethrows), so we swallow it here — the
+        // gateway already logs the error — and always resolve to success.
+        try { await paymentService.DisablePaymentConsentAsync(sub!); }
+        catch { /* best-effort — failure already logged downstream; never block deletion */ }
+        return new Unit();
+      }))
+      .Then(_ => new Unit(), Errors.MapAll)
+      .DoAwait(DoType.MapErrors, _ => authManagement.DeleteUser(sub!));
+
+    return this.ReturnUnitResult(result);
+  }
+
   [Authorize(Policy = AuthPolicies.OnlyAdmin), HttpDelete("{id}")]
   public async Task<ActionResult> Delete(string id)
   {
-    // Delete user from Logto first (if exists - it handles 404 gracefully)
-    // We don't fail the operation if Logto deletion fails - we still want to clean up the database
-    await authManagement.DeleteUser(id);
-
-    // Delete all remnants from database (habits, habit versions, executions, configurations, payment customers, and user)
+    // DB-first, then Logto (mirrors DeleteMe's safe ordering): never leave DB PII orphaned behind a
+    // deleted Logto identity. Delete all DB remnants first; then clean up the Logto identity
+    // (best-effort — DeleteUser treats 404 as success and we don't fail the op on it). We attempt the
+    // Logto purge even when the DB row was already gone, so an orphaned Logto identity (DB deleted but
+    // Logto not) is still cleaned up by this endpoint.
     var dbResult = await service.DeleteAllRemnants(id);
+    if (dbResult.IsSuccess())
+      await authManagement.DeleteUser(id);
 
     return this.ReturnUnitNullableResult(dbResult, new EntityNotFound(
       "User Not Found", typeof(UserPrincipal), id));
