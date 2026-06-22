@@ -46,8 +46,8 @@ public class PenaltyService(
       var intent = chargeResult.Get();
       if (intent.Status == "SUCCEEDED")
         // Terminal success: charge + atomic charity credit. Propagate a
-        // persistence/transition failure (e.g. charity currency mismatch
-        // rollback) instead of silently counting it as success.
+        // persistence failure (the credit's transaction rolling back) instead
+        // of silently counting it as success.
         return await repo.MarkCharged(p.Id, intent.Id).Then(_ => 1, Errors.MapAll);
 
       // REQUIRES_PAYMENT_METHOD / REQUIRES_CUSTOMER_ACTION / REQUIRES_CAPTURE -> not yet settled, retry.

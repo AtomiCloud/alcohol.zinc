@@ -117,7 +117,7 @@ public class PenaltyIntegrationTests : IAsyncLifetime
   }
 
   private static PenaltyRecord PendingRecord(
-    Guid executionId, string userId, Guid charityId, long amountCents, string currency = "SGD")
+    Guid executionId, string userId, Guid charityId, long amountCents, string currency = "USD")
     => new()
     {
       HabitExecutionId = executionId,
@@ -251,7 +251,7 @@ public class PenaltyIntegrationTests : IAsyncLifetime
     // path — this targets the lost-update race, not the first-insert race.
     _db.CharityBalances.Add(new CharityBalanceData
     {
-      Id = Guid.NewGuid(), CharityId = charityId, Currency = "SGD", AccruedCents = 0
+      Id = Guid.NewGuid(), CharityId = charityId, Currency = "USD", AccruedCents = 0
     });
     await _db.SaveChangesAsync();
 
@@ -306,6 +306,30 @@ public class PenaltyIntegrationTests : IAsyncLifetime
     // Both penalties reached the terminal Charged state — neither stranded.
     var penalties = await verify.Penalties.AsNoTracking().Where(x => x.UserId == userId).ToListAsync();
     penalties.Should().HaveCount(2).And.OnlyContain(p => p.Status == (int)PenaltyStatus.Charged);
+  }
+
+  [Fact]
+  public async Task SameCurrencySameCharity_AccrueIntoOneRow()
+  {
+    if (_conn == null) { Assert.True(true, Skip); return; }
+
+    var (userId, charityId) = await SeedUserAndCharity();
+    var e1 = await SeedExecution(userId, charityId);
+    var e2 = await SeedExecution(userId, charityId);
+
+    // Two penalties, same charity, same currency (the common path — stakes are USD):
+    // the second must UPDATE the existing (charity, currency) row, not insert a new one.
+    (await Repo(_db).EnqueuePending(PendingRecord(e1, userId, charityId, 300))).Get().Should().BeTrue();
+    (await Repo(_db).EnqueuePending(PendingRecord(e2, userId, charityId, 200))).Get().Should().BeTrue();
+
+    var payment = StubPaymentService.Succeeds("pi_ok");
+    ((int)await Service(Repo(_db), payment).ProcessPending(batchSize: 100, maxAttempts: 5)).Should().Be(2);
+
+    await using var verify = NewContext(_conn!);
+    var balances = await verify.CharityBalances.AsNoTracking()
+      .Where(x => x.CharityId == charityId).ToListAsync();
+    balances.Should().ContainSingle(); // one row for the single (charity, USD) pair
+    balances[0].AccruedCents.Should().Be(500); // 300 + 200 summed in place
   }
 
   [Fact]
