@@ -7,7 +7,7 @@ public class CharityBalanceData
 {
   [Key]
   public Guid Id { get; set; }
-  public required Guid CharityId { get; set; } // UNIQUE — one balance row per charity
+  public required Guid CharityId { get; set; } // part of UNIQUE(CharityId, Currency) — one row per charity per currency
   public long AccruedCents { get; set; } = 0; // long: accumulates many penalties without overflow
   [MaxLength(8)]
   public required string Currency { get; set; }

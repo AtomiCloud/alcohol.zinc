@@ -143,7 +143,10 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
            .OnDelete(DeleteBehavior.Cascade);
 
     var charityBalance = modelBuilder.Entity<CharityBalanceData>();
-    charityBalance.HasIndex(x => x.CharityId).IsUnique();
+    // One accrual row per (charity, currency): a charity can legitimately receive
+    // penalties in multiple currencies, so the running total is kept per currency
+    // rather than forcing a single currency per charity.
+    charityBalance.HasIndex(x => new { x.CharityId, x.Currency }).IsUnique();
     charityBalance.HasOne(x => x.Charity)
                   .WithMany()
                   .HasForeignKey(x => x.CharityId)

@@ -116,13 +116,14 @@ public class PenaltyIntegrationTests : IAsyncLifetime
     return executionId;
   }
 
-  private static PenaltyRecord PendingRecord(Guid executionId, string userId, Guid charityId, long amountCents)
+  private static PenaltyRecord PendingRecord(
+    Guid executionId, string userId, Guid charityId, long amountCents, string currency = "SGD")
     => new()
     {
       HabitExecutionId = executionId,
       UserId = userId,
       CharityId = charityId,
-      Amount = new Money(amountCents / 100m, Currency.FromCode("SGD")),
+      Amount = new Money(amountCents / 100m, Currency.FromCode(currency)),
       Status = PenaltyStatus.Pending,
       PaymentIntentId = null,
       Attempts = 0,
@@ -275,6 +276,36 @@ public class PenaltyIntegrationTests : IAsyncLifetime
     await using var verify = NewContext(_conn!);
     var balance = await verify.CharityBalances.AsNoTracking().SingleAsync(x => x.CharityId == charityId);
     balance.AccruedCents.Should().Be(500); // 300 + 200, no lost update
+  }
+
+  [Fact]
+  public async Task DifferentCurrenciesSameCharity_AccrueIntoSeparateRows()
+  {
+    if (_conn == null) { Assert.True(true, Skip); return; }
+
+    var (userId, charityId) = await SeedUserAndCharity();
+    var eSgd = await SeedExecution(userId, charityId);
+    var eUsd = await SeedExecution(userId, charityId);
+
+    // Same charity, two currencies — the multi-currency scenario. With the
+    // (CharityId, Currency) key these accrue into two separate rows instead of the
+    // second one mismatching and stranding forever.
+    (await Repo(_db).EnqueuePending(PendingRecord(eSgd, userId, charityId, 500, "SGD"))).Get().Should().BeTrue();
+    (await Repo(_db).EnqueuePending(PendingRecord(eUsd, userId, charityId, 300, "USD"))).Get().Should().BeTrue();
+
+    var payment = StubPaymentService.Succeeds("pi_ok");
+    ((int)await Service(Repo(_db), payment).ProcessPending(batchSize: 100, maxAttempts: 5)).Should().Be(2);
+
+    await using var verify = NewContext(_conn!);
+    var balances = await verify.CharityBalances.AsNoTracking()
+      .Where(x => x.CharityId == charityId).ToListAsync();
+    balances.Should().HaveCount(2); // one row per (charity, currency)
+    balances.Single(b => b.Currency == "SGD").AccruedCents.Should().Be(500);
+    balances.Single(b => b.Currency == "USD").AccruedCents.Should().Be(300);
+
+    // Both penalties reached the terminal Charged state — neither stranded.
+    var penalties = await verify.Penalties.AsNoTracking().Where(x => x.UserId == userId).ToListAsync();
+    penalties.Should().HaveCount(2).And.OnlyContain(p => p.Status == (int)PenaltyStatus.Charged);
   }
 
   [Fact]

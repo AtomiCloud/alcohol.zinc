@@ -125,15 +125,20 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
       penalty.PaymentIntentId = paymentIntentId;
       penalty.UpdatedAt = DateTime.UtcNow;
 
-      // Upsert per-charity accrual ledger in place. Lock the balance row too: two
-      // DIFFERENT penalties for the SAME charity, drained concurrently across
-      // workers, would otherwise both read the same AccruedCents and lost-update
-      // one credit. FOR UPDATE serializes the read-modify-write. (When the row does
-      // not exist yet FOR UPDATE locks nothing; the unique index on CharityId is the
-      // backstop — a losing concurrent insert raises a unique violation, the tx
-      // rolls back, and the penalty is retried on the next drain.)
+      // Upsert the (charity, currency) accrual ledger in place. The balance is keyed
+      // by (CharityId, Currency) — a charity can receive penalties in multiple
+      // currencies, each accruing into its own row, so money is never summed across
+      // currencies. Lock the row too: two DIFFERENT penalties for the SAME (charity,
+      // currency), drained concurrently across workers, would otherwise both read the
+      // same AccruedCents and lost-update one credit. FOR UPDATE serializes the
+      // read-modify-write. (When the row does not exist yet FOR UPDATE locks nothing;
+      // the unique (CharityId, Currency) index is the backstop — a losing concurrent
+      // insert raises a unique violation, the tx rolls back, and the penalty is
+      // re-claimed by the stale-claim lease on a later drain.)
       var bal = (await db.CharityBalances
-          .FromSqlRaw(@"SELECT * FROM ""CharityBalances"" WHERE ""CharityId"" = {0} FOR UPDATE", penalty.CharityId)
+          .FromSqlRaw(
+            @"SELECT * FROM ""CharityBalances"" WHERE ""CharityId"" = {0} AND ""Currency"" = {1} FOR UPDATE",
+            penalty.CharityId, penalty.Currency)
           .ToListAsync())
         .FirstOrDefault();
       if (bal == null)
@@ -145,19 +150,6 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
           AccruedCents = 0
         };
         db.CharityBalances.Add(bal);
-      }
-      else if (bal.Currency != penalty.Currency)
-      {
-        // Money arithmetic is only valid within a single currency. Summing cents
-        // across currencies into one balance row would silently corrupt the ledger,
-        // so refuse rather than conflate. The penalty stays Pending (tx rolled back)
-        // and surfaces for operator attention instead of being mis-credited.
-        await tx.RollbackAsync();
-        logger.LogError(
-          "MarkCharged currency mismatch for CharityId={CharityId}: balance is {BalanceCurrency} but penalty {Id} is {PenaltyCurrency}",
-          penalty.CharityId, bal.Currency, id, penalty.Currency);
-        return new InvalidOperationException(
-          $"CharityBalance currency mismatch for CharityId={penalty.CharityId}: balance {bal.Currency} vs penalty {penalty.Currency}");
       }
       bal.AccruedCents += penalty.AmountCents;
       bal.UpdatedAt = DateTime.UtcNow;
