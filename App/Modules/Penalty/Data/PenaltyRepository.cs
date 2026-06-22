@@ -101,6 +101,16 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
         return new Unit();
       }
 
+      if (penalty.Status == (int)PenaltyStatus.Charged)
+      {
+        // Already charged. The stale-claim lease can hand an in-flight row to a
+        // second worker, so MarkCharged may run twice for ONE real (idempotent)
+        // charge. The credit below is NOT idempotent, so re-running it would
+        // over-accrue the charity ledger. Treat a repeat as a no-op.
+        await tx.RollbackAsync();
+        return new Unit();
+      }
+
       penalty.Status = (int)PenaltyStatus.Charged;
       penalty.PaymentIntentId = paymentIntentId;
       penalty.UpdatedAt = DateTime.UtcNow;

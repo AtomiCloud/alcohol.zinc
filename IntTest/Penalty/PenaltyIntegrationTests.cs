@@ -184,6 +184,36 @@ public class PenaltyIntegrationTests : IAsyncLifetime
   }
 
   [Fact]
+  public async Task MarkCharged_CalledTwice_CreditsCharityOnce()
+  {
+    if (_conn == null) { Assert.True(true, Skip); return; }
+
+    var (userId, charityId) = await SeedUserAndCharity();
+    var executionId = await SeedExecution(userId, charityId);
+    var repo = Repo(_db);
+
+    (await repo.EnqueuePending(PendingRecord(executionId, userId, charityId, 500))).Get().Should().BeTrue();
+
+    Guid id;
+    await using (var read = NewContext(_conn!))
+      id = (await read.Penalties.AsNoTracking().SingleAsync(x => x.UserId == userId)).Id;
+
+    // Stale-claim race: the lease can hand an in-flight Processing row to a second
+    // worker, so MarkCharged may run twice for ONE real (idempotent) charge. The
+    // charity credit must still apply exactly once, not double.
+    (await repo.MarkCharged(id, "pi_ok")).Get();
+    (await repo.MarkCharged(id, "pi_ok")).Get();
+
+    await using var verify = NewContext(_conn!);
+    var penalties = await verify.Penalties.AsNoTracking().Where(x => x.UserId == userId).ToListAsync();
+    penalties.Should().ContainSingle();
+    penalties[0].Status.Should().Be((int)PenaltyStatus.Charged);
+
+    var balance = await verify.CharityBalances.AsNoTracking().SingleAsync(x => x.CharityId == charityId);
+    balance.AccruedCents.Should().Be(500); // credited exactly once despite double MarkCharged
+  }
+
+  [Fact]
   public async Task NoConsent_MarksSkipped_NoCredit()
   {
     if (_conn == null) { Assert.True(true, Skip); return; }
