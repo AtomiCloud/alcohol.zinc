@@ -215,7 +215,7 @@ public class PenaltyIntegrationTests : IAsyncLifetime
   }
 
   [Fact]
-  public async Task MarkCharged_ConcurrentSamePenalty_CreditsCharityOnce()
+  public async Task MarkCharged_BlocksOnHeldRowLock_ThenCreditsOnce()
   {
     if (_conn == null) { Assert.True(true, Skip); return; }
 
@@ -227,14 +227,26 @@ public class PenaltyIntegrationTests : IAsyncLifetime
     await using (var read = NewContext(_conn!))
       id = (await read.Penalties.AsNoTracking().SingleAsync(x => x.UserId == userId)).Id;
 
-    // Two workers (separate DbContexts/connections) race to MarkCharged the SAME
-    // penalty — the stale-claim lease scenario. The FOR UPDATE row lock must
-    // serialize them so the charity ledger is credited exactly once. A plain
-    // (non-locking) read would let both pass the already-charged guard and double.
-    await using var c1 = NewContext(_conn!);
-    await using var c2 = NewContext(_conn!);
-    var results = await Task.WhenAll(Repo(c1).MarkCharged(id, "pi_ok"), Repo(c2).MarkCharged(id, "pi_ok"));
-    results.Should().OnlyContain(r => r.IsSuccess());
+    // Worker A holds the penalty row lock — the SAME lock MarkCharged acquires first
+    // (the stale-claim lease scenario). Real MarkCharged on a second connection
+    // (worker B) must BLOCK behind it. This distinguishes the fix from the bug: the
+    // pre-fix code used a plain non-locking SELECT which, under Postgres MVCC, would
+    // NOT wait on A's lock and would complete immediately — failing this assertion.
+    await using var ctxA = NewContext(_conn!);
+    await using var txA = await ctxA.Database.BeginTransactionAsync();
+    await ctxA.Penalties
+      .FromSqlRaw(@"SELECT * FROM ""Penalties"" WHERE ""Id"" = {0} FOR UPDATE", id)
+      .ToListAsync();
+
+    await using var ctxB = NewContext(_conn!);
+    var bTask = Repo(ctxB).MarkCharged(id, "pi_ok");
+    // MarkCharged normally finishes in ms; still pending after 1.5s means it is blocked.
+    var winner = await Task.WhenAny(bTask, Task.Delay(1500));
+    winner.Should().NotBeSameAs(bTask, "MarkCharged must block on the penalty row lock held by tx A");
+
+    // Release A; B unblocks, takes the row, and credits exactly once.
+    await txA.RollbackAsync();
+    (await bTask).IsSuccess().Should().BeTrue();
 
     await using var verify = NewContext(_conn!);
     var balance = await verify.CharityBalances.AsNoTracking().SingleAsync(x => x.CharityId == charityId);
@@ -242,40 +254,48 @@ public class PenaltyIntegrationTests : IAsyncLifetime
   }
 
   [Fact]
-  public async Task MarkCharged_ConcurrentDifferentPenaltiesSameCharity_SumsCorrectly()
+  public async Task MarkCharged_ConcurrentSameCharityCurrency_NeverLosesUpdate()
   {
     if (_conn == null) { Assert.True(true, Skip); return; }
 
+    const int reps = 50;
     var (userId, charityId) = await SeedUserAndCharity();
-    // Pre-create the balance row so both concurrent credits take the UPDATE (lock)
-    // path — this targets the lost-update race, not the first-insert race.
+    // Pre-create the (charity, USD) row so every credit takes the UPDATE (lock) path —
+    // isolates the lost-update race from the first-insert race.
     _db.CharityBalances.Add(new CharityBalanceData
     {
       Id = Guid.NewGuid(), CharityId = charityId, Currency = "USD", AccruedCents = 0
     });
     await _db.SaveChangesAsync();
 
-    var e1 = await SeedExecution(userId, charityId);
-    var e2 = await SeedExecution(userId, charityId);
-    (await Repo(_db).EnqueuePending(PendingRecord(e1, userId, charityId, 300))).Get().Should().BeTrue();
-    (await Repo(_db).EnqueuePending(PendingRecord(e2, userId, charityId, 200))).Get().Should().BeTrue();
+    // Fuzz the lost-update race: many rounds of two DIFFERENT penalties for the SAME
+    // (charity, currency) charged concurrently. Without the balance-row FOR UPDATE a
+    // round reads a stale AccruedCents and lost-updates one credit, so the running
+    // total ends below reps*(3+2). Task.WhenAll may not overlap on a single run;
+    // repeating makes a missing lock reliably flake red.
+    for (var i = 0; i < reps; i++)
+    {
+      var e1 = await SeedExecution(userId, charityId);
+      var e2 = await SeedExecution(userId, charityId);
+      (await Repo(_db).EnqueuePending(PendingRecord(e1, userId, charityId, 3))).Get().Should().BeTrue();
+      (await Repo(_db).EnqueuePending(PendingRecord(e2, userId, charityId, 2))).Get().Should().BeTrue();
 
-    List<Guid> ids;
-    await using (var read = NewContext(_conn!))
-      ids = (await read.Penalties.AsNoTracking().Where(x => x.UserId == userId).ToListAsync())
-        .Select(x => x.Id).ToList();
-    ids.Should().HaveCount(2);
+      Guid id1, id2;
+      await using (var read = NewContext(_conn!))
+      {
+        id1 = (await read.Penalties.AsNoTracking().SingleAsync(x => x.HabitExecutionId == e1)).Id;
+        id2 = (await read.Penalties.AsNoTracking().SingleAsync(x => x.HabitExecutionId == e2)).Id;
+      }
 
-    // Two DIFFERENT penalties, SAME charity, charged concurrently. Without the
-    // balance-row FOR UPDATE they'd both read AccruedCents=0 and lost-update to
-    // 300 or 200; the lock must serialize them to 500.
-    await using var c1 = NewContext(_conn!);
-    await using var c2 = NewContext(_conn!);
-    await Task.WhenAll(Repo(c1).MarkCharged(ids[0], "pi_1"), Repo(c2).MarkCharged(ids[1], "pi_2"));
+      await using var c1 = NewContext(_conn!);
+      await using var c2 = NewContext(_conn!);
+      (await Task.WhenAll(Repo(c1).MarkCharged(id1, "pi_1"), Repo(c2).MarkCharged(id2, "pi_2")))
+        .Should().OnlyContain(r => r.IsSuccess());
+    }
 
     await using var verify = NewContext(_conn!);
     var balance = await verify.CharityBalances.AsNoTracking().SingleAsync(x => x.CharityId == charityId);
-    balance.AccruedCents.Should().Be(500); // 300 + 200, no lost update
+    balance.AccruedCents.Should().Be(reps * 5L); // every credit landed; no lost update
   }
 
   [Fact]
