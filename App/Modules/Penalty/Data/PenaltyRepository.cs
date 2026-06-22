@@ -93,7 +93,18 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
       // Atomic: set Charged + intent id AND credit charity balance in ONE transaction.
       await using var tx = await db.Database.BeginTransactionAsync();
 
-      var penalty = await db.Penalties.Where(x => x.Id == id).FirstOrDefaultAsync();
+      // Lock the penalty row (SELECT ... FOR UPDATE) so two workers that each
+      // claimed it serialize here. The stale-claim lease can hand an in-flight row
+      // to a second worker; without the lock the already-charged check below is a
+      // TOCTOU hole — under READ COMMITTED both transactions read Status=Processing,
+      // both pass the check, both credit, and the ledger double-counts. With the
+      // lock the second waits for the first to commit, then sees Charged -> no-op.
+      // ToListAsync (not FirstOrDefaultAsync) so EF runs the raw SQL verbatim and
+      // does not wrap FOR UPDATE in an unsupported subquery.
+      var penalty = (await db.Penalties
+          .FromSqlRaw(@"SELECT * FROM ""Penalties"" WHERE ""Id"" = {0} FOR UPDATE", id)
+          .ToListAsync())
+        .FirstOrDefault();
       if (penalty == null)
       {
         // Idempotent no-op: nothing to charge.
@@ -103,9 +114,8 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
 
       if (penalty.Status == (int)PenaltyStatus.Charged)
       {
-        // Already charged. The stale-claim lease can hand an in-flight row to a
-        // second worker, so MarkCharged may run twice for ONE real (idempotent)
-        // charge. The credit below is NOT idempotent, so re-running it would
+        // Already charged (a concurrent or earlier MarkCharged won the row lock and
+        // committed). The credit below is not idempotent, so re-running it would
         // over-accrue the charity ledger. Treat a repeat as a no-op.
         await tx.RollbackAsync();
         return new Unit();
@@ -115,8 +125,17 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
       penalty.PaymentIntentId = paymentIntentId;
       penalty.UpdatedAt = DateTime.UtcNow;
 
-      // Upsert per-charity accrual ledger in place.
-      var bal = await db.CharityBalances.Where(x => x.CharityId == penalty.CharityId).FirstOrDefaultAsync();
+      // Upsert per-charity accrual ledger in place. Lock the balance row too: two
+      // DIFFERENT penalties for the SAME charity, drained concurrently across
+      // workers, would otherwise both read the same AccruedCents and lost-update
+      // one credit. FOR UPDATE serializes the read-modify-write. (When the row does
+      // not exist yet FOR UPDATE locks nothing; the unique index on CharityId is the
+      // backstop — a losing concurrent insert raises a unique violation, the tx
+      // rolls back, and the penalty is retried on the next drain.)
+      var bal = (await db.CharityBalances
+          .FromSqlRaw(@"SELECT * FROM ""CharityBalances"" WHERE ""CharityId"" = {0} FOR UPDATE", penalty.CharityId)
+          .ToListAsync())
+        .FirstOrDefault();
       if (bal == null)
       {
         bal = new CharityBalanceData
