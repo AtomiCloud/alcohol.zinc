@@ -108,7 +108,10 @@ public class AirwallexGateway(AirwallexClient client) : IPaymentGateway
   {
     var req = new AirwallexConfirmPaymentIntentReq
     {
-      RequestId = Guid.NewGuid().ToString(),
+      // Deterministic idempotency: derive request_id from the (stable) intent id so a
+      // retried/concurrent confirm of the SAME intent dedupes on Airwallex's side instead
+      // of minting a fresh id each time (which would let a repeat confirm slip through).
+      RequestId = $"confirm-{paymentIntentId}",
       PaymentConsentId = paymentConsentId,
       CustomerId = customerId,
       ReturnUrl = ReturnUrl,
