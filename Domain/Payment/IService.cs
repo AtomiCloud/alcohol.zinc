@@ -1,4 +1,5 @@
 using CSharp_Result;
+using NodaMoney;
 
 namespace Domain.Payment;
 
@@ -20,6 +21,17 @@ public interface IPaymentService
   // Payment intent operations
   Task<Result<PaymentIntentResult>> CreatePaymentIntentAsync(string userId, CreatePaymentIntentRequest request);
   Task<Result<PaymentIntentResult>> ConfirmPaymentIntentAsync(string userId, string intentId, ConfirmPaymentIntentRequest request);
+
+  // Merchant-initiated charge against the user's stored, verified consent.
+  // idempotencyKey: stable per-logical-charge key (e.g. penalty Id) so a retried/
+  //   concurrent attempt collapses onto the same Airwallex intent instead of a new one.
+  // existingIntentId: if a prior attempt already created an intent for this charge,
+  //   the gateway intent is retrieved and reconciled (already SUCCEEDED -> returned as-is;
+  //   confirmable -> confirmed) BEFORE any new intent is created, so settled money is
+  //   never charged twice.
+  Task<Result<PaymentIntentResult>> ChargeStoredConsentAsync(
+    string userId, Money amount, string description,
+    string? idempotencyKey = null, string? existingIntentId = null);
 
   // Query operations
   Task<Result<IEnumerable<PaymentCustomerPrincipal>>> SearchCustomers(PaymentCustomerSearch search);

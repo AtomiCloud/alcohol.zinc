@@ -15,5 +15,6 @@ public interface IPaymentGateway
 
   // Payment intent operations
   Task<Result<PaymentIntentResult>> CreatePaymentIntentAsync(CreatePaymentIntentRequest request);
+  Task<Result<PaymentIntentResult>> RetrievePaymentIntentAsync(string paymentIntentId);
   Task<Result<PaymentIntentResult>> ConfirmPaymentIntentAsync(string paymentIntentId, string paymentConsentId, string customerId);
 }

@@ -39,4 +39,37 @@ public record AirwallexConfirmPaymentIntentReq
 
   [JsonPropertyName("customer_id")]
   public required string CustomerId { get; init; }
+
+  // Off-session merchant-initiated transaction (MIT): the penalty is charged by a
+  // background job with no customer present. Without "merchant" Airwallex treats it
+  // as customer-initiated and can demand customer action (e.g. 3DS), which can never
+  // settle off-session. The scheduled/unscheduled distinction lives on the consent
+  // (next_triggered_by), not here.
+  [JsonPropertyName("triggered_by")]
+  public string TriggeredBy { get; init; } = "merchant";
+
+  // Airwallex requires a syntactically valid return_url even though an off-session
+  // MIT charge never redirects.
+  [JsonPropertyName("return_url")]
+  public required string ReturnUrl { get; init; }
+
+  [JsonPropertyName("payment_method_options")]
+  public AirwallexPaymentMethodOptions PaymentMethodOptions { get; init; } = new();
+}
+
+public record AirwallexPaymentMethodOptions
+{
+  [JsonPropertyName("card")]
+  public AirwallexCardOptions Card { get; init; } = new();
+}
+
+public record AirwallexCardOptions
+{
+  // final_auth + auto_capture: capture the funds immediately rather than only
+  // authorizing, so a successful confirm actually moves the money.
+  [JsonPropertyName("authorization_type")]
+  public string AuthorizationType { get; init; } = "final_auth";
+
+  [JsonPropertyName("auto_capture")]
+  public bool AutoCapture { get; init; } = true;
 }

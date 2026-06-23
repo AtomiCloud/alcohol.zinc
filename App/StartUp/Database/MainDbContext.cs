@@ -5,6 +5,7 @@ using App.Modules.Habit.Data;
 using App.Modules.HabitExecution.Data;
 using App.Modules.HabitVersion.Data;
 using App.Modules.Payment.Data;
+using App.Modules.Penalty.Data;
 using App.Modules.Protection.Data;
 using App.Modules.Users.Data;
 using App.Modules.Vacation.Data;
@@ -37,6 +38,9 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
   public DbSet<UserProtectionData> UserProtections { get; set; }
   public DbSet<FreezeAwardData> FreezeAwards { get; set; }
   public DbSet<FreezeConsumptionData> FreezeConsumptions { get; set; }
+  // Penalty
+  public DbSet<PenaltyData> Penalties { get; set; }
+  public DbSet<CharityBalanceData> CharityBalances { get; set; }
   // public DbSet<CompletionData> Completions { get; set; }
   // public DbSet<StatsData> Stats { get; set; }
 
@@ -52,7 +56,7 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
   {
     var user = modelBuilder.Entity<UserData>();
     user.HasIndex(x => x.Username).IsUnique();
-    
+
     // Configuration
     var configuration = modelBuilder.Entity<ConfigurationData>();
     configuration.HasIndex(c => c.UserId).IsUnique(); // One configuration per user
@@ -64,7 +68,7 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
     habit.HasMany(h => h.Versions)
          .WithOne(hv => hv.Habit)
          .HasForeignKey(hv => hv.HabitId);
-    
+
     // HabitVersion configuration (versioned details)
     var habitVersion = modelBuilder.Entity<HabitVersionData>();
     habitVersion.HasIndex(x => new { x.HabitId, x.Version }).IsUnique();  // Unique version per habit
@@ -74,7 +78,7 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
     habitVersion.HasMany(hv => hv.Executions)
                 .WithOne(he => he.HabitVersion)
                 .HasForeignKey(he => he.HabitVersionId);
-    
+
     // HabitExecution configuration
     var habitExecution = modelBuilder.Entity<HabitExecutionData>();
     habitExecution.HasIndex(x => new { x.HabitVersionId, x.Date }).IsUnique();  // One execution per version per day
@@ -128,6 +132,25 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
 
     var consume = modelBuilder.Entity<FreezeConsumptionData>();
     consume.HasIndex(x => new { x.UserId, x.Date }).IsUnique();
+
+    // Penalty
+    var penalty = modelBuilder.Entity<PenaltyData>();
+    penalty.HasIndex(x => x.HabitExecutionId).IsUnique();   // exactly-once per execution
+    penalty.HasIndex(x => new { x.Status, x.Attempts });    // drain query: GetPending
+    penalty.HasOne(x => x.Charity)
+           .WithMany()
+           .HasForeignKey(x => x.CharityId)
+           .OnDelete(DeleteBehavior.Cascade);
+
+    var charityBalance = modelBuilder.Entity<CharityBalanceData>();
+    // One accrual row per (charity, currency): a charity can legitimately receive
+    // penalties in multiple currencies, so the running total is kept per currency
+    // rather than forcing a single currency per charity.
+    charityBalance.HasIndex(x => new { x.CharityId, x.Currency }).IsUnique();
+    charityBalance.HasOne(x => x.Charity)
+                  .WithMany()
+                  .HasForeignKey(x => x.CharityId)
+                  .OnDelete(DeleteBehavior.Cascade);
 
   }
 }

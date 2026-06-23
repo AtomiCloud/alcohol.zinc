@@ -1,5 +1,6 @@
 using CSharp_Result;
 using Domain.Exceptions;
+using NodaMoney;
 
 namespace Domain.Payment;
 
@@ -123,12 +124,91 @@ public class PaymentService(
 
   public Task<Result<PaymentIntentResult>> CreatePaymentIntentAsync(string userId, CreatePaymentIntentRequest request)
   {
-    throw new NotImplementedException();
+    return repo.GetByUserId(userId)
+      .Then(customer =>
+        customer == null
+          ? new NotFoundException($"Payment customer not found for userId: {userId}", typeof(PaymentCustomer), userId)
+          : customer.ToResult()
+      )
+      .ThenAwait(customer =>
+        gateway.CreatePaymentIntentAsync(
+          request with { CustomerId = customer.Principal.Record.AirwallexCustomerId }));
   }
 
   public Task<Result<PaymentIntentResult>> ConfirmPaymentIntentAsync(string userId, string intentId, ConfirmPaymentIntentRequest request)
   {
-    throw new NotImplementedException();
+    return repo.GetByUserId(userId)
+      .Then(customer =>
+        customer == null
+          ? new NotFoundException($"Payment customer not found for userId: {userId}", typeof(PaymentCustomer), userId)
+          : customer.ToResult()
+      )
+      .ThenAwait(customer =>
+        gateway.ConfirmPaymentIntentAsync(
+          intentId,
+          request.PaymentConsentId,
+          customer.Principal.Record.AirwallexCustomerId));
+  }
+
+  // Merchant-initiated charge against the user's stored, verified consent.
+  // No-consent surfaces a typed NotFoundException(PaymentCustomer) so the Penalty
+  // drain can pattern-match it and mark the row Skipped.
+  //
+  // Exactly-once: when existingIntentId is supplied (a prior attempt that recorded
+  // an intent) the gateway intent is retrieved and reconciled FIRST — if it already
+  // SUCCEEDED it is returned without re-charging; otherwise that SAME intent is
+  // confirmed rather than minting a new one. New charges derive request_id /
+  // merchant_order_id from idempotencyKey so even a concurrent duplicate create
+  // collapses onto one Airwallex intent.
+  public Task<Result<PaymentIntentResult>> ChargeStoredConsentAsync(
+    string userId, Money amount, string description,
+    string? idempotencyKey = null, string? existingIntentId = null)
+  {
+    return repo.GetByUserId(userId)
+      .Then(customer =>
+        customer == null
+          ? new NotFoundException($"Payment customer not found for userId: {userId}", typeof(PaymentCustomer), userId)
+          : customer.ToResult()
+      )
+      .Then(customer =>
+        !customer.Principal.Record.HasPaymentConsent || string.IsNullOrEmpty(customer.Principal.Record.PaymentConsentId)
+          ? new NotFoundException($"No verified payment consent found for userId: {userId}", typeof(PaymentCustomer), userId)
+          : customer.ToResult()
+      )
+      .ThenAwait(customer =>
+      {
+        var r = customer.Principal.Record;
+
+        // Retry path: reconcile the previously-created intent instead of charging again.
+        if (!string.IsNullOrEmpty(existingIntentId))
+        {
+          return gateway.RetrievePaymentIntentAsync(existingIntentId!)
+            .ThenAwait(intent =>
+              intent.Status == "SUCCEEDED"
+                // Money already moved on the prior attempt: do not re-charge.
+                ? intent.ToAsyncResult()
+                // Not yet settled: confirm the SAME intent (no new intent id).
+                : gateway.ConfirmPaymentIntentAsync(intent.Id, r.PaymentConsentId!, r.AirwallexCustomerId));
+        }
+
+        var createReq = new CreatePaymentIntentRequest
+        {
+          UserId = userId,
+          CustomerId = r.AirwallexCustomerId,
+          Amount = amount.Amount,
+          Currency = amount.Currency.Code,
+          Description = description,
+          IdempotencyKey = idempotencyKey
+        };
+        return gateway.CreatePaymentIntentAsync(createReq)
+          .ThenAwait(intent =>
+            intent.Status == "SUCCEEDED"
+              // Idempotent replay (same IdempotencyKey -> Airwallex request_id)
+              // returned the already-settled intent from a prior attempt: do not
+              // re-confirm, which would otherwise move money a second time.
+              ? intent.ToAsyncResult()
+              : gateway.ConfirmPaymentIntentAsync(intent.Id, r.PaymentConsentId!, r.AirwallexCustomerId));
+      });
   }
 
   public Task<Result<PaymentCustomer?>> GetCustomerById(Guid id)

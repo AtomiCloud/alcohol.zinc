@@ -78,6 +78,13 @@ public record CreatePaymentIntentRequest
   public required decimal Amount { get; init; }
   public required string Currency { get; init; }
   public required string Description { get; init; }
+
+  // Optional deterministic idempotency key. When set, the gateway uses it as the
+  // Airwallex request_id AND merchant_order_id so a retried/concurrent attempt for
+  // the same logical charge collapses to the same intent instead of creating a new
+  // one. Penalty drains derive this from the penalty Id. Interactive callers leave
+  // it null and the gateway mints fresh GUIDs (legacy behaviour).
+  public string? IdempotencyKey { get; init; }
 }
 
 public record ConfirmPaymentIntentRequest
