@@ -1,3 +1,26 @@
+## [1.21.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.20.0...v1.21.0) (2026-06-23)
+
+
+### ✨ Features ✨
+
+* habit penalty processing with charity accrual ([bd864f4](https://github.com/AtomiCloud/alcohol.zinc/commit/bd864f45d77ec676935e5c6dac13df1fa7f01a79))
+* key charity balance by (charity, currency) for multi-currency ([d722797](https://github.com/AtomiCloud/alcohol.zinc/commit/d7227971ba7fca0c1d89fe0a4c501b0937178719))
+
+
+### 🐛 Bug Fixes 🐛
+
+* lock penalty + balance rows for race-safe charity accrual ([0e87663](https://github.com/AtomiCloud/alcohol.zinc/commit/0e87663af4dfda9a5aedb4d3e547a9f7560a42ee))
+* make Airwallex confirm request_id deterministic for idempotency ([e0afc13](https://github.com/AtomiCloud/alcohol.zinc/commit/e0afc133882c94fee9f9a5f969365dc9ee6b5fb0))
+* make MarkCharged idempotent to prevent double charity credit ([110d184](https://github.com/AtomiCloud/alcohol.zinc/commit/110d184a1bca45693e33cce8576db3cf23f0196d))
+* regenerate penalty migration + address review feedback ([c084854](https://github.com/AtomiCloud/alcohol.zinc/commit/c084854eeff890fe9b3f95d0c7480ee1c549ce04)), closes [#48](https://github.com/AtomiCloud/alcohol.zinc/issues/48)
+* send merchant-initiated fields on Airwallex confirm ([9445158](https://github.com/AtomiCloud/alcohol.zinc/commit/9445158758a4b8375c670c131f31cf4893de5fdd))
+
+
+### 🧪 Tests 🧪
+
+* default penalty tests to USD + cover same-currency accrual ([48c9b53](https://github.com/AtomiCloud/alcohol.zinc/commit/48c9b5370310aa07e73477aafa63645170d03910))
+* strengthen penalty concurrency tests (barrier + fuzz) ([adf56cb](https://github.com/AtomiCloud/alcohol.zinc/commit/adf56cb4205ef51b36d35e2d101311ff2335a89d))
+
 ## [1.20.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.19.0...v1.20.0) (2026-06-21)
 
 
