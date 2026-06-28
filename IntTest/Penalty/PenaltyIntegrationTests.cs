@@ -30,7 +30,7 @@ namespace IntTest.Penalty;
 // wherever Postgres is available (CI / the later build phase).
 public class PenaltyIntegrationTests : IAsyncLifetime
 {
-  private const string Skip = "PENALTY_TEST_DB not set; skipping DB-backed penalty integration test.";
+  private const string SkipReason = "PENALTY_TEST_DB not set; skipping DB-backed penalty integration test.";
   private readonly string? _conn = Environment.GetEnvironmentVariable("PENALTY_TEST_DB");
   private MainDbContext _db = null!;
 
@@ -130,10 +130,10 @@ public class PenaltyIntegrationTests : IAsyncLifetime
       LastError = null
     };
 
-  [Fact]
+  [SkippableFact]
   public async Task OneFailedExecution_ChargedOnce_CreditsCharity()
   {
-    if (_conn == null) { Assert.True(true, Skip); return; }
+    Skip.If(_conn == null, SkipReason);
 
     var (userId, charityId) = await SeedUserAndCharity();
     var executionId = await SeedExecution(userId, charityId);
@@ -157,10 +157,10 @@ public class PenaltyIntegrationTests : IAsyncLifetime
     balance.AccruedCents.Should().Be(500);
   }
 
-  [Fact]
+  [SkippableFact]
   public async Task SetIntentId_PersistsIntentId_LeavesStatusAndAttemptsUntouched()
   {
-    if (_conn == null) { Assert.True(true, Skip); return; }
+    Skip.If(_conn == null, SkipReason);
 
     var (userId, charityId) = await SeedUserAndCharity();
     var executionId = await SeedExecution(userId, charityId);
@@ -178,10 +178,10 @@ public class PenaltyIntegrationTests : IAsyncLifetime
     p.Attempts.Should().Be(0);                               // attempts untouched
   }
 
-  [Fact]
+  [SkippableFact]
   public async Task ConfirmFailThenRetry_ReusesPersistedIntent_NoRecreate_ThenCharges()
   {
-    if (_conn == null) { Assert.True(true, Skip); return; }
+    Skip.If(_conn == null, SkipReason);
 
     // Full round-trip regression for the duplicate_request fix:
     //   pass 1: create-ok + confirm-fail -> intent id persisted, row bumped & still Pending
@@ -220,10 +220,10 @@ public class PenaltyIntegrationTests : IAsyncLifetime
     bal.AccruedCents.Should().Be(100);
   }
 
-  [Fact]
+  [SkippableFact]
   public async Task RunningTwice_DoesNotDoubleCharge()
   {
-    if (_conn == null) { Assert.True(true, Skip); return; }
+    Skip.If(_conn == null, SkipReason);
 
     var (userId, charityId) = await SeedUserAndCharity();
     var executionId = await SeedExecution(userId, charityId);
@@ -247,10 +247,10 @@ public class PenaltyIntegrationTests : IAsyncLifetime
     balance.AccruedCents.Should().Be(500); // credited exactly once
   }
 
-  [Fact]
+  [SkippableFact]
   public async Task MarkCharged_CalledTwice_CreditsCharityOnce()
   {
-    if (_conn == null) { Assert.True(true, Skip); return; }
+    Skip.If(_conn == null, SkipReason);
 
     var (userId, charityId) = await SeedUserAndCharity();
     var executionId = await SeedExecution(userId, charityId);
@@ -277,10 +277,10 @@ public class PenaltyIntegrationTests : IAsyncLifetime
     balance.AccruedCents.Should().Be(500); // credited exactly once despite double MarkCharged
   }
 
-  [Fact]
+  [SkippableFact]
   public async Task MarkCharged_BlocksOnHeldRowLock_ThenCreditsOnce()
   {
-    if (_conn == null) { Assert.True(true, Skip); return; }
+    Skip.If(_conn == null, SkipReason);
 
     var (userId, charityId) = await SeedUserAndCharity();
     var executionId = await SeedExecution(userId, charityId);
@@ -316,10 +316,10 @@ public class PenaltyIntegrationTests : IAsyncLifetime
     balance.AccruedCents.Should().Be(500);
   }
 
-  [Fact]
+  [SkippableFact]
   public async Task MarkCharged_ConcurrentSameCharityCurrency_NeverLosesUpdate()
   {
-    if (_conn == null) { Assert.True(true, Skip); return; }
+    Skip.If(_conn == null, SkipReason);
 
     const int reps = 50;
     var (userId, charityId) = await SeedUserAndCharity();
@@ -361,10 +361,10 @@ public class PenaltyIntegrationTests : IAsyncLifetime
     balance.AccruedCents.Should().Be(reps * 5L); // every credit landed; no lost update
   }
 
-  [Fact]
+  [SkippableFact]
   public async Task DifferentCurrenciesSameCharity_AccrueIntoSeparateRows()
   {
-    if (_conn == null) { Assert.True(true, Skip); return; }
+    Skip.If(_conn == null, SkipReason);
 
     var (userId, charityId) = await SeedUserAndCharity();
     var eSgd = await SeedExecution(userId, charityId);
@@ -391,10 +391,10 @@ public class PenaltyIntegrationTests : IAsyncLifetime
     penalties.Should().HaveCount(2).And.OnlyContain(p => p.Status == (int)PenaltyStatus.Charged);
   }
 
-  [Fact]
+  [SkippableFact]
   public async Task SameCurrencySameCharity_AccrueIntoOneRow()
   {
-    if (_conn == null) { Assert.True(true, Skip); return; }
+    Skip.If(_conn == null, SkipReason);
 
     var (userId, charityId) = await SeedUserAndCharity();
     var e1 = await SeedExecution(userId, charityId);
@@ -415,10 +415,10 @@ public class PenaltyIntegrationTests : IAsyncLifetime
     balances[0].AccruedCents.Should().Be(500); // 300 + 200 summed in place
   }
 
-  [Fact]
+  [SkippableFact]
   public async Task NoConsent_MarksSkipped_NoCredit()
   {
-    if (_conn == null) { Assert.True(true, Skip); return; }
+    Skip.If(_conn == null, SkipReason);
 
     var (userId, charityId) = await SeedUserAndCharity();
     var executionId = await SeedExecution(userId, charityId);

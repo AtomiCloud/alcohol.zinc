@@ -84,8 +84,11 @@ public class ChargeStoredConsentTests
       onIntentCreated: _ => { hookCalled = true; return Task.CompletedTask; });
 
     res.IsSuccess().Should().BeTrue();
-    gateway.Calls.Should().NotContain("create"); // reused existing intent
-    hookCalled.Should().BeFalse();                // nothing new created -> hook not used
+    gateway.Calls.Should().NotContain("create");                  // reused existing intent
+    gateway.Calls.Should().ContainInOrder("retrieve", "confirm"); // retrieved THEN confirmed
+    res.Get().Status.Should().Be("SUCCEEDED");                    // returns the confirmed intent
+    res.Get().Id.Should().Be("int_old");
+    hookCalled.Should().BeFalse();                                // nothing new created -> hook not used
   }
 
   // --- Fakes ---
