@@ -2,6 +2,9 @@
 .task
 .pre-commit-config.yaml
 
+# Local DB inspection helper (read-only penalty/charity queries)
+scripts/check-penalties.sh
+
 ### VisualStudioCode template
 .vscode/*
 !.vscode/settings.json

@@ -185,6 +185,29 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
     }
   }
 
+  public async Task<Result<Unit>> SetIntentId(Guid id, string paymentIntentId)
+  {
+    try
+    {
+      // Fail loud if the row is gone: returning success here would let the caller proceed to
+      // confirm without a durable PaymentIntentId, reopening the duplicate_request hole.
+      var penalty = await db.Penalties.Where(x => x.Id == id).FirstOrDefaultAsync()
+        ?? throw new InvalidOperationException($"Cannot persist payment intent: penalty {id} was not found.");
+      // Persist only the intent id from a successful create; status/attempts stay as-is
+      // (the row remains claimed/Processing for the rest of this pass). This makes the
+      // intent id durable across a confirm failure so the retry reconciles it.
+      penalty.PaymentIntentId = paymentIntentId;
+      penalty.UpdatedAt = DateTime.UtcNow;
+      await db.SaveChangesAsync();
+      return new Unit();
+    }
+    catch (Exception e)
+    {
+      logger.LogError(e, "SetIntentId failed for Id={Id} PaymentIntentId={PaymentIntentId}", id, paymentIntentId);
+      throw;
+    }
+  }
+
   public async Task<Result<Unit>> Bump(Guid id, string error)
   {
     try

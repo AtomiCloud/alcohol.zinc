@@ -16,6 +16,7 @@ public sealed class FakePenaltyRepository(params PenaltyPrincipal[] pending) : I
   public List<PenaltyRecord> EnqueuedRecords { get; } = [];
   public List<(Guid Id, string PaymentIntentId)> MarkChargedCalls { get; } = [];
   public List<(Guid Id, string PaymentIntentId, int Attempts)> MarkPendingCalls { get; } = [];
+  public List<(Guid Id, string PaymentIntentId)> SetIntentIdCalls { get; } = [];
   public List<(Guid Id, string Error)> BumpCalls { get; } = [];
   public List<(Guid Id, string Error)> MarkFailedCalls { get; } = [];
   public List<Guid> MarkSkippedCalls { get; } = [];
@@ -44,6 +45,12 @@ public sealed class FakePenaltyRepository(params PenaltyPrincipal[] pending) : I
     return Task.FromResult<Result<Unit>>(new Unit());
   }
 
+  public Task<Result<Unit>> SetIntentId(Guid id, string paymentIntentId)
+  {
+    SetIntentIdCalls.Add((id, paymentIntentId));
+    return Task.FromResult<Result<Unit>>(new Unit());
+  }
+
   public Task<Result<Unit>> Bump(Guid id, string error)
   {
     BumpCalls.Add((id, error));
@@ -69,9 +76,15 @@ public sealed class FakePenaltyRepository(params PenaltyPrincipal[] pending) : I
 public sealed class FakePaymentService : IPaymentService
 {
   private readonly Func<string, Money, string, Result<PaymentIntentResult>> _charge;
+  // If set, ChargeStoredConsentAsync invokes onIntentCreated with this id before returning,
+  // simulating "create succeeded, then confirm did X".
+  private readonly string? _emitIntentId;
 
-  private FakePaymentService(Func<string, Money, string, Result<PaymentIntentResult>> charge)
-    => _charge = charge;
+  private FakePaymentService(Func<string, Money, string, Result<PaymentIntentResult>> charge, string? emitIntentId = null)
+  {
+    _charge = charge;
+    _emitIntentId = emitIntentId;
+  }
 
   public List<(string UserId, Money Amount, string Description)> ChargeCalls { get; } = [];
 
@@ -92,12 +105,20 @@ public sealed class FakePaymentService : IPaymentService
   public static FakePaymentService Fails(Exception ex)
     => new((_, _, _) => ex);
 
-  public Task<Result<PaymentIntentResult>> ChargeStoredConsentAsync(
+  // Simulates: create intent succeeded (emits intentId via onIntentCreated), then the
+  // subsequent confirm failed with ex. Mirrors the real bug scenario.
+  public static FakePaymentService CreatesThenFails(string intentId, Exception ex)
+    => new((_, _, _) => ex, emitIntentId: intentId);
+
+  public async Task<Result<PaymentIntentResult>> ChargeStoredConsentAsync(
     string userId, Money amount, string description,
-    string? idempotencyKey = null, string? existingIntentId = null)
+    string? idempotencyKey = null, string? existingIntentId = null,
+    Func<string, Task>? onIntentCreated = null)
   {
     ChargeCalls.Add((userId, amount, description));
-    return Task.FromResult(_charge(userId, amount, description));
+    if (_emitIntentId != null && onIntentCreated != null)
+      await onIntentCreated(_emitIntentId);
+    return _charge(userId, amount, description);
   }
 
   // --- Unused members of the contract (drain never invokes these) ---

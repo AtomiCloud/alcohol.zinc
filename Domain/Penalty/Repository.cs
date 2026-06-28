@@ -16,6 +16,11 @@ public interface IPenaltyRepository
   // Keep Pending, persist intent id from a requires-action create, set Attempts.
   Task<Result<Unit>> MarkPending(Guid id, string paymentIntentId, int attempts);
 
+  // Persist ONLY the PaymentIntentId from a freshly-created intent (no status/attempts
+  // change), so a subsequent confirm failure doesn't lose it and the retry reconciles
+  // this intent instead of creating a new one (which would reuse the request_id).
+  Task<Result<Unit>> SetIntentId(Guid id, string paymentIntentId);
+
   // Attempts += 1, set LastError, keep Pending (transient retry).
   Task<Result<Unit>> Bump(Guid id, string error);
 
