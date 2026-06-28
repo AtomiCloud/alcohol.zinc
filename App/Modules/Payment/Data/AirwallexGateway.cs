@@ -115,8 +115,9 @@ public class AirwallexGateway(AirwallexClient client) : IPaymentGateway
       PaymentConsentId = paymentConsentId,
       CustomerId = customerId,
       ReturnUrl = ReturnUrl,
-      // TriggeredBy ("merchant") and PaymentMethodOptions (final_auth + auto_capture)
-      // use their MIT defaults so the off-session penalty charge actually captures.
+      // No triggered_by: the consent's next_triggered_by ("merchant") designates the MIT.
+      // PaymentMethodOptions (final_auth + auto_capture) use their defaults so a successful
+      // confirm actually captures the off-session penalty charge.
     };
 
     return await client

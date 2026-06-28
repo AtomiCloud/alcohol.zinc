@@ -40,13 +40,10 @@ public record AirwallexConfirmPaymentIntentReq
   [JsonPropertyName("customer_id")]
   public required string CustomerId { get; init; }
 
-  // Off-session merchant-initiated transaction (MIT): the penalty is charged by a
-  // background job with no customer present. Without "merchant" Airwallex treats it
-  // as customer-initiated and can demand customer action (e.g. 3DS), which can never
-  // settle off-session. The scheduled/unscheduled distinction lives on the consent
-  // (next_triggered_by), not here.
-  [JsonPropertyName("triggered_by")]
-  public string TriggeredBy { get; init; } = "merchant";
+  // NOTE: do NOT send a top-level "triggered_by" here. For a consent-based MIT charge
+  // Airwallex derives merchant-vs-customer from the consent's next_triggered_by (set to
+  // "merchant" when the card was saved). Sending triggered_by makes Airwallex demand a
+  // payment_method.id and reject the confirm with a validation_error.
 
   // Airwallex requires a syntactically valid return_url even though an off-session
   // MIT charge never redirects.
