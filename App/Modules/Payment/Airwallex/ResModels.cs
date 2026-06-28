@@ -73,8 +73,13 @@ public record AirwallexPaymentIntentRes
   [JsonPropertyName("id")]
   public required string Id { get; init; }
 
+  // Conditionally present (and unused downstream): not echoed on every payment-intent
+  // response. e.g. an off-session MIT confirm omits client_secret. Keeping these required
+  // makes System.Text.Json throw when they're absent, crashing the charge after the money
+  // has already moved. Only id/amount/currency/status/customer_id/merchant_order_id are
+  // guaranteed + read, so the rest are optional.
   [JsonPropertyName("request_id")]
-  public required string RequestId { get; init; }
+  public string? RequestId { get; init; }
 
   [JsonPropertyName("amount")]
   public required decimal Amount { get; init; }
@@ -89,13 +94,13 @@ public record AirwallexPaymentIntentRes
   public required string Status { get; init; }
 
   [JsonPropertyName("captured_amount")]
-  public required decimal CapturedAmount { get; init; }
+  public decimal? CapturedAmount { get; init; }
 
   [JsonPropertyName("customer_id")]
   public required string CustomerId { get; init; }
 
   [JsonPropertyName("client_secret")]
-  public required string ClientSecret { get; init; }
+  public string? ClientSecret { get; init; }
 }
 
 public record AirwallexPaymentConsentRes
