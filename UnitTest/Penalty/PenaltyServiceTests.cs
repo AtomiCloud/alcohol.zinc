@@ -184,6 +184,25 @@ public class PenaltyServiceTests
   }
 
   [Fact]
+  public async Task ProcessOneThrows_IsolatedToThatPenalty_BatchKeepsDraining()
+  {
+    // Regression: an unhandled throw on one penalty (e.g. a malformed gateway response) must
+    // NOT abort the whole batch and strand the rest. The throwing row is recorded (bumped);
+    // the next row still charges.
+    var p1 = Pending();
+    var p2 = Pending();
+    var repo = new FakePenaltyRepository(p1, p2);
+    var payment = FakePaymentService.ThrowsOnFirstThenSucceeds(new Exception("malformed response"), "pi_ok");
+    var svc = Build(repo, payment);
+
+    var res = await svc.ProcessPending(batchSize: 10, maxAttempts: 5);
+
+    res.IsSuccess().Should().BeTrue();                                       // pass did NOT crash
+    repo.BumpCalls.Should().ContainSingle().Which.Id.Should().Be(p1.Id);     // p1 throw -> recorded
+    repo.MarkChargedCalls.Should().ContainSingle().Which.Should().Be((p2.Id, "pi_ok")); // p2 still charged
+  }
+
+  [Fact]
   public async Task ConfirmFailsAfterCreate_PersistsIntentId_SoRetryDoesNotRecreate()
   {
     // Regression (Airwallex duplicate_request): create-intent succeeded but the follow-up

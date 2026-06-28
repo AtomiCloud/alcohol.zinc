@@ -80,6 +80,11 @@ public sealed class FakePaymentService : IPaymentService
   // simulating "create succeeded, then confirm did X".
   private readonly string? _emitIntentId;
 
+  // If set, the FIRST ChargeStoredConsentAsync call throws (simulates an unhandled gateway
+  // exception, e.g. a malformed response); later calls run normally.
+  public Exception? ThrowOnFirstCall { get; init; }
+  private int _calls;
+
   private FakePaymentService(Func<string, Money, string, Result<PaymentIntentResult>> charge, string? emitIntentId = null)
   {
     _charge = charge;
@@ -110,12 +115,27 @@ public sealed class FakePaymentService : IPaymentService
   public static FakePaymentService CreatesThenFails(string intentId, Exception ex)
     => new((_, _, _) => ex, emitIntentId: intentId);
 
+  // First call throws (unhandled), subsequent calls succeed — to test batch isolation.
+  public static FakePaymentService ThrowsOnFirstThenSucceeds(Exception ex, string intentId)
+    => new((_, amount, _) => new PaymentIntentResult
+    {
+      Id = intentId,
+      Status = "SUCCEEDED",
+      Amount = amount.Amount,
+      Currency = amount.Currency.Code,
+      CustomerId = "cus_fake",
+      MerchantOrderId = "mo_fake"
+    })
+    { ThrowOnFirstCall = ex };
+
   public async Task<Result<PaymentIntentResult>> ChargeStoredConsentAsync(
     string userId, Money amount, string description,
     string? idempotencyKey = null, string? existingIntentId = null,
     Func<string, Task>? onIntentCreated = null)
   {
     ChargeCalls.Add((userId, amount, description));
+    if (ThrowOnFirstCall != null && _calls++ == 0)
+      throw ThrowOnFirstCall;
     if (_emitIntentId != null && onIntentCreated != null)
       await onIntentCreated(_emitIntentId);
     return _charge(userId, amount, description);

@@ -123,6 +123,7 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
 
       penalty.Status = (int)PenaltyStatus.Charged;
       penalty.PaymentIntentId = paymentIntentId;
+      penalty.LastError = null; // clear any stale failure from earlier retries now that it settled
       penalty.UpdatedAt = DateTime.UtcNow;
 
       // Upsert the (charity, currency) accrual ledger in place. The balance is keyed

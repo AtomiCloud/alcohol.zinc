@@ -19,7 +19,33 @@ public class PenaltyService(
         var results = new List<Result<int>>();
         foreach (var p in pending)
         {
-          results.Add(await this.ProcessOne(p, maxAttempts));
+          try
+          {
+            results.Add(await this.ProcessOne(p, maxAttempts));
+          }
+          catch (OperationCanceledException)
+          {
+            // A host shutdown / cancellation must abort the drain, not be turned into a Bump.
+            throw;
+          }
+          catch (Exception ex)
+          {
+            // Isolate per penalty: an unexpected throw (e.g. a malformed gateway response or
+            // an auth blip) must not abort the whole batch and strand the other claimed rows.
+            // Record it against this penalty and keep draining the rest.
+            logger.LogError(ex, "ProcessOne threw for penalty {Id}; isolating and continuing", p.Id);
+            try
+            {
+              await (p.Record.Attempts + 1 >= maxAttempts
+                ? repo.MarkFailed(p.Id, $"unhandled: {ex.Message}")
+                : repo.Bump(p.Id, $"unhandled: {ex.Message}"));
+            }
+            catch (Exception inner)
+            {
+              logger.LogError(inner, "Failed to record isolation for penalty {Id}", p.Id);
+            }
+            results.Add(0);
+          }
         }
 
         return results
