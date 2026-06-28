@@ -1,3 +1,10 @@
+## [1.22.3](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.22.2...v1.22.3) (2026-06-28)
+
+
+### 🐛 Bug Fixes 🐛
+
+* isolate per-penalty failures in the drain + clear LastError on charge ([8099b95](https://github.com/AtomiCloud/alcohol.zinc/commit/8099b95802c591c88a257a6a0ed914789ffd5d48))
+
 ## [1.22.2](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.22.1...v1.22.2) (2026-06-28)
 
 
