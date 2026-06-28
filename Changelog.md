@@ -1,3 +1,16 @@
+## [1.22.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.21.0...v1.22.0) (2026-06-28)
+
+
+### 🐛 Bug Fixes 🐛
+
+* address review — fail-loud SetIntentId, stronger tests, SkippableFact ([dfc636a](https://github.com/AtomiCloud/alcohol.zinc/commit/dfc636a738f3bc3081cece5ddd7321f553539259))
+* persist Airwallex intent id between create and confirm ([76175f7](https://github.com/AtomiCloud/alcohol.zinc/commit/76175f71970e5625b1e2d23a003d68041f1a29f6))
+
+
+### 🧪 Tests 🧪
+
+* add full round-trip integration test for intent-id reuse ([b7c1723](https://github.com/AtomiCloud/alcohol.zinc/commit/b7c1723287966a06e451a5b1f9d801ed33ded1fe))
+
 ## [1.21.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.20.0...v1.21.0) (2026-06-23)
 
 
