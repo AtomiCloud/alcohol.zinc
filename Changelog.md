@@ -1,3 +1,10 @@
+## [1.22.2](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.22.1...v1.22.2) (2026-06-28)
+
+
+### 🐛 Bug Fixes 🐛
+
+* make optional Airwallex payment-intent response fields nullable ([3ccf192](https://github.com/AtomiCloud/alcohol.zinc/commit/3ccf192cd819aa36f2983b2ccce08d6950e139e0)), closes [alcohol.zinc#51](https://github.com/AtomiCloud/alcohol.zinc/issues/51)
+
 ## [1.22.1](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.22.0...v1.22.1) (2026-06-28)
 
 
