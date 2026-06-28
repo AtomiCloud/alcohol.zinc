@@ -162,7 +162,8 @@ public class PaymentService(
   // collapses onto one Airwallex intent.
   public Task<Result<PaymentIntentResult>> ChargeStoredConsentAsync(
     string userId, Money amount, string description,
-    string? idempotencyKey = null, string? existingIntentId = null)
+    string? idempotencyKey = null, string? existingIntentId = null,
+    Func<string, Task>? onIntentCreated = null)
   {
     return repo.GetByUserId(userId)
       .Then(customer =>
@@ -201,13 +202,21 @@ public class PaymentService(
           IdempotencyKey = idempotencyKey
         };
         return gateway.CreatePaymentIntentAsync(createReq)
-          .ThenAwait(intent =>
-            intent.Status == "SUCCEEDED"
-              // Idempotent replay (same IdempotencyKey -> Airwallex request_id)
-              // returned the already-settled intent from a prior attempt: do not
-              // re-confirm, which would otherwise move money a second time.
-              ? intent.ToAsyncResult()
-              : gateway.ConfirmPaymentIntentAsync(intent.Id, r.PaymentConsentId!, r.AirwallexCustomerId));
+          .ThenAwait(async intent =>
+          {
+            // Idempotent replay (same IdempotencyKey -> Airwallex request_id) returned the
+            // already-settled intent from a prior attempt: do not re-confirm, which would
+            // otherwise move money a second time.
+            if (intent.Status == "SUCCEEDED") return intent.ToResult();
+
+            // Persist the freshly-created intent id BEFORE confirming, so a confirm failure
+            // (or crash) doesn't lose it. The next retry then reconciles THIS intent via
+            // existingIntentId instead of creating a new one, which would reuse the
+            // request_id and be rejected by Airwallex as duplicate_request.
+            if (onIntentCreated != null) await onIntentCreated(intent.Id);
+
+            return await gateway.ConfirmPaymentIntentAsync(intent.Id, r.PaymentConsentId!, r.AirwallexCustomerId);
+          });
       });
   }
 

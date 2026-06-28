@@ -158,6 +158,27 @@ public class PenaltyIntegrationTests : IAsyncLifetime
   }
 
   [Fact]
+  public async Task SetIntentId_PersistsIntentId_LeavesStatusAndAttemptsUntouched()
+  {
+    if (_conn == null) { Assert.True(true, Skip); return; }
+
+    var (userId, charityId) = await SeedUserAndCharity();
+    var executionId = await SeedExecution(userId, charityId);
+    var repo = Repo(_db);
+    (await repo.EnqueuePending(PendingRecord(executionId, userId, charityId, 100))).Get().Should().BeTrue();
+
+    var id = await _db.Penalties.AsNoTracking().Where(x => x.UserId == userId).Select(x => x.Id).SingleAsync();
+
+    (await repo.SetIntentId(id, "int_persisted")).Get();
+
+    await using var verify = NewContext(_conn!);
+    var p = await verify.Penalties.AsNoTracking().SingleAsync(x => x.UserId == userId);
+    p.PaymentIntentId.Should().Be("int_persisted");          // id written
+    p.Status.Should().Be((int)PenaltyStatus.Pending);        // status untouched
+    p.Attempts.Should().Be(0);                               // attempts untouched
+  }
+
+  [Fact]
   public async Task RunningTwice_DoesNotDoubleCharge()
   {
     if (_conn == null) { Assert.True(true, Skip); return; }

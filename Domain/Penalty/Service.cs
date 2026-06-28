@@ -39,7 +39,15 @@ public class PenaltyService(
       await payment.ChargeStoredConsentAsync(
         rec.UserId, rec.Amount, $"Habit penalty {rec.HabitExecutionId}",
         idempotencyKey: p.Id.ToString(),
-        existingIntentId: rec.PaymentIntentId);
+        existingIntentId: rec.PaymentIntentId,
+        // Persist the intent id the moment it's created (before confirm) so a confirm
+        // failure doesn't lose it; a persistence failure surfaces so the attempt retries.
+        onIntentCreated: async intentId =>
+        {
+          var saved = await repo.SetIntentId(p.Id, intentId);
+          if (!saved.IsSuccess())
+            throw saved.FailureOrDefault() ?? new Exception($"SetIntentId failed for penalty {p.Id}");
+        });
 
     if (chargeResult.IsSuccess())
     {

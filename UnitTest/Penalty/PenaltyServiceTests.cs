@@ -184,6 +184,29 @@ public class PenaltyServiceTests
   }
 
   [Fact]
+  public async Task ConfirmFailsAfterCreate_PersistsIntentId_SoRetryDoesNotRecreate()
+  {
+    // Regression (Airwallex duplicate_request): create-intent succeeded but the follow-up
+    // confirm failed. The intent id MUST be persisted (SetIntentId) so the next attempt
+    // reconciles the EXISTING intent instead of re-creating with the same request_id.
+    var pending = Pending(attempts: 0);
+    var repo = new FakePenaltyRepository(pending);
+    var payment = FakePaymentService.CreatesThenFails("pi_created", new Exception("confirm 400"));
+    var svc = Build(repo, payment);
+
+    var res = await svc.ProcessPending(batchSize: 10, maxAttempts: 5);
+
+    res.IsSuccess().Should().BeTrue();
+    // Intent id saved even though the overall charge failed.
+    repo.SetIntentIdCalls.Should().ContainSingle();
+    repo.SetIntentIdCalls[0].Should().Be((pending.Id, "pi_created"));
+    // Confirm failed transiently (below max) -> bumped for retry, not charged/failed.
+    repo.BumpCalls.Should().ContainSingle();
+    repo.MarkChargedCalls.Should().BeEmpty();
+    repo.MarkFailedCalls.Should().BeEmpty();
+  }
+
+  [Fact]
   public async Task TransientError_AtMax_MarksFailed()
   {
     var pending = Pending(attempts: 4); // attempts+1 == 5 >= 5

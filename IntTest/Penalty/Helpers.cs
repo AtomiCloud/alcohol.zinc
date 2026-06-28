@@ -35,7 +35,8 @@ public sealed class StubPaymentService(Func<string, Money, string, Result<Paymen
 
   public Task<Result<PaymentIntentResult>> ChargeStoredConsentAsync(
     string userId, Money amount, string description,
-    string? idempotencyKey = null, string? existingIntentId = null)
+    string? idempotencyKey = null, string? existingIntentId = null,
+    Func<string, Task>? onIntentCreated = null)
     => Task.FromResult(charge(userId, amount, description));
 
   public Task<Result<PaymentCustomerPrincipal>> CreateCustomerAsync(string userId)
