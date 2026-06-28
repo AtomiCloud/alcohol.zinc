@@ -179,6 +179,48 @@ public class PenaltyIntegrationTests : IAsyncLifetime
   }
 
   [Fact]
+  public async Task ConfirmFailThenRetry_ReusesPersistedIntent_NoRecreate_ThenCharges()
+  {
+    if (_conn == null) { Assert.True(true, Skip); return; }
+
+    // Full round-trip regression for the duplicate_request fix:
+    //   pass 1: create-ok + confirm-fail -> intent id persisted, row bumped & still Pending
+    //   pass 2: drain re-reads the persisted id and passes it as existingIntentId
+    //           (reconcile, NOT a re-create) -> charge succeeds, charity credited.
+    var (userId, charityId) = await SeedUserAndCharity();
+    var executionId = await SeedExecution(userId, charityId);
+    (await Repo(_db).EnqueuePending(PendingRecord(executionId, userId, charityId, 100))).Get().Should().BeTrue();
+
+    var payment = StubPaymentService.CreatesThenFailsThenSucceeds("int_rt");
+
+    // Pass 1: confirm fails -> not charged, but intent id must be persisted. Each pass uses
+    // its own DbContext, mirroring the per-drain scoped context in the hosted service.
+    await using (var c1 = NewContext(_conn!))
+      ((int)await Service(Repo(c1), payment).ProcessPending(batchSize: 100, maxAttempts: 5)).Should().Be(0);
+    await using (var v1 = NewContext(_conn!))
+    {
+      var p1 = await v1.Penalties.AsNoTracking().SingleAsync(x => x.UserId == userId);
+      p1.PaymentIntentId.Should().Be("int_rt");                 // survived the confirm failure
+      p1.Status.Should().Be((int)PenaltyStatus.Pending);
+      p1.Attempts.Should().Be(1);
+    }
+
+    // Pass 2: reconcile the SAME intent and settle.
+    await using (var c2 = NewContext(_conn!))
+      ((int)await Service(Repo(c2), payment).ProcessPending(batchSize: 100, maxAttempts: 5)).Should().Be(1);
+
+    // The retry passed the persisted id as existingIntentId (no re-create with a fresh id).
+    payment.ExistingIntentIdArgs.Should().Equal([null, "int_rt"]);
+
+    await using var v2 = NewContext(_conn!);
+    var p2 = await v2.Penalties.AsNoTracking().SingleAsync(x => x.UserId == userId);
+    p2.Status.Should().Be((int)PenaltyStatus.Charged);
+    p2.PaymentIntentId.Should().Be("int_rt");
+    var bal = await v2.CharityBalances.AsNoTracking().SingleAsync(x => x.CharityId == charityId);
+    bal.AccruedCents.Should().Be(100);
+  }
+
+  [Fact]
   public async Task RunningTwice_DoesNotDoubleCharge()
   {
     if (_conn == null) { Assert.True(true, Skip); return; }
