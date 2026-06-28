@@ -221,6 +221,28 @@ public class PenaltyIntegrationTests : IAsyncLifetime
   }
 
   [SkippableFact]
+  public async Task MarkCharged_ClearsStaleLastError()
+  {
+    Skip.If(_conn == null, SkipReason);
+
+    var (userId, charityId) = await SeedUserAndCharity();
+    var executionId = await SeedExecution(userId, charityId);
+    (await Repo(_db).EnqueuePending(PendingRecord(executionId, userId, charityId, 100))).Get().Should().BeTrue();
+    var id = await _db.Penalties.AsNoTracking().Where(x => x.UserId == userId).Select(x => x.Id).SingleAsync();
+
+    // A prior failed attempt left a stale error; a successful charge must clear it.
+    await using (var c1 = NewContext(_conn!))
+      (await Repo(c1).Bump(id, "stale 401 Unauthorized")).Get();
+    await using (var c2 = NewContext(_conn!))
+      (await Repo(c2).MarkCharged(id, "pi_ok")).Get();
+
+    await using var verify = NewContext(_conn!);
+    var p = await verify.Penalties.AsNoTracking().SingleAsync(x => x.UserId == userId);
+    p.Status.Should().Be((int)PenaltyStatus.Charged);
+    p.LastError.Should().BeNull(); // cleared on success
+  }
+
+  [SkippableFact]
   public async Task RunningTwice_DoesNotDoubleCharge()
   {
     Skip.If(_conn == null, SkipReason);
