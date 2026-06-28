@@ -1,3 +1,10 @@
+## [1.22.1](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.22.0...v1.22.1) (2026-06-28)
+
+
+### 🐛 Bug Fixes 🐛
+
+* drop triggered_by from Airwallex confirm for consent-based MIT ([4111ff3](https://github.com/AtomiCloud/alcohol.zinc/commit/4111ff36e3cfc2e2010cb624ba6e5de2e73d45a4)), closes [alcohol.zinc#50](https://github.com/AtomiCloud/alcohol.zinc/issues/50)
+
 ## [1.22.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.21.0...v1.22.0) (2026-06-28)
 
 
