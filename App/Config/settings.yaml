@@ -215,3 +215,12 @@ Payment:
     Id: 'your-airwallex-client-id'
     Key: 'your-airwallex-api-key'
     Webhook: 'webhook-secret-key'
+# Charity payout worker. Disabled by default; landscapes that point Pledge at a safe
+# environment (e.g. pichu -> api-staging.pledge.to) enable it via their override file.
+Disbursement:
+  Enabled: false
+  MinPayoutCents: 0
+  MaxGroupsPerRun: 100
+  DonorFirstName: LazyTax
+  DonorLastName: Donations
+  DonorEmail: donations@lazytax.club

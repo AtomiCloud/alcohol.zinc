@@ -21,6 +21,8 @@ public record PenaltyRecord
   public string? PaymentIntentId { get; init; }
   public required int Attempts { get; init; }
   public string? LastError { get; init; }
+  // Payout linkage: null while pending payout, set once a disbursement has claimed it.
+  public Guid? DisbursementId { get; init; }
 }
 
 public record PenaltyPrincipal

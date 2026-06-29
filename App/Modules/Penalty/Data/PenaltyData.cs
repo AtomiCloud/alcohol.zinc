@@ -22,6 +22,12 @@ public class PenaltyData
   public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
   public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
+  // Payout linkage: NULL while Status=Charged means "pending payout"; set means the
+  // penalty has been claimed by (and, once that disbursement Completes, paid out via)
+  // the referenced Disbursement. Stamped at claim time so concurrent/retried payout
+  // passes never re-select the same charged penalty and double-donate.
+  public Guid? DisbursementId { get; set; }
+
   // Foreign Keys & Navigation
   [MaxLength(128)]
   public required string UserId { get; set; }

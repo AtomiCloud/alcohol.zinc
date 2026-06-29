@@ -34,7 +34,8 @@ public static class PenaltyMapper
       Status = (PenaltyStatus)data.Status,
       PaymentIntentId = data.PaymentIntentId,
       Attempts = data.Attempts,
-      LastError = data.LastError
+      LastError = data.LastError,
+      DisbursementId = data.DisbursementId
     };
   }
 
