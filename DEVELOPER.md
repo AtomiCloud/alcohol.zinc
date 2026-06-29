@@ -182,6 +182,19 @@ So:
 - **Operational dependency (not code):** the Pledge Impact Hub payment method must exist and stay
   **funded** (e.g. topped up from Airwallex), or the monthly batch bill fails. This must be set up
   in **both** the Pledge sandbox (for testing) and production (before go-live).
+- **Fee optimization (the cadence that matters is Pledge's, not ours):** our donation-worker
+  schedule (how often `POST /v1/donations` runs) has **zero** fee impact — creating donations only
+  adds to Pledge's running tally; it does not trigger a charge. Fees are set by **Pledge's batch
+  billing** + the **payment method**:
+  - **5% API fee** and the **percentage processing fee** are proportional to the money, so they are
+    cadence-independent.
+  - The **flat/cap part** is charged **once per batch charge to our card** (Pledge batches monthly
+    on the 1st, or sooner at the **$50 threshold** — both editable in the Impact Hub): **card =
+    2.9% + $0.30**, **ACH = 0.8% capped at $5**.
+  - So to minimize fees: prefer **ACH** (capped at $5/batch) and a **larger batch threshold** (fewer
+    batches → the flat/cap applies fewer times). Trade-off: a higher threshold means money sits at
+    Pledge longer before the charity is paid. E.g. a $1,000 batch costs ≈ $29.30 on card vs **$5 on
+    ACH** (plus the 5% API fee either way).
 - **`Disbursement.Completed` means "donation recorded at Pledge", not "charity has been paid."**
   True settlement is Pledge's monthly batch. The reconciliation invariant
   (`sum(charged) == sum(disbursed) + outstanding`) tracks _recorded_ payouts, not settled cash.
