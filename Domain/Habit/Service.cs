@@ -73,16 +73,21 @@ public class HabitService(
 
     // 3) For users on vacation today, insert Vacation executions for their active versions
     var totalProtected = 0;
+    var usersOnVacation = new HashSet<string>();
     foreach (var kv in hvByUser)
     {
       var userId = kv.Key;
       var hvIds = kv.Value;
       var vacations = await vacationRepo.ListActiveForUserOnDate(userId, date);
       var vs = (List<VacationPrincipal>)vacations;
-      if (vs.Count > 0 && hvIds.Count > 0)
+      if (vs.Count > 0)
       {
-        var inserted = await repo.CreateExecutionsForVersionsWithStatus(hvIds, date, ExecutionStatus.Vacation);
-        totalProtected += (int)inserted;
+        usersOnVacation.Add(userId);
+        if (hvIds.Count > 0)
+        {
+          var inserted = await repo.CreateExecutionsForVersionsWithStatus(hvIds, date, ExecutionStatus.Vacation);
+          totalProtected += (int)inserted;
+        }
       }
     }
 
@@ -94,6 +99,11 @@ public class HabitService(
       var userId = kv.Key;
       var hvIds = kv.Value;
       if (hvIds.Count == 0) continue;
+
+      // Vacation already protects every scheduled habit for this user today, so a
+      // freeze would only no-op on the anti-join while still burning a credit.
+      // Skip the freeze branch entirely for vacationing users.
+      if (usersOnVacation.Contains(userId)) continue;
 
       var anyDone = await repo.HasAnyCompletedOrSkippedForVersions(hvIds, date);
       if (anyDone)
