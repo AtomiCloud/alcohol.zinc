@@ -169,9 +169,9 @@ Confirmed terms from the staging Impact Hub (Fees and Schedule, 2026-06-29):
 - **Fee model (decided):** **LazyTax takes 0% and does NOT absorb the fee.** We donate the full
   amount collected from the user; the donation platform (Pledge) deducts its API + processing fee,
   and the charity receives the remainder. So we donate as-collected — there is **no gross-up** and
-  **no LazyTax cut**. ⚠️ This means the public copy must NOT claim "100% goes to charity"; the
-  website Terms/marketing (separate repo) must be reworded to: _the money goes to the chosen charity
-  and the charity platform's processing fee — LazyTax keeps none of it._
+  **no LazyTax cut**. This is already reflected in the Terms of Service ("100% Donation Policy" /
+  "Fee Transparency": LazyTax donates 100% of penalties _after_ third-party Airwallex + Pledge fees,
+  which it does not control or profit from; LazyTax acts as donor, not the user's agent).
 
 So:
 
