@@ -68,11 +68,12 @@ public class DisbursementServiceTests
   }
 
   [Fact]
-  public async Task DonationFails_MarksFailed_ReleasesForRetry_NotCounted()
+  public async Task DefinitiveRejection_MarksFailed_ReleasesForRetry_NotCounted()
   {
+    // A 4xx provider rejection means nothing was created -> safe to release the penalties.
     var p = Payout();
     var repo = new FakeDisbursementRepository(claim: [p]);
-    var gw = FakeDonationGateway.Fails(new Exception("pledge 422"));
+    var gw = FakeDonationGateway.Rejects("rejected with status 422");
     var svc = Build(repo, gw);
 
     var res = await svc.ProcessPending(Donor, 0, 100);
@@ -84,9 +85,29 @@ public class DisbursementServiceTests
   }
 
   [Fact]
-  public async Task CreateThrows_IsolatedToThatGroup_BatchKeepsDonating()
+  public async Task AmbiguousFailure_StaysPending_DoesNotReleaseOrReDonate()
   {
-    // An unhandled throw on one group's donation must NOT abort the batch and strand the rest.
+    // The money-twice guard: a 5xx/timeout/unknown failure may mean the donation landed. The
+    // disbursement must stay Pending (no MarkFailed -> penalties NOT released) so reconciliation
+    // settles it; otherwise a re-claim would donate a second time.
+    var p = Payout();
+    var repo = new FakeDisbursementRepository(claim: [p]);
+    var gw = FakeDonationGateway.Fails(new Exception("503 gateway timeout"));
+    var svc = Build(repo, gw);
+
+    var res = await svc.ProcessPending(Donor, 0, 100);
+
+    ((int)res).Should().Be(0);
+    repo.MarkFailedCalls.Should().BeEmpty();    // penalties NOT released
+    repo.MarkDisbursedCalls.Should().BeEmpty(); // not completed either -> left Pending
+  }
+
+  [Fact]
+  public async Task CreateThrows_IsolatedToThatGroup_LeavesItPending_BatchKeepsDonating()
+  {
+    // An unhandled throw on one group must NOT abort the batch — and (money-twice guard) must NOT
+    // release that group's penalties (the throw can follow an accepted donation). It stays Pending;
+    // the next group still donates.
     var p1 = Payout();
     var p2 = Payout();
     var repo = new FakeDisbursementRepository(claim: [p1, p2]);
@@ -96,7 +117,7 @@ public class DisbursementServiceTests
     var res = await svc.ProcessPending(Donor, 0, 100);
 
     res.IsSuccess().Should().BeTrue();                                   // pass did not crash
-    repo.MarkFailedCalls.Should().ContainSingle().Which.Id.Should().Be(p1.DisbursementId);   // p1 throw -> released
+    repo.MarkFailedCalls.Should().BeEmpty();                             // p1 throw -> left Pending, NOT released
     repo.MarkDisbursedCalls.Should().ContainSingle().Which.Should().Be((p2.DisbursementId, "don_ok")); // p2 still donated
     ((int)res).Should().Be(1);
   }

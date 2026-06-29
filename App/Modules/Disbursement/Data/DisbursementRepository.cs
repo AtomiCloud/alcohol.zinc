@@ -52,14 +52,18 @@ public class DisbursementRepository(MainDbContext db, ILogger<DisbursementReposi
       }
 
       // Resolve each charity's Pledge org id (the donation target). A charity could in principle
-      // carry more than one pledge link; take the first deterministically.
+      // carry more than one pledge link. Pick deterministically (most recently synced, then a
+      // stable tie-break on the key) — an unordered First() could send the payout to a different
+      // organization across runs.
       var charityIds = groups.Select(g => g.CharityId).Distinct().ToList();
       var orgRows = await db.ExternalIds.AsNoTracking()
         .Where(e => e.Source == PledgeSource && charityIds.Contains(e.CharityId))
         .ToListAsync();
       var orgIdByCharity = orgRows
         .GroupBy(e => e.CharityId)
-        .ToDictionary(g => g.Key, g => g.First().ExternalKey);
+        .ToDictionary(
+          g => g.Key,
+          g => g.OrderByDescending(e => e.LastSyncedAt).ThenBy(e => e.ExternalKey, StringComparer.Ordinal).First().ExternalKey);
 
       var now = DateTime.UtcNow;
       var claimed = new List<ClaimedPayout>();

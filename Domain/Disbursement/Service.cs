@@ -42,17 +42,10 @@ public class DisbursementService(
           catch (Exception ex)
           {
             // Per-(charity,currency) isolation: one group's unexpected throw must not abort the
-            // batch and strand the rest. Record it against this disbursement (which releases its
-            // penalties for retry) and keep going.
-            logger.LogError(ex, "DonateOne threw for disbursement {Id}; isolating and continuing", c.DisbursementId);
-            try
-            {
-              await repo.MarkFailed(c.DisbursementId, $"unhandled: {ex.Message}");
-            }
-            catch (Exception inner)
-            {
-              logger.LogError(inner, "Failed to record isolation for disbursement {Id}", c.DisbursementId);
-            }
+            // batch and strand the rest. An unhandled throw is AMBIGUOUS (it can happen after the
+            // donation was accepted), so we must NOT release the penalties here — that would risk a
+            // double payout. Leave the disbursement Pending and let the reconcile pass settle it.
+            logger.LogError(ex, "DonateOne threw for disbursement {Id}; leaving Pending for reconciliation", c.DisbursementId);
             results.Add(0);
           }
         }
@@ -80,9 +73,19 @@ public class DisbursementService(
       return await repo.MarkDisbursed(c.DisbursementId, d.DonationId).Then(_ => 1, Errors.MapAll);
     }
 
-    // Donation failed: release the penalties so a later pass retries them in a fresh disbursement.
     var ex = donation.FailureOrDefault();
-    return await repo.MarkFailed(c.DisbursementId, ex?.Message ?? "donation error").Then(_ => 0, Errors.MapAll);
+
+    // DEFINITIVE rejection (4xx): the provider refused and created nothing, so it is safe to release
+    // the penalties for a fresh retry.
+    if (ex is DonationRejectedException)
+      return await repo.MarkFailed(c.DisbursementId, ex.Message).Then(_ => 0, Errors.MapAll);
+
+    // AMBIGUOUS failure (5xx, timeout, network, unparseable body): the donation MAY have landed.
+    // Releasing now would let the next pass re-claim and donate AGAIN (Pledge has no idempotency
+    // key) -> double payout. Leave the disbursement Pending so the reconcile pass settles it by
+    // looking the donation up by our reference before deciding to release.
+    logger.LogWarning(ex, "Donation for disbursement {Id} failed ambiguously; leaving Pending for reconciliation", c.DisbursementId);
+    return 0;
   }
 
   // For each in-flight (Pending) disbursement past the lease, ask the vendor whether the donation

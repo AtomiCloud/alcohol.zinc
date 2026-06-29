@@ -64,8 +64,13 @@ public sealed class FakeDonationGateway : IDonationGateway
     => new(_ => new DonationResult { DonationId = donationId, Status = "processed" },
            _ => (DonationResult?)null);
 
+  // Ambiguous failure (5xx/timeout/etc.): the donation may have landed -> caller must keep Pending.
   public static FakeDonationGateway Fails(Exception ex)
     => new(_ => ex, _ => (DonationResult?)null);
+
+  // Definitive provider rejection (4xx): no donation created -> caller releases for retry.
+  public static FakeDonationGateway Rejects(string reason = "rejected")
+    => new(_ => new DonationRejectedException(reason), _ => (DonationResult?)null);
 
   // First create throws, later creates succeed.
   public static FakeDonationGateway ThrowsOnFirstThenSucceeds(Exception ex, string donationId = "don_ok")
