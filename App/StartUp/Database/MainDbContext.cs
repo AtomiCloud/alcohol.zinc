@@ -1,6 +1,7 @@
 using App.Modules.Causes.Data;
 using App.Modules.Charities.Data;
 using App.Modules.Configurations.Data;
+using App.Modules.Disbursement.Data;
 using App.Modules.Habit.Data;
 using App.Modules.HabitExecution.Data;
 using App.Modules.HabitVersion.Data;
@@ -41,6 +42,8 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
   // Penalty
   public DbSet<PenaltyData> Penalties { get; set; }
   public DbSet<CharityBalanceData> CharityBalances { get; set; }
+  // Disbursement (charity payout)
+  public DbSet<DisbursementData> Disbursements { get; set; }
   // public DbSet<CompletionData> Completions { get; set; }
   // public DbSet<StatsData> Stats { get; set; }
 
@@ -137,10 +140,25 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
     var penalty = modelBuilder.Entity<PenaltyData>();
     penalty.HasIndex(x => x.HabitExecutionId).IsUnique();   // exactly-once per execution
     penalty.HasIndex(x => new { x.Status, x.Attempts });    // drain query: GetPending
+    penalty.HasIndex(x => new { x.Status, x.DisbursementId }); // pending-payout scan: Charged + DisbursementId IS NULL
     penalty.HasOne(x => x.Charity)
            .WithMany()
            .HasForeignKey(x => x.CharityId)
            .OnDelete(DeleteBehavior.Cascade);
+    // Payout linkage. SetNull (not Cascade): deleting a disbursement row must never
+    // delete the underlying penalties — it just releases them back to pending-payout.
+    penalty.HasOne<DisbursementData>()
+           .WithMany()
+           .HasForeignKey(x => x.DisbursementId)
+           .OnDelete(DeleteBehavior.SetNull);
+
+    // Disbursement (charity payout ledger): one row per (charity, currency) payout attempt.
+    var disbursement = modelBuilder.Entity<DisbursementData>();
+    disbursement.HasIndex(x => x.Status); // worker scan: pending/reconcilable disbursements
+    disbursement.HasOne(x => x.Charity)
+                .WithMany()
+                .HasForeignKey(x => x.CharityId)
+                .OnDelete(DeleteBehavior.Cascade);
 
     var charityBalance = modelBuilder.Entity<CharityBalanceData>();
     // One accrual row per (charity, currency): a charity can legitimately receive

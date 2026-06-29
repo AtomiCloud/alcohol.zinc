@@ -154,6 +154,7 @@ public class Server(
     // Background jobs
     services.AddHostedService<HabitDailyFailureHostedService>();
     services.AddHostedService<PenaltyProcessorHostedService>();
+    services.AddHostedService<App.Modules.Disbursement.DisbursementHostedService>();
 
     // Data seeding for development (lapras only)
     services.AddHostedService<DataSeederHostedService>();

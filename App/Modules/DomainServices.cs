@@ -20,6 +20,7 @@ using Domain.Allowance;
 using Domain.Cause;
 using Domain.Charity;
 using Domain.Configuration;
+using Domain.Disbursement;
 using Domain.Entitlement;
 using Domain.Habit;
 using Domain.Payment;
@@ -136,6 +137,14 @@ public static class DomainServices
       .AutoTrace<IPledgeClient>();
     s.AddScoped<IPledgeSyncService, PledgeSyncService>()
       .AutoTrace<IPledgeSyncService>();
+
+    // DISBURSEMENT (charity payout)
+    s.AddScoped<IDisbursementService, Domain.Disbursement.DisbursementService>()
+      .AutoTrace<IDisbursementService>();
+    s.AddScoped<IDisbursementRepository, App.Modules.Disbursement.Data.DisbursementRepository>()
+      .AutoTrace<IDisbursementRepository>();
+    s.AddScoped<IDonationGateway, App.Modules.Disbursement.PledgeDonationGateway>()
+      .AutoTrace<IDonationGateway>();
 
 
 

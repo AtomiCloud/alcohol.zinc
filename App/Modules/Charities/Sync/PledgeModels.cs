@@ -55,3 +55,35 @@ public record PledgeOrganizationsPage
   [JsonPropertyName("previous")] public string? PreviousUri { get; init; }
   [JsonPropertyName("results")] public PledgeOrganizationDto[] Data { get; init; } = [];
 }
+
+// POST /v1/donations request body. email/first_name/last_name/amount/organization_id are
+// required by Pledge; `amount` is a STRING DECIMAL in major units (e.g. "5.00"), and there is
+// no currency field (Pledge donations bill the account's payment method on file). `metadata` is
+// a free-form string — we store our Disbursement.Id there so a crashed attempt can be looked up.
+public record PledgeDonationReq
+{
+  [JsonPropertyName("email")] public required string Email { get; init; }
+  [JsonPropertyName("first_name")] public required string FirstName { get; init; }
+  [JsonPropertyName("last_name")] public required string LastName { get; init; }
+  [JsonPropertyName("amount")] public required string Amount { get; init; }
+  [JsonPropertyName("organization_id")] public required string OrganizationId { get; init; }
+  [JsonPropertyName("metadata")] public string? Metadata { get; init; }
+}
+
+public record PledgeDonationDto
+{
+  [JsonPropertyName("id")] public string Id { get; init; } = string.Empty;
+  [JsonPropertyName("status")] public string Status { get; init; } = string.Empty;
+  [JsonPropertyName("metadata")] public string? Metadata { get; init; }
+  [JsonPropertyName("amount")] public string Amount { get; init; } = string.Empty;
+  [JsonPropertyName("organization_id")] public string OrganizationId { get; init; } = string.Empty;
+}
+
+public record PledgeDonationsPage
+{
+  [JsonPropertyName("page")] public int Page { get; init; }
+  [JsonPropertyName("per")] public int PerPage { get; init; }
+  [JsonPropertyName("total_count")] public int TotalCount { get; init; }
+  [JsonPropertyName("next")] public string? NextUri { get; init; }
+  [JsonPropertyName("results")] public PledgeDonationDto[] Results { get; init; } = [];
+}

@@ -1,3 +1,22 @@
+## [1.23.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.22.3...v1.23.0) (2026-06-29)
+
+
+### 📜 Documentation 📜
+
+* note Pledge fee optimization (ACH + batch threshold) ([f653b7c](https://github.com/AtomiCloud/alcohol.zinc/commit/f653b7c3f2ec456df8594179c0eabc6e140bb927))
+* note Terms already cover the fee model (no reword needed) ([108fe86](https://github.com/AtomiCloud/alcohol.zinc/commit/108fe864cba762b82164bec48f02cf934c4ba8b7))
+
+
+### ✨ Features ✨
+
+* add admin endpoint to run a disbursement pass on demand ([0da0973](https://github.com/AtomiCloud/alcohol.zinc/commit/0da0973ada51cfbe3951907c132f02b8d491ff8d))
+* pay out accrued penalties to charities via Pledge donations ([00ad809](https://github.com/AtomiCloud/alcohol.zinc/commit/00ad80985c0879a9bed25025788733abd768508a))
+
+
+### 🐛 Bug Fixes 🐛
+
+* keep ambiguous donation failures Pending to prevent double payout ([88d9bd7](https://github.com/AtomiCloud/alcohol.zinc/commit/88d9bd7d868a4c7565503cef4c381ebdd47fa624)), closes [#58](https://github.com/AtomiCloud/alcohol.zinc/issues/58)
+
 ## [1.22.3](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.22.2...v1.22.3) (2026-06-28)
 
 
