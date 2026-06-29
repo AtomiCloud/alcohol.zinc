@@ -44,6 +44,11 @@ HttpClient:
     BaseAddress: 'https://api-demo.airwallex.com'
     Timeout: 60
 
+# Charity payout: pichu's Pledge points at staging (api-staging.pledge.to), so it is safe to
+# run the disbursement worker here. Donations hit the Pledge sandbox, never production.
+Disbursement:
+  Enabled: true
+
 Auth:
   Enabled: true
   Settings:

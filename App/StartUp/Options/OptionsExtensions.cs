@@ -132,6 +132,9 @@ public static class OptionsExtensions
     // Register Payment Options
     services.RegisterOption<PaymentOption>(PaymentOption.Key);
 
+    // Register Disbursement (charity payout) Options
+    services.RegisterOption<DisbursementOption>(DisbursementOption.Key);
+
     return services;
   }
 }

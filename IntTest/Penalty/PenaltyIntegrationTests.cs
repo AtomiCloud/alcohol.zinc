@@ -28,6 +28,7 @@ namespace IntTest.Penalty;
 // When it is not set the tests Skip rather than fail, so the suite is green in
 // environments without a database while still exercising the full L3->L6 path
 // wherever Postgres is available (CI / the later build phase).
+[Collection(DbIntegrationCollection.Name)]
 public class PenaltyIntegrationTests : IAsyncLifetime
 {
   private const string SkipReason = "PENALTY_TEST_DB not set; skipping DB-backed penalty integration test.";
