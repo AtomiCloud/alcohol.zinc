@@ -29,6 +29,13 @@ public record DisbursementPrincipal
   public required DateTime UpdatedAt { get; init; }
 }
 
+// Full aggregate (no-suffix tier). A disbursement has no extra related entities to compose yet,
+// so it wraps the principal — mirrors Cause/Penalty and lets the data mapper expose ToDomain().
+public record Disbursement
+{
+  public required DisbursementPrincipal Principal { get; init; }
+}
+
 // Legal donor of record recorded on every donation (LazyTax). Sourced from config.
 public record DonorIdentity
 {
