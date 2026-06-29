@@ -37,7 +37,7 @@ HttpClient:
   LOGTO:
     BaseAddress: https://api.lithium.alcohol.pichu.cluster.atomi.cloud
   PLEDGE:
-    BaseAddress: https://api.pledge.to
+    BaseAddress: https://api-staging.pledge.to
     Timeout: 60
     BearerAuth: supersecret
   AIRWALLEX:
