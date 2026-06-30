@@ -83,7 +83,7 @@ public class FreezeCapTests
     // Exactly one freeze day consumed for this (user, date).
     prot.TryConsumeFreezeCalls.Should().ContainSingle()
       .Which.Should().Be((UserId, Date));
-    prot.FreezeBalance.Should().Be(balance - 1, "exactly one freeze day is consumed per protected date");
+    prot.BalanceFor(UserId).Should().Be(balance - 1, "exactly one freeze day is consumed per protected date");
     prot.ConsumedDates.Should().Contain((UserId, Date));
 
     // A Frozen execution row was created for the scheduled version.
@@ -110,13 +110,13 @@ public class FreezeCapTests
     var svc = Build(repo, vac, prot, penalty);
 
     await svc.MarkDailyFailures([habitId], Date);
-    prot.FreezeBalance.Should().Be(0);
+    prot.BalanceFor(UserId).Should().Be(0);
 
     // Re-running the same date must not re-charge the pool (real repo is
     // idempotent per (user,date) via the consumption ledger).
     await svc.MarkDailyFailures([habitId], Date);
 
-    prot.FreezeBalance.Should().Be(0, "a date already frozen must not consume a second freeze day");
+    prot.BalanceFor(UserId).Should().Be(0, "a date already frozen must not consume a second freeze day");
     prot.TryConsumeFreezeCalls.Should().HaveCount(2);
     penalty.EnqueuedRecords.Should().BeEmpty();
   }
@@ -142,7 +142,7 @@ public class FreezeCapTests
 
     // TryConsumeFreeze was attempted but returned false => no decrement, no freeze row.
     prot.TryConsumeFreezeCalls.Should().ContainSingle();
-    prot.FreezeBalance.Should().Be(0);
+    prot.BalanceFor(UserId).Should().Be(0);
     prot.ConsumedDates.Should().BeEmpty();
     repo.CreateExecutionsForVersionsWithStatusCalls
       .Where(c => c.Status == ExecutionStatus.Freeze)
@@ -161,7 +161,7 @@ public class FreezeCapTests
     var (repo, habitId, hvId) = SeedScheduledMiss(log);
     // Model a completed/skipped day: short-circuits the freeze branch AND
     // occupies the slot so the fail step skips it.
-    repo.CompletedOrSkipped.Add(hvId);
+    repo.CompletedOrSkipped.Add((hvId, Date));
     repo.ExistingExecutions.Add((hvId, Date));
     var vac = new FakeVacationRepository();
     var prot = new FakeProtectionRepository(freezeBalance: 5);
@@ -172,7 +172,7 @@ public class FreezeCapTests
 
     ((int)res).Should().Be(0);
     prot.TryConsumeFreezeCalls.Should().BeEmpty("a completed/skipped day must never spend a freeze");
-    prot.FreezeBalance.Should().Be(5);
+    prot.BalanceFor(UserId).Should().Be(5);
     penalty.EnqueuedRecords.Should().BeEmpty();
   }
 
@@ -213,7 +213,7 @@ public class FreezeCapTests
     // Pool covers exactly `balance` distinct dates; the extra date must fail.
     frozenDays.Should().Be(balance);
     failedDays.Should().Be(attempts - balance);
-    prot.FreezeBalance.Should().Be(0);
+    prot.BalanceFor(UserId).Should().Be(0);
     // One penalty per failed (excess) date.
     penalty.EnqueuedRecords.Should().HaveCount(attempts - balance);
   }
@@ -234,15 +234,15 @@ public class FreezeCapTests
     // Award is cap-blind...
     var inc = await prot.IncrementFreeze(UserId, award);
     inc.IsSuccess().Should().BeTrue();
-    prot.FreezeBalance.Should().Be(start + award, "IncrementFreeze must be cap-blind");
+    prot.BalanceFor(UserId).Should().Be(start + award, "IncrementFreeze must be cap-blind");
 
     // ...then ClampFreezeToCap enforces the ceiling.
     var clamp = await prot.ClampFreezeToCap(UserId, cap);
     clamp.IsSuccess().Should().BeTrue();
 
     var expected = Math.Min(start + award, cap);
-    prot.FreezeBalance.Should().Be(expected);
-    prot.FreezeBalance.Should().BeLessThanOrEqualTo(cap, "the freeze pool must never exceed the cap after clamping");
+    prot.BalanceFor(UserId).Should().Be(expected);
+    prot.BalanceFor(UserId).Should().BeLessThanOrEqualTo(cap, "the freeze pool must never exceed the cap after clamping");
 
     prot.IncrementFreezeCalls.Should().ContainSingle().Which.Should().Be((UserId, award));
     prot.ClampFreezeToCapCalls.Should().ContainSingle().Which.Should().Be((UserId, cap));
@@ -257,7 +257,7 @@ public class FreezeCapTests
 
     await prot.ClampFreezeToCap(UserId, cap: 3);
 
-    prot.FreezeBalance.Should().Be(3);
+    prot.BalanceFor(UserId).Should().Be(3);
   }
 
   // ---------------------------------------------------------------------------

@@ -98,7 +98,7 @@ public class MarkDailyFailuresTests
     var date = new DateOnly(2026, 1, 1);
 
     // model a completed/skipped row: short-circuit freeze AND occupy the slot.
-    h.Repo.CompletedOrSkipped.Add(hvId);
+    h.Repo.CompletedOrSkipped.Add((hvId, date));
     h.Repo.ExistingExecutions.Add((hvId, date));
     // A seed exists, but the anti-join must exclude it.
     h.Repo.FailedRowSeeds[hvId] = new FailedRowSeed { UserId = UserId };
@@ -110,7 +110,7 @@ public class MarkDailyFailuresTests
     h.Penalty.EnqueuedRecords.Should().BeEmpty();
     // anyDone short-circuits before the freeze branch.
     h.Prot.TryConsumeFreezeCalls.Should().BeEmpty();
-    h.Prot.FreezeBalance.Should().Be(5); // untouched
+    h.Prot.BalanceFor(UserId).Should().Be(5); // untouched
   }
 
   // ---------------------------------------------------------------------------
@@ -152,7 +152,7 @@ public class MarkDailyFailuresTests
     ((int)res).Should().Be(1); // 1 freeze row inserted, 0 failed
 
     h.Prot.TryConsumeFreezeCalls.Should().ContainSingle();
-    h.Prot.FreezeBalance.Should().Be(0); // decremented
+    h.Prot.BalanceFor(UserId).Should().Be(0); // decremented
     h.Repo.CreateExecutionsForVersionsWithStatusCalls
       .Where(c => c.Status == ExecutionStatus.Freeze)
       .Should().ContainSingle();
@@ -199,7 +199,7 @@ public class MarkDailyFailuresTests
 
     // Correct behavior: the vacation already protects the day; freeze must be left intact.
     h.Prot.TryConsumeFreezeCalls.Should().BeEmpty();
-    h.Prot.FreezeBalance.Should().Be(1);
+    h.Prot.BalanceFor(UserId).Should().Be(1);
   }
 
   // ---------------------------------------------------------------------------

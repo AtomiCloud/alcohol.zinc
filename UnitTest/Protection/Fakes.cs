@@ -29,8 +29,10 @@ public sealed class CallLog
 // Seedable state:
 //   ActiveVersions          -> returned by GetActiveHabitVersionsByIds
 //   Habits                  -> returned by GetHabitsByIds (and GetHabit)
-//   CompletedOrSkipped      -> set of habitVersionIds considered "done"
-//                              (drives HasAnyCompletedOrSkippedForVersions)
+//   CompletedOrSkipped      -> set of (habitVersionId, date) considered "done"
+//                              (drives HasAnyCompletedOrSkippedForVersions);
+//                              date-scoped so a completion on one day does not
+//                              leak into other days.
 //   ExistingExecutions      -> set of (habitVersionId, date) that already have
 //                              an execution row of ANY status. Seed this to
 //                              model Completed/Skipped/Vacation/Freeze/Failed
@@ -56,7 +58,7 @@ public sealed class FakeHabitRepository(CallLog? log = null) : IHabitRepository
   // ----- seedable inputs -----
   public List<HabitVersionPrincipal> ActiveVersions { get; } = [];
   public List<HabitPrincipal> Habits { get; } = [];
-  public HashSet<Guid> CompletedOrSkipped { get; } = [];
+  public HashSet<(Guid HabitVersionId, DateOnly Date)> CompletedOrSkipped { get; } = [];
   public HashSet<(Guid HabitVersionId, DateOnly Date)> ExistingExecutions { get; } = [];
 
   // For each scheduled habitVersionId that truly misses, what FailedExecutionRow
@@ -93,7 +95,7 @@ public sealed class FakeHabitRepository(CallLog? log = null) : IHabitRepository
   public Task<Result<bool>> HasAnyCompletedOrSkippedForVersions(List<Guid> habitVersionIds, DateOnly date)
   {
     HasAnyCompletedOrSkippedCalls.Add((_log.Next(), habitVersionIds, date));
-    var any = habitVersionIds.Any(CompletedOrSkipped.Contains);
+    var any = habitVersionIds.Any(hvId => CompletedOrSkipped.Contains((hvId, date)));
     return Task.FromResult<Result<bool>>(any);
   }
 
@@ -230,7 +232,9 @@ public sealed class FakeVacationRepository : IVacationRepository
   public Task<Result<List<VacationPrincipal>>> ListActiveForUserOnDate(string userId, DateOnly date)
   {
     ListActiveForUserOnDateCalls.Add((userId, date));
-    var list = ActiveByUser.TryGetValue(userId, out var v) ? v.ToList() : new List<VacationPrincipal>();
+    var list = ActiveByUser.TryGetValue(userId, out var v)
+      ? v.Where(x => x.Record.StartDate <= date && date <= x.Record.EndDate).ToList()
+      : new List<VacationPrincipal>();
     return Task.FromResult<Result<List<VacationPrincipal>>>(list);
   }
 
@@ -267,14 +271,21 @@ public sealed class FakeVacationRepository : IVacationRepository
 // ---------------------------------------------------------------------------
 //
 // Freeze balance / cap model:
-//   FreezeBalance is the in-memory pool. TryConsumeFreeze decrements it by 1 and
-//   returns true while > 0; returns false (no decrement) at 0. It is idempotent
-//   per date: a date already consumed returns true WITHOUT decrementing again.
+//   The freeze pool is PER USER (mirrors the real UserProtections row keyed by
+//   userId), held in a dictionary that lazily defaults to the ctor seed on first
+//   touch. Use BalanceFor(userId) to read and SetBalanceFor(userId, n) to seed a
+//   specific user. TryConsumeFreeze decrements that user's pool by 1 and returns
+//   true while > 0; returns false (no decrement) at 0. It is idempotent per date:
+//   a date already consumed returns true WITHOUT decrementing again.
 // Inspectable: TryConsumeFreezeCalls, ConsumedDates, IncrementFreezeCalls,
 //   ClampFreezeToCapCalls, RecordFreezeAwardIfAbsentCalls.
 public sealed class FakeProtectionRepository(int freezeBalance = 0) : IProtectionRepository
 {
-  public int FreezeBalance { get; set; } = freezeBalance;
+  private readonly Dictionary<string, int> _balances = [];
+
+  // Per-user freeze pool, lazily seeded from the ctor default on first read.
+  public int BalanceFor(string userId) => _balances.TryGetValue(userId, out var b) ? b : freezeBalance;
+  public void SetBalanceFor(string userId, int balance) => _balances[userId] = balance;
 
   public List<(string UserId, DateOnly Date)> TryConsumeFreezeCalls { get; } = [];
   public HashSet<(string UserId, DateOnly Date)> ConsumedDates { get; } = [];
@@ -289,9 +300,9 @@ public sealed class FakeProtectionRepository(int freezeBalance = 0) : IProtectio
     // Idempotent per date: already consumed -> true, no further decrement.
     if (ConsumedDates.Contains((userId, date)))
       return Task.FromResult<Result<bool>>(true);
-    if (FreezeBalance <= 0)
+    if (BalanceFor(userId) <= 0)
       return Task.FromResult<Result<bool>>(false);
-    FreezeBalance -= 1;
+    SetBalanceFor(userId, BalanceFor(userId) - 1);
     ConsumedDates.Add((userId, date));
     return Task.FromResult<Result<bool>>(true);
   }
@@ -299,14 +310,14 @@ public sealed class FakeProtectionRepository(int freezeBalance = 0) : IProtectio
   public Task<Result<Unit>> IncrementFreeze(string userId, int n)
   {
     IncrementFreezeCalls.Add((userId, n));
-    FreezeBalance += Math.Max(0, n); // cap-blind, like the real repo
+    SetBalanceFor(userId, BalanceFor(userId) + Math.Max(0, n)); // cap-blind, like the real repo
     return Task.FromResult<Result<Unit>>(new Unit());
   }
 
   public Task<Result<Unit>> ClampFreezeToCap(string userId, int cap)
   {
     ClampFreezeToCapCalls.Add((userId, cap));
-    if (FreezeBalance > cap) FreezeBalance = cap;
+    if (BalanceFor(userId) > cap) SetBalanceFor(userId, cap);
     return Task.FromResult<Result<Unit>>(new Unit());
   }
 
@@ -321,14 +332,14 @@ public sealed class FakeProtectionRepository(int freezeBalance = 0) : IProtectio
     => Task.FromResult<Result<UserProtectionPrincipal?>>(new UserProtectionPrincipal
     {
       UserId = userId,
-      Record = new UserProtectionRecord { FreezeCurrent = FreezeBalance }
+      Record = new UserProtectionRecord { FreezeCurrent = BalanceFor(userId) }
     });
 
   public Task<Result<UserProtectionPrincipal>> UpsertProtection(string userId)
     => Task.FromResult<Result<UserProtectionPrincipal>>(new UserProtectionPrincipal
     {
       UserId = userId,
-      Record = new UserProtectionRecord { FreezeCurrent = FreezeBalance }
+      Record = new UserProtectionRecord { FreezeCurrent = BalanceFor(userId) }
     });
 }
 

@@ -117,7 +117,7 @@ public class VacationPauseTests
 
     // The freeze branch was skipped: no freeze probed, none consumed, no insert.
     h.Prot.TryConsumeFreezeCalls.Should().BeEmpty();
-    h.Prot.FreezeBalance.Should().Be(5); // untouched
+    h.Prot.BalanceFor(UserId).Should().Be(5); // untouched
     h.Repo.CreateExecutionsForVersionsWithStatusCalls
       .Where(c => c.Status == ExecutionStatus.Freeze).Should().BeEmpty();
 
