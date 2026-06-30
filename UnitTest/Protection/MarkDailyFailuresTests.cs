@@ -191,7 +191,7 @@ public class MarkDailyFailuresTests
   public async Task VacationedUser_DoesNotConsumeFreeze()
   {
     var h = Build(freezeBalance: 1);
-    var (habitId, hvId) = SeedScheduled(h);
+    var (habitId, _) = SeedScheduled(h);
     var date = new DateOnly(2026, 1, 1);
     h.Vac.WithActive(UserId, new DateOnly(2025, 12, 30), new DateOnly(2026, 1, 5));
 

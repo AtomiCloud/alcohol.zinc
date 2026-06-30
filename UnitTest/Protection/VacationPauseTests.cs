@@ -172,18 +172,18 @@ public class VacationPauseTests
   public async Task VacationPausesAllScheduledHabitsForUser_OnSameDay()
   {
     var h = Build();
-    var a = SeedScheduledMiss(h);
+    var (HabitId, HvId, ExecutionId) = SeedScheduledMiss(h);
     var b = SeedScheduledMiss(h);
     var date = new DateOnly(2026, 6, 10);
     h.Vac.WithActive(UserId, new DateOnly(2026, 6, 1), new DateOnly(2026, 6, 30));
 
-    var res = await h.Svc.MarkDailyFailures([a.HabitId, b.HabitId], date);
+    var res = await h.Svc.MarkDailyFailures([HabitId, b.HabitId], date);
 
     res.IsSuccess().Should().BeTrue();
 
-    var vacationInsert = h.Repo.CreateExecutionsForVersionsWithStatusCalls
+    var (Seq, HvIds, Date, Status) = h.Repo.CreateExecutionsForVersionsWithStatusCalls
       .Single(c => c.Status == ExecutionStatus.Vacation);
-    vacationInsert.HvIds.Should().BeEquivalentTo([a.HvId, b.HvId]);
+    HvIds.Should().BeEquivalentTo([HvId, b.HvId]);
 
     h.Repo.CreateFailedExecutionsCalls[0].Returned.Should().BeEmpty();
     h.Penalty.EnqueuedRecords.Should().BeEmpty();

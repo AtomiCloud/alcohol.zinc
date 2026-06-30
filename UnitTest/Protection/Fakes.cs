@@ -158,7 +158,7 @@ public sealed class FakeHabitRepository(CallLog? log = null) : IHabitRepository
 
   public Task<Result<List<Guid>>> GetEnabledHabitIdsByTimezone(string timezone)
   {
-    var ids = HabitIdsByTimezone.TryGetValue(timezone, out var x) ? x.ToList() : new List<Guid>();
+    var ids = HabitIdsByTimezone.TryGetValue(timezone, out var x) ? x.ToList() : [];
     return Task.FromResult<Result<List<Guid>>>(ids);
   }
 
@@ -234,7 +234,7 @@ public sealed class FakeVacationRepository : IVacationRepository
     ListActiveForUserOnDateCalls.Add((userId, date));
     var list = ActiveByUser.TryGetValue(userId, out var v)
       ? v.Where(x => x.Record.StartDate <= date && date <= x.Record.EndDate).ToList()
-      : new List<VacationPrincipal>();
+      : [];
     return Task.FromResult<Result<List<VacationPrincipal>>>(list);
   }
 
