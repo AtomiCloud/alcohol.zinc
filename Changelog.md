@@ -1,3 +1,15 @@
+## [1.24.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.23.0...v1.24.0) (2026-06-30)
+
+
+### 🐛 Bug Fixes 🐛
+
+* don't consume a freeze credit on a vacation day ([84896df](https://github.com/AtomiCloud/alcohol.zinc/commit/84896df429e79b6a01a72be8f11dd50ad79f8946))
+
+
+### 🧪 Tests 🧪
+
+* address CodeRabbit review — make Protection fakes higher-fidelity ([c7af6a6](https://github.com/AtomiCloud/alcohol.zinc/commit/c7af6a65394b03c2c8e4b1f836362cac3e86073c))
+
 ## [1.23.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.22.3...v1.23.0) (2026-06-29)
 
 
