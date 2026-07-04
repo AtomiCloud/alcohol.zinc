@@ -1,6 +1,8 @@
 using System.Net.Mime;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using App.Error;
+using App.Error.V1;
 using App.Modules.Common;
 using App.Modules.Payment.Airwallex;
 using App.StartUp.Registry;
@@ -50,26 +52,44 @@ public class PaymentController(
     return this.ReturnResult(result);
   }
 
-  // 3. GET /api/v1/payment/{userId}/consent
+  // 3. GET /api/v1/payment/{userId}/consent?purpose=penalty|subscription
   [Authorize, HttpGet("{userId}/consent")]
-  public async Task<ActionResult<PaymentConsentRes>> GetPaymentConsent(string userId)
+  public async Task<ActionResult<PaymentConsentRes>> GetPaymentConsent(string userId, [FromQuery] string? purpose)
   {
     var result = await this.GuardAsync(userId)
-      .ThenAwait(_ => service.GetPaymentConsentAsync(userId))
+      .ThenAwait(_ => ParsePurpose(purpose))
+      .ThenAwait(p => service.GetPaymentConsentAsync(userId, p))
       .Then(x => x.ToRes(), Errors.MapNone);
 
     return this.ReturnResult(result);
   }
 
-  // 3b. DELETE /api/v1/payment/{userId}/consent
+  // 3b. DELETE /api/v1/payment/{userId}/consent?purpose=penalty|subscription
   [Authorize, HttpDelete("{userId}/consent")]
-  public async Task<ActionResult> DisablePaymentConsent(string userId)
+  public async Task<ActionResult> DisablePaymentConsent(string userId, [FromQuery] string? purpose)
   {
     var result = await this.GuardAsync(userId)
-      .ThenAwait(_ => service.DisablePaymentConsentAsync(userId))
-      .ThenAwait(_ => authManagement.SetClaim(userId, LogtoClaims.HasPaymentConsent, "false"));
+      .ThenAwait(_ => ParsePurpose(purpose))
+      .ThenAwait(p => service.DisablePaymentConsentAsync(userId, p)
+        // The Logto claim only tracks the penalty consent (gates habit flows).
+        .ThenAwait(_ => p == ConsentPurpose.Penalty
+          ? authManagement.SetClaim(userId, LogtoClaims.HasPaymentConsent, "false")
+            .Then(_ => new Unit(), Errors.MapNone)
+          : new Unit().ToAsyncResult()));
 
     return this.ReturnUnitResult(result);
+  }
+
+  private static Task<Result<ConsentPurpose>> ParsePurpose(string? purpose)
+  {
+    Result<ConsentPurpose> r = purpose?.ToLowerInvariant() switch
+    {
+      null or "" or "penalty" => ConsentPurpose.Penalty,
+      "subscription" => ConsentPurpose.Subscription,
+      _ => new DomainProblemException(new ValidationError("Invalid purpose",
+        new Dictionary<string, string[]> { ["purpose"] = ["must be 'penalty' or 'subscription'"] }))
+    };
+    return Task.FromResult(r);
   }
 
   // 4. POST /api/v1/payment/{userId}/intent

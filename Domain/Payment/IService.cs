@@ -11,12 +11,19 @@ public interface IPaymentService
   Task<Result<PaymentCustomerPrincipal?>> UpdatePaymentConsentAsync(
     string airwallexCustomerId,
     string? paymentConsentId,
-    PaymentConsentStatus? consentStatus);
+    PaymentConsentStatus? consentStatus,
+    ConsentPurpose purpose);
 
-  // Payment consent operations
-  Task<Result<PaymentConsentStatusResult>> GetPaymentConsentAsync(string userId);
-  Task<Result<bool>> HasPaymentConsentAsync(string userId);
-  Task<Result<Unit>> DisablePaymentConsentAsync(string userId);
+  // Payment consent operations. Consents are purpose-scoped (penalty =
+  // unscheduled MIT, subscription = recurring MIT); the default keeps every
+  // pre-existing call site on the original penalty consent.
+  Task<Result<PaymentConsentStatusResult>> GetPaymentConsentAsync(string userId, ConsentPurpose purpose = ConsentPurpose.Penalty);
+  Task<Result<bool>> HasPaymentConsentAsync(string userId, ConsentPurpose purpose = ConsentPurpose.Penalty);
+  Task<Result<Unit>> DisablePaymentConsentAsync(string userId, ConsentPurpose purpose = ConsentPurpose.Penalty);
+
+  // Disables every consent the user still has (account deletion): missing
+  // consents are skipped rather than surfaced as errors.
+  Task<Result<Unit>> DisableAllPaymentConsentsAsync(string userId);
 
   // Payment intent operations
   Task<Result<PaymentIntentResult>> CreatePaymentIntentAsync(string userId, CreatePaymentIntentRequest request);
@@ -35,7 +42,8 @@ public interface IPaymentService
   Task<Result<PaymentIntentResult>> ChargeStoredConsentAsync(
     string userId, Money amount, string description,
     string? idempotencyKey = null, string? existingIntentId = null,
-    Func<string, Task>? onIntentCreated = null);
+    Func<string, Task>? onIntentCreated = null,
+    ConsentPurpose purpose = ConsentPurpose.Penalty);
 
   // Query operations
   Task<Result<IEnumerable<PaymentCustomerPrincipal>>> SearchCustomers(PaymentCustomerSearch search);

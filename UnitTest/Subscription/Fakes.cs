@@ -287,8 +287,10 @@ public sealed class FakeSubscriptionPaymentService : IPaymentService
     _emitIntentId = emitIntentId;
   }
 
-  public List<(string UserId, Money Amount, string Description, string? IdempotencyKey, string? ExistingIntentId)>
+  public List<(string UserId, Money Amount, string Description, string? IdempotencyKey, string? ExistingIntentId, ConsentPurpose Purpose)>
     ChargeCalls { get; } = [];
+
+  public List<ConsentPurpose> HasConsentCalls { get; } = [];
 
   public static FakeSubscriptionPaymentService Succeeds(string intentId)
     => WithStatus(intentId, "SUCCEEDED");
@@ -314,15 +316,19 @@ public sealed class FakeSubscriptionPaymentService : IPaymentService
   public static FakeSubscriptionPaymentService NoConsent()
     => new((_, _, _) => new Exception("should not be charged")) { HasConsent = false };
 
-  public Task<Result<bool>> HasPaymentConsentAsync(string userId)
-    => Task.FromResult<Result<bool>>(this.HasConsent);
+  public Task<Result<bool>> HasPaymentConsentAsync(string userId, ConsentPurpose purpose = ConsentPurpose.Penalty)
+  {
+    HasConsentCalls.Add(purpose);
+    return Task.FromResult<Result<bool>>(this.HasConsent);
+  }
 
   public async Task<Result<PaymentIntentResult>> ChargeStoredConsentAsync(
     string userId, Money amount, string description,
     string? idempotencyKey = null, string? existingIntentId = null,
-    Func<string, Task>? onIntentCreated = null)
+    Func<string, Task>? onIntentCreated = null,
+    ConsentPurpose purpose = ConsentPurpose.Penalty)
   {
-    ChargeCalls.Add((userId, amount, description, idempotencyKey, existingIntentId));
+    ChargeCalls.Add((userId, amount, description, idempotencyKey, existingIntentId, purpose));
     if (_emitIntentId != null && onIntentCreated != null)
       await onIntentCreated(_emitIntentId);
     return _charge(userId, amount, description);
@@ -336,13 +342,16 @@ public sealed class FakeSubscriptionPaymentService : IPaymentService
     => throw new NotImplementedException();
 
   public Task<Result<PaymentCustomerPrincipal?>> UpdatePaymentConsentAsync(
-    string airwallexCustomerId, string? paymentConsentId, PaymentConsentStatus? consentStatus)
+    string airwallexCustomerId, string? paymentConsentId, PaymentConsentStatus? consentStatus, ConsentPurpose purpose)
     => throw new NotImplementedException();
 
-  public Task<Result<PaymentConsentStatusResult>> GetPaymentConsentAsync(string userId)
+  public Task<Result<PaymentConsentStatusResult>> GetPaymentConsentAsync(string userId, ConsentPurpose purpose = ConsentPurpose.Penalty)
     => throw new NotImplementedException();
 
-  public Task<Result<Unit>> DisablePaymentConsentAsync(string userId)
+  public Task<Result<Unit>> DisablePaymentConsentAsync(string userId, ConsentPurpose purpose = ConsentPurpose.Penalty)
+    => throw new NotImplementedException();
+
+  public Task<Result<Unit>> DisableAllPaymentConsentsAsync(string userId)
     => throw new NotImplementedException();
 
   public Task<Result<PaymentIntentResult>> CreatePaymentIntentAsync(string userId, CreatePaymentIntentRequest request)

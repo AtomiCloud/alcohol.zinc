@@ -49,17 +49,28 @@ public class AirwallexWebhookService(
 
   private Task<Result<Unit>> ProcessPaymentConsentEvent(AirwallexEvent evt)
   {
-    var (customerId, consentId, status) = adapter.ProcessPaymentConsentEvent(evt);
+    var (customerId, consentId, status, purpose) = adapter.ProcessPaymentConsentEvent(evt);
     logger.LogInformation(
-      "Processing payment consent event: {EventName}, CustomerId: {CustomerId}, ConsentId: {ConsentId}, Status: {Status}",
-      evt.Name, customerId, consentId, status);
+      "Processing payment consent event: {EventName}, CustomerId: {CustomerId}, ConsentId: {ConsentId}, Status: {Status}, Purpose: {Purpose}",
+      evt.Name, customerId, consentId, status, purpose);
+
+    // Classification depends on the client setting merchant_trigger_reason at
+    // consent creation (docs/payment-consents.md). An empty reason classifies
+    // as Penalty by design (legacy consents), but a NEW consent arriving
+    // without one is a frontend contract violation worth surfacing loudly —
+    // a mislabelled subscription consent would overwrite the penalty columns.
+    if (string.IsNullOrEmpty(evt.Data.Object.MerchantTriggerReason))
+      logger.LogWarning(
+        "Consent {ConsentId} for {CustomerId} carries no merchant_trigger_reason; classified as Penalty — verify the client sets it",
+        consentId, customerId);
 
     return paymentService
-      .UpdatePaymentConsentAsync(customerId, consentId, status)
+      .UpdatePaymentConsentAsync(customerId, consentId, status, purpose)
       .ThenAwait(customer =>
       {
-        // If consent is verified, update Logto custom claims
-        if (status == PaymentConsentStatus.Verified && customer != null)
+        // The Logto claim gates penalty/habit flows only; the subscription
+        // consent is checked against the DB by the subscription engine.
+        if (status == PaymentConsentStatus.Verified && customer != null && purpose == ConsentPurpose.Penalty)
         {
           logger.LogInformation("Payment consent verified, updating Logto custom claim for userId: {UserId}", customer.Record.UserId);
           return authManagement

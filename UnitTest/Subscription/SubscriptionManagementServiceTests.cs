@@ -1,3 +1,4 @@
+using Domain.Payment;
 using Domain.Subscription;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -59,6 +60,9 @@ public class SubscriptionManagementServiceTests
     payment.ChargeCalls.Should().HaveCount(1);
     payment.ChargeCalls[0].Amount.Amount.Should().Be(5m);
     payment.ChargeCalls[0].IdempotencyKey.Should().StartWith("sub-u1-pro-");
+    payment.ChargeCalls[0].Purpose.Should().Be(ConsentPurpose.Subscription,
+      "subscription fees must ride the recurring consent, never the penalty one");
+    payment.HasConsentCalls.Should().ContainSingle().Which.Should().Be(ConsentPurpose.Subscription);
 
     konnect.UpsertSubscriptionCalls.Should().ContainSingle(x => x.Tier == "pro");
   }

@@ -11,6 +11,10 @@ public interface IPaymentCustomerRepository
   Task<Result<PaymentCustomerPrincipal?>> UpdatePaymentConsentByAirwallexCustomerId(
     string airwallexCustomerId,
     string? paymentConsentId,
-    PaymentConsentStatus? consentStatus);
-  Task<Result<PaymentCustomerPrincipal?>> DisablePaymentConsentAsync(string userId);
+    PaymentConsentStatus? consentStatus,
+    ConsentPurpose purpose);
+  // Deletes the purpose's consent row ONLY if it still holds `expectedConsentId`
+  // — a consent stored concurrently (e.g. a webhook landing between the gateway
+  // revoke and this delete) must survive. Zero rows affected is not an error.
+  Task<Result<PaymentCustomerPrincipal?>> DisablePaymentConsentAsync(string userId, ConsentPurpose purpose, string expectedConsentId);
 }

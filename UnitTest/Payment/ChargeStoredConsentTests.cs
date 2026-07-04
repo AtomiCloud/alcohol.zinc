@@ -25,9 +25,10 @@ public class ChargeStoredConsentTests
       {
         UserId = UserId,
         AirwallexCustomerId = "cus_1",
-        PaymentConsentId = "cst_1",
-        ConsentStatus = PaymentConsentStatus.Verified,
-        HasPaymentConsent = true
+        Consents = new Dictionary<ConsentPurpose, StoredPaymentConsent>
+        {
+          [ConsentPurpose.Penalty] = new() { ConsentId = "cst_1", Status = PaymentConsentStatus.Verified }
+        }
       }
     }
   };
@@ -102,8 +103,8 @@ public class ChargeStoredConsentTests
     public Task<Result<IEnumerable<PaymentCustomerPrincipal>>> Search(PaymentCustomerSearch search) => throw new NotImplementedException();
     public Task<Result<PaymentCustomerPrincipal>> Create(string userId, string airwallexCustomerId) => throw new NotImplementedException();
     public Task<Result<PaymentCustomerPrincipal?>> UpdatePaymentConsentByAirwallexCustomerId(
-      string airwallexCustomerId, string? paymentConsentId, PaymentConsentStatus? consentStatus) => throw new NotImplementedException();
-    public Task<Result<PaymentCustomerPrincipal?>> DisablePaymentConsentAsync(string userId) => throw new NotImplementedException();
+      string airwallexCustomerId, string? paymentConsentId, PaymentConsentStatus? consentStatus, ConsentPurpose purpose) => throw new NotImplementedException();
+    public Task<Result<PaymentCustomerPrincipal?>> DisablePaymentConsentAsync(string userId, ConsentPurpose purpose, string expectedConsentId) => throw new NotImplementedException();
   }
 
   private sealed class FakeGateway : IPaymentGateway
