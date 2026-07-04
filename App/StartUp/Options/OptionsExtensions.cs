@@ -52,6 +52,13 @@ public static class OptionsExtensions
     .Select(x => x!)
     .ToArray();
 
+  private static readonly string[] SubscriptionTiers = typeof(SubscriptionTiers)
+    .GetFields()
+    .Select(x => x.GetValue(null)?.ToString())
+    .Where(x => x is { Length: > 0 })
+    .Select(x => x!)
+    .ToArray();
+
 
   public static IServiceCollection AddStartupOptions(this IServiceCollection services)
   {
@@ -134,6 +141,20 @@ public static class OptionsExtensions
 
     // Register Disbursement (charity payout) Options
     services.RegisterOption<DisbursementOption>(DisbursementOption.Key);
+
+    // Register Subscription (tier catalog + renewal) Options
+    services.RegisterOption<SubscriptionOption>(SubscriptionOption.Key)
+      .Validate(c => c.Tiers.Keys.All(x => SubscriptionTiers.Any(t => t == x)),
+        "Subscription.Tiers keys (Config File) must be in SubscriptionTiers (Class)")
+      .Validate(c => c.Tiers.ContainsKey(Registry.SubscriptionTiers.Free),
+        "Subscription.Tiers (Config File) must contain the 'free' tier")
+      // R1 guard: the free tier must grant at least what the pre-subscription
+      // stub hardcoded (10/10/3/7), or existing users would instantly hit
+      // TierInsufficient on habits/skips they already have.
+      .Validate(c => !c.Tiers.TryGetValue(Registry.SubscriptionTiers.Free, out var free)
+                     || (free.HabitsMax >= 10 && free.SkipsMonthly >= 10
+                         && free.VacationWindowsYearly >= 3 && free.FreezeBase >= 7),
+        "Subscription.Tiers.free caps must be >= the legacy defaults (10 habits, 10 skips, 3 vacations, 7 freeze)");
 
     return services;
   }

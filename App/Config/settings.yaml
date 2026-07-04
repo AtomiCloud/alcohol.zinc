@@ -181,6 +181,10 @@ HttpClient:
   AIRWALLEX:
     BaseAddress: 'https://api.airwallex.com'
     Timeout: 60
+  KONNECT:
+    BaseAddress: 'https://us.api.konghq.com'
+    Timeout: 60
+    BearerAuth: supersecret
 Auth:
   Enabled: true
   Management:
@@ -224,3 +228,31 @@ Disbursement:
   DonorFirstName: LazyTax
   DonorLastName: Donations
   DonorEmail: donations@lazytax.club
+# Subscription tier catalog + renewal worker. This config is the enforcement
+# source of truth; the Kong Konnect catalog mirrors it (docs/KONNECT_SETUP.md).
+# free caps must stay >= the legacy stub defaults (10/10/3/7) — validated at startup.
+Subscription:
+  RenewalEnabled: false
+  GracePeriodDays: 7
+  Tiers:
+    free:
+      PriceCents: 0
+      Currency: USD
+      HabitsMax: 10
+      SkipsMonthly: 10
+      VacationWindowsYearly: 3
+      FreezeBase: 7
+    pro:
+      PriceCents: 500
+      Currency: USD
+      HabitsMax: 25
+      SkipsMonthly: 20
+      VacationWindowsYearly: 6
+      FreezeBase: 14
+    ultimate:
+      PriceCents: 1500
+      Currency: USD
+      HabitsMax: 100
+      SkipsMonthly: 60
+      VacationWindowsYearly: 12
+      FreezeBase: 30

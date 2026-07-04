@@ -8,6 +8,7 @@ using App.Modules.HabitVersion.Data;
 using App.Modules.Payment.Data;
 using App.Modules.Penalty.Data;
 using App.Modules.Protection.Data;
+using App.Modules.Subscription.Data;
 using App.Modules.Users.Data;
 using App.Modules.Vacation.Data;
 using App.StartUp.Options;
@@ -44,6 +45,8 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
   public DbSet<CharityBalanceData> CharityBalances { get; set; }
   // Disbursement (charity payout)
   public DbSet<DisbursementData> Disbursements { get; set; }
+  // Subscription (paid tiers)
+  public DbSet<UserSubscriptionData> UserSubscriptions { get; set; }
   // public DbSet<CompletionData> Completions { get; set; }
   // public DbSet<StatsData> Stats { get; set; }
 
@@ -170,5 +173,14 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
                   .HasForeignKey(x => x.CharityId)
                   .OnDelete(DeleteBehavior.Cascade);
 
+    // Subscription (paid tiers): one row per user.
+    var subscription = modelBuilder.Entity<UserSubscriptionData>();
+    subscription.HasIndex(x => x.UserId).IsUnique();
+    subscription.HasIndex(x => new { x.Status, x.PeriodEnd }); // renewal scan: GetDue
+    subscription.HasIndex(x => x.KonnectSyncedAt);             // mirror-retry scan
+    subscription.HasOne(x => x.User)
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
   }
 }

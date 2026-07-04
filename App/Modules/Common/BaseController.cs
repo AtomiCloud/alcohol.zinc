@@ -7,6 +7,7 @@ using App.StartUp.Services.Auth;
 using App.Utility;
 using CSharp_Result;
 using Domain.Exceptions;
+using Domain.Subscription;
 using Microsoft.AspNetCore.Mvc;
 
 namespace App.Modules.Common;
@@ -46,6 +47,18 @@ public class AtomiControllerBase(IAuthHelper h) : ControllerBase
         new EntityNotFound(nfe.Message, nfe.Type, nfe.RequestIdentifier)),
       AccountDeletionBlockedException adb => this.Error(HttpStatusCode.Conflict,
         new AccountDeletionBlocked(adb.TotalDebt, adb.Currency)),
+      NoPaymentConsentException npc => this.Error(HttpStatusCode.PreconditionFailed,
+        new NoPaymentConsent(npc.UserId)),
+      AlreadySubscribedException asub => this.Error(HttpStatusCode.Conflict,
+        new AlreadySubscribed(asub.CurrentTier, asub.RequestedTier)),
+      InvalidSubscriptionTierException ist => this.Error(HttpStatusCode.BadRequest,
+        new InvalidSubscriptionTier(ist.Tier)),
+      SubscriptionChargeFailedException scf => this.Error(HttpStatusCode.PaymentRequired,
+        new SubscriptionChargeFailed(scf.IntentStatus)),
+      NoActiveSubscriptionException nas => this.Error(HttpStatusCode.NotFound,
+        new NoActiveSubscription(nas.UserId)),
+      SubscriptionBusyException sbe => this.Error(HttpStatusCode.Conflict,
+        new RenewalInProgress(sbe.UserId)),
       _ => throw new AggregateException("Unhandled Exception", e),
     };
   }
