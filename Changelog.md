@@ -1,3 +1,10 @@
+## [1.26.1](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.26.0...v1.26.1) (2026-07-04)
+
+
+### 🐛 Bug Fixes 🐛
+
+* align subscription tier prices with launch pricing (pro 499, ultimate 799) ([610c1c3](https://github.com/AtomiCloud/alcohol.zinc/commit/610c1c3726c49d983660c2c9e01adc1a6440c859))
+
 ## [1.26.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.25.0...v1.26.0) (2026-07-04)
 
 
