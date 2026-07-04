@@ -243,14 +243,16 @@ Subscription:
       VacationWindowsYearly: 3
       FreezeBase: 7
     pro:
-      PriceCents: 500
+      # Launch price ($4.99) — must match the argon checkout display (alcohol.argon src/lib/billing/pricing.ts)
+      PriceCents: 499
       Currency: USD
       HabitsMax: 25
       SkipsMonthly: 20
       VacationWindowsYearly: 6
       FreezeBase: 14
     ultimate:
-      PriceCents: 1500
+      # Launch price ($7.99) — must match the argon checkout display
+      PriceCents: 799
       Currency: USD
       HabitsMax: 100
       SkipsMonthly: 60
