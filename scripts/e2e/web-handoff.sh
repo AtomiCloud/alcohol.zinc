@@ -47,7 +47,7 @@ sub=$(echo "$TOKEN" | cut -d. -f2 | tr '_-' '/+' | {
   p=$(cat)
   pad=$(((4 - ${#p} % 4) % 4))
   printf '%s' "$p"
-  printf '=%.0s' $(seq 1 $pad) 2>/dev/null
+  if [ "$pad" -gt 0 ]; then printf '=%.0s' $(seq 1 "$pad"); fi
 } | base64 -d 2>/dev/null | jq -r .sub)
 if [ -z "$sub" ] || [ "$sub" = "null" ]; then
   echo "could not extract sub from token" >&2
@@ -102,6 +102,14 @@ if [ "$tier" = "free" ]; then
 else
   if [ "$cta_sg" = "manage" ]; then ok "paid + SG storefront -> manage"; else ko "paid + SG -> $cta_sg (want manage)"; fi
   if [ "$cta_us" = "manage" ]; then ok "paid + US storefront -> manage"; else ko "paid + US -> $cta_us (want manage)"; fi
+fi
+
+if [ "$tier" = "free" ]; then
+  echo "== 3b. restricted-storefront handoff must be refused (403) ==" >&2
+  refused=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$ZINC_ENDPOINT/api/v1.0/Auth/web-handoff" \
+    -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+    -d '{"platform": "ios", "storefront": "SG"}')
+  if [ "$refused" = "403" ]; then ok "free + SG handoff refused (403)"; else ko "free + SG handoff returned $refused (want 403)"; fi
 fi
 
 echo "== 4. own-account guard (CTA for another user must 403) ==" >&2

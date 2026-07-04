@@ -1,5 +1,6 @@
 using App.StartUp.Options;
 using App.StartUp.Services.Auth;
+using App.Utility;
 using CSharp_Result;
 using Domain.Exceptions;
 using Domain.Subscription;
@@ -44,6 +45,10 @@ public static class CtaMatrix
   public static string Resolve(string tier, string platform, string? storefront,
     IReadOnlyDictionary<string, CtaPlatformOption> cta)
   {
+    // Any non-free tier (i.e. any active subscription row, even a legacy tier
+    // no longer in the catalog) may MANAGE: managing an existing subscription
+    // is permitted in every storefront — only the free-user "subscribe" steer
+    // below is region-gated, and that path is allowlist/fail-closed.
     if (tier != SubscriptionService.FreeTier) return CtaVariants.Manage;
     if (string.IsNullOrWhiteSpace(storefront)) return CtaVariants.Neutral;
     if (!cta.TryGetValue(platform.ToLowerInvariant(), out var p)) return CtaVariants.Neutral;
@@ -83,11 +88,16 @@ public class WebHandoffService(
     var user = userRes.Get();
     if (user == null)
       return new NotFoundException("User not found", typeof(User), userId);
+    var email = user.Principal.Record.Email;
+    if (string.IsNullOrWhiteSpace(email))
+      return new App.Error.V1.ValidationError(
+        "User has no email on record; a web login link cannot be minted",
+        new Dictionary<string, string[]> { ["email"] = ["missing"] }).ToException();
 
     logger.LogInformation("Creating web handoff for user {UserId}", userId);
     return await authManagement
-      .CreateOneTimeToken(user.Principal.Record.Email, opt.OttExpirySeconds)
-      .Then(token => new WebHandoff(BuildUrl(opt, token, user.Principal.Record.Email), opt.OttExpirySeconds),
+      .CreateOneTimeToken(email, opt.OttExpirySeconds)
+      .Then(token => new WebHandoff(BuildUrl(opt, token, email), opt.OttExpirySeconds),
         Errors.MapNone);
   }
 

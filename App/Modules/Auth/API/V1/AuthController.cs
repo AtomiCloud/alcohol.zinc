@@ -22,6 +22,10 @@ public class AuthController(
   // Mints a Logto one-time token for the CALLER (identity comes exclusively
   // from the JWT sub — there is no way to request another user's token) and
   // returns the magic-link URL into the web billing portal.
+  //
+  // platform/storefront are client-asserted, so the neutral-region 403 is a
+  // best-effort compliance backstop, not a security boundary: the token is
+  // only ever minted for the caller's own account either way.
   [Authorize, HttpPost("web-handoff")]
   public async Task<ActionResult<WebHandoffRes>> WebHandoff([FromBody] WebHandoffReq req)
   {
