@@ -9,12 +9,14 @@ using App.Modules.Payment.Airwallex;
 using App.Modules.Payment.Data;
 using App.Modules.Penalty.Data;
 using App.Modules.Protection.Data;
+using App.Modules.Subscription;
+using App.Modules.Subscription.Data;
+using App.Modules.Subscription.Konnect;
 using App.Modules.System;
 using App.Modules.Users.Data;
 using App.Modules.Vacation;
 using App.Modules.Vacation.Data;
 using App.StartUp.Services;
-using App.StartUp.Services.Subscription;
 using Domain;
 using Domain.Allowance;
 using Domain.Cause;
@@ -106,9 +108,21 @@ public static class DomainServices
     s.AddScoped<IEntitlementService, EntitlementService>()
       .AutoTrace<IEntitlementService>();
 
-    // SUBSCRIPTION (temporary stub until Lagos integration)
-    s.AddScoped<ISubscriptionService, NullSubscriptionService>()
+    // SUBSCRIPTION (local table + config catalog; Konnect is a mirror)
+    s.AddScoped<ISubscriptionService, Domain.Subscription.SubscriptionService>()
       .AutoTrace<ISubscriptionService>();
+
+    s.AddScoped<ISubscriptionManagementService, SubscriptionManagementService>()
+      .AutoTrace<ISubscriptionManagementService>();
+
+    s.AddScoped<ISubscriptionRepository, SubscriptionRepository>()
+      .AutoTrace<ISubscriptionRepository>();
+
+    s.AddScoped<ISubscriptionPlanProvider, SubscriptionPlanProvider>()
+      .AutoTrace<ISubscriptionPlanProvider>();
+
+    s.AddScoped<IKonnectGateway, KonnectGateway>()
+      .AutoTrace<IKonnectGateway>();
     // PAYMENT
     s.AddScoped<IPaymentService, PaymentService>()
       .AutoTrace<IPaymentService>();

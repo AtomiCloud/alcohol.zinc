@@ -155,6 +155,7 @@ public class Server(
     services.AddHostedService<HabitDailyFailureHostedService>();
     services.AddHostedService<PenaltyProcessorHostedService>();
     services.AddHostedService<App.Modules.Disbursement.DisbursementHostedService>();
+    services.AddHostedService<App.Modules.Subscription.SubscriptionRenewalHostedService>();
 
     // Data seeding for development (lapras only)
     services.AddHostedService<DataSeederHostedService>();
