@@ -1,3 +1,22 @@
+## [1.27.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.26.1...v1.27.0) (2026-07-04)
+
+
+### 📜 Documentation 📜
+
+* add E2E token script usage and security handling rules ([83e41d1](https://github.com/AtomiCloud/alcohol.zinc/commit/83e41d166745d79a7659b60965dd0ab033b5efe6))
+
+
+### ✨ Features ✨
+
+* add Logto impersonation script for automated E2E user tokens ([9984915](https://github.com/AtomiCloud/alcohol.zinc/commit/998491573f64551c937a7cd7983acd021ee8343f))
+* web-handoff magic link and regional subscription CTA ([26b86ba](https://github.com/AtomiCloud/alcohol.zinc/commit/26b86ba37a2af91394924e3066082d21c7591069))
+
+
+### 🐛 Bug Fixes 🐛
+
+* address review comments on schema and e2e docs ([75e3c48](https://github.com/AtomiCloud/alcohol.zinc/commit/75e3c482dd2ab0cb9328d1746d141e7839938608))
+* harden web-handoff per code review ([769aae1](https://github.com/AtomiCloud/alcohol.zinc/commit/769aae1f4389bd29c50bcdb8a623618c7d9bd514))
+
 ## [1.26.1](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.26.0...v1.26.1) (2026-07-04)
 
 
