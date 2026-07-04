@@ -97,7 +97,7 @@ public class ConsentPurposeTests
     public Task<Result<PaymentCustomerPrincipal?>> UpdatePaymentConsentByAirwallexCustomerId(
       string airwallexCustomerId, string? paymentConsentId, PaymentConsentStatus? consentStatus, ConsentPurpose purpose) => throw new NotImplementedException();
 
-    public Task<Result<PaymentCustomerPrincipal?>> DisablePaymentConsentAsync(string userId, ConsentPurpose purpose)
+    public Task<Result<PaymentCustomerPrincipal?>> DisablePaymentConsentAsync(string userId, ConsentPurpose purpose, string expectedConsentId)
     {
       DisabledPurposes.Add(purpose);
       return Task.FromResult<Result<PaymentCustomerPrincipal?>>(customer.Principal);

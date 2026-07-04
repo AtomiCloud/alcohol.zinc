@@ -119,10 +119,12 @@ public class PaymentService(
         return customer.ToResult();
       })
       .ThenAwait(customer =>
-        gateway.DisablePaymentConsentAsync(customer.Principal.Record.ConsentIdFor(purpose)!)
-          .ThenAwait(_ => repo.DisablePaymentConsentAsync(userId, purpose))
-          .Then(_ => new Unit(), Errors.MapNone)
-      );
+      {
+        var consentId = customer.Principal.Record.ConsentIdFor(purpose)!;
+        return gateway.DisablePaymentConsentAsync(consentId)
+          .ThenAwait(_ => repo.DisablePaymentConsentAsync(userId, purpose, consentId))
+          .Then(_ => new Unit(), Errors.MapNone);
+      });
   }
 
   // Account deletion: revoke whatever consents exist, skipping missing ones.
@@ -140,11 +142,11 @@ public class PaymentService(
     Exception? firstFailure = null;
     foreach (var purpose in new[] { ConsentPurpose.Penalty, ConsentPurpose.Subscription })
     {
-      if (string.IsNullOrEmpty(record.ConsentIdFor(purpose))) continue;
+      if (record.ConsentIdFor(purpose) is not { } consentId) continue;
       try
       {
-        var disabled = await gateway.DisablePaymentConsentAsync(record.ConsentIdFor(purpose)!)
-          .ThenAwait(_ => repo.DisablePaymentConsentAsync(userId, purpose));
+        var disabled = await gateway.DisablePaymentConsentAsync(consentId)
+          .ThenAwait(_ => repo.DisablePaymentConsentAsync(userId, purpose, consentId));
         if (!disabled.IsSuccess()) firstFailure ??= disabled.FailureOrDefault();
       }
       catch (Exception ex)

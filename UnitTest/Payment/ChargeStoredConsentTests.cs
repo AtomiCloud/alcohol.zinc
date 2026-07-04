@@ -104,7 +104,7 @@ public class ChargeStoredConsentTests
     public Task<Result<PaymentCustomerPrincipal>> Create(string userId, string airwallexCustomerId) => throw new NotImplementedException();
     public Task<Result<PaymentCustomerPrincipal?>> UpdatePaymentConsentByAirwallexCustomerId(
       string airwallexCustomerId, string? paymentConsentId, PaymentConsentStatus? consentStatus, ConsentPurpose purpose) => throw new NotImplementedException();
-    public Task<Result<PaymentCustomerPrincipal?>> DisablePaymentConsentAsync(string userId, ConsentPurpose purpose) => throw new NotImplementedException();
+    public Task<Result<PaymentCustomerPrincipal?>> DisablePaymentConsentAsync(string userId, ConsentPurpose purpose, string expectedConsentId) => throw new NotImplementedException();
   }
 
   private sealed class FakeGateway : IPaymentGateway

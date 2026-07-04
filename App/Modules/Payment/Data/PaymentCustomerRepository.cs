@@ -200,7 +200,7 @@ public class PaymentCustomerRepository(MainDbContext db, ILogger<PaymentCustomer
     }
   }
 
-  public async Task<Result<PaymentCustomerPrincipal?>> DisablePaymentConsentAsync(string userId, ConsentPurpose purpose)
+  public async Task<Result<PaymentCustomerPrincipal?>> DisablePaymentConsentAsync(string userId, ConsentPurpose purpose, string expectedConsentId)
   {
     try
     {
@@ -208,10 +208,17 @@ public class PaymentCustomerRepository(MainDbContext db, ILogger<PaymentCustomer
 
       var now = DateTime.UtcNow;
       // Deleting the row (not nulling) keeps the invariant: a consent row always
-      // carries a consent id. The customer's UpdatedAt still marks the change.
-      await db.PaymentConsents
-        .Where(c => c.Purpose == (int)purpose && c.PaymentCustomer!.UserId == userId)
+      // carries a consent id. Guarded on the consent id that was actually revoked
+      // at the gateway, so a newer consent stored concurrently survives.
+      var deleted = await db.PaymentConsents
+        .Where(c => c.Purpose == (int)purpose
+                    && c.PaymentCustomer!.UserId == userId
+                    && c.ConsentId == expectedConsentId)
         .ExecuteDeleteAsync();
+      if (deleted == 0)
+        logger.LogInformation(
+          "{Purpose} consent for {UserId} was already replaced/removed; leaving the current row intact",
+          purpose, userId);
       var rowsAffected = await db.PaymentCustomers
         .Where(x => x.UserId == userId)
         .ExecuteUpdateAsync(setter => setter.SetProperty(p => p.UpdatedAt, now));
