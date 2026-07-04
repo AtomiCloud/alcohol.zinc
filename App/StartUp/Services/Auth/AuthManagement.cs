@@ -12,4 +12,6 @@ public interface IAuthManagement
   Task<Result<Unit>> RemoveClaim(string userId, string claimKey);
 
   Task<Result<Unit>> DeleteUser(string userId);
+
+  Task<Result<string>> CreateOneTimeToken(string email, int expiresInSeconds);
 }

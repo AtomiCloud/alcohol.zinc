@@ -39,6 +39,10 @@ HttpClient:
     BaseAddress: https://api.pledge.to
     Timeout: 60
     BearerAuth: supersecret
+WebPortal:
+  Scheme: https
+  Host: lazytax.club
+
 Auth:
   Enabled: true
   Settings:

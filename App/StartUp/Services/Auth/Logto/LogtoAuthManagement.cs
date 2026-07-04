@@ -133,6 +133,40 @@ public class LogtoAuthManagement(
       }, Errors.MapNone);
   }
 
+  public Task<Result<string>> CreateOneTimeToken(string email, int expiresInSeconds)
+  {
+    // The email and the minted token are deliberately never logged: the token
+    // is a live login credential and the email identifies its owner.
+    logger.LogInformation("Minting one-time token, expiring in {ExpiresInSeconds}s", expiresInSeconds);
+    return authenticator.BearerToken()
+      .ThenAwait(async bearer =>
+      {
+        try
+        {
+          var request = new HttpRequestMessage
+          {
+            Method = HttpMethod.Post,
+            RequestUri = new Uri("api/one-time-tokens", UriKind.Relative),
+            Headers = { Authorization = new AuthenticationHeaderValue("Bearer", bearer), },
+            Content = new StringContent(
+              new LogtoOneTimeTokenReq { Email = email, ExpiresIn = expiresInSeconds }.ToJson(),
+              Encoding.UTF8, "application/json")
+          };
+          using var response = await this.HttpClient.SendAsync(request);
+          response.EnsureSuccessStatusCode();
+          var body = await response.Content.ReadAsStringAsync();
+          var r = body.ToObj<LogtoOneTimeTokenRes>();
+          logger.LogInformation("One-time token minted");
+          return r.Token;
+        }
+        catch (Exception e)
+        {
+          logger.LogError(e, "Failed to mint one-time token");
+          throw;
+        }
+      }, Errors.MapNone);
+  }
+
   public Task<Result<Unit>> DeleteUser(string userId)
   {
     logger.LogInformation("Deleting user {UserId} from Logto", userId);

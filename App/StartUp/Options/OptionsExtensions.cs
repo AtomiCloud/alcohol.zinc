@@ -117,6 +117,11 @@ public static class OptionsExtensions
     // Register Error Portal Configurations
     services.RegisterOption<ErrorPortalOption>(ErrorPortalOption.Key);
 
+    // Register Web Portal (billing handoff) Configurations
+    services.RegisterOption<WebPortalOption>(WebPortalOption.Key)
+      .Validate(c => c.Cta.Keys.All(k => k is "ios" or "android"),
+        "WebPortal.Cta keys (Config File) must be 'ios' or 'android'");
+
     // Register Auth Configurations
     services.RegisterOption<AuthOption>(AuthOption.Key)
       .Validate(

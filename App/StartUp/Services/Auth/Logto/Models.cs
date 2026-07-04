@@ -18,6 +18,22 @@ public record LogtoTokenRes
   [JsonPropertyName("scope")] public string Scope { get; set; } = string.Empty;
 }
 
+public record LogtoOneTimeTokenReq
+{
+  [JsonPropertyName("email")] public string Email { get; set; } = string.Empty;
+
+  [JsonPropertyName("expiresIn")] public int ExpiresIn { get; set; }
+}
+
+public record LogtoOneTimeTokenRes
+{
+  [JsonPropertyName("token")] public string Token { get; set; } = string.Empty;
+
+  [JsonPropertyName("status")] public string Status { get; set; } = string.Empty;
+
+  [JsonPropertyName("expiresAt")] public long ExpiresAt { get; set; }
+}
+
 public record ClaimsPatchReq
 {
   [JsonPropertyName("customData")] public Dictionary<string, string?> CustomData { get; set; } = [];

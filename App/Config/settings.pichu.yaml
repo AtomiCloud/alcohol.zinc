@@ -49,6 +49,10 @@ HttpClient:
 Disbursement:
   Enabled: true
 
+WebPortal:
+  Scheme: https
+  Host: argon-alcohol-pichu.kirinnee.workers.dev
+
 Auth:
   Enabled: true
   Settings:

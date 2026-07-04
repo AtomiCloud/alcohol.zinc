@@ -41,6 +41,23 @@ ErrorPortal:
   Scheme: http
   Host: localhost:3000
   EnableExceptionResponse: true
+# Web billing portal handoff (neon app -> browser magic link). Scheme/Host are
+# the argon portal for the landscape; the Cta allowlists are the storefronts
+# where a free user may see the web "subscribe" link-out (US: Epic ruling,
+# EU-27: DMA). Anything not listed (incl. SG) fails closed to the neutral CTA.
+WebPortal:
+  Scheme: http
+  Host: localhost:3000
+  HandoffPath: /auth/handoff
+  RedirectPath: /billing
+  OttExpirySeconds: 300
+  Cta:
+    ios:
+      SubscribeAllowed:
+        [US, AT, BE, BG, HR, CY, CZ, DK, EE, FI, FR, DE, GR, HU, IE, IT, LV, LT, LU, MT, NL, PL, PT, RO, SK, SI, ES, SE]
+    android:
+      SubscribeAllowed:
+        [US, AT, BE, BG, HR, CY, CZ, DK, EE, FI, FR, DE, GR, HU, IE, IT, LV, LT, LU, MT, NL, PL, PT, RO, SK, SI, ES, SE]
 # Security
 Cors:
   - Name: AllowAll
