@@ -319,12 +319,15 @@ public class SubscriptionManagementService(
         if (reconcile.IsSuccess() && reconcile.Get().Status == "SUCCEEDED")
           return await this.RollRenewedPeriod(sub, targetTier);
 
-        // Only a DEFINITIVE decline may fall through to a fresh attempt. A
-        // transient error (gateway 5xx) or a status that may still settle
-        // asynchronously must wait for tomorrow's pass — minting a new intent
-        // beside one that later settles would charge the period twice.
+        // Only a DEFINITIVE decline (REQUIRES_PAYMENT_METHOD after a confirm
+        // attempt) may fall through to a fresh attempt. A transient error
+        // (gateway 5xx) or any status that could still settle without us —
+        // including REQUIRES_CUSTOMER_ACTION, whose 3DS challenge Airwallex
+        // documents as completable out-of-band — must wait for tomorrow's
+        // pass: minting a new intent beside one that later settles would
+        // charge the period twice.
         if (!reconcile.IsSuccess()
-            || reconcile.Get().Status is not ("REQUIRES_PAYMENT_METHOD" or "REQUIRES_CUSTOMER_ACTION"))
+            || reconcile.Get().Status is not "REQUIRES_PAYMENT_METHOD")
         {
           logger.LogWarning(
             "Renewal reconcile inconclusive for subscription {Id} (intent {Intent}); retrying next pass",

@@ -18,10 +18,22 @@ public class SubscriptionPlanProvider(IOptionsMonitor<SubscriptionOption> option
     if (!opt.Tiers.TryGetValue(tier, out var t))
       return new InvalidSubscriptionTierException(tier);
 
+    // A misconfigured currency code must surface through the Result path, not
+    // escape as an unhandled FormatException from Currency.FromCode.
+    Currency currency;
+    try
+    {
+      currency = Currency.FromCode(t.Currency);
+    }
+    catch (Exception e)
+    {
+      return new InvalidOperationException($"Invalid currency '{t.Currency}' for tier '{tier}'", e);
+    }
+
     return new SubscriptionPlan
     {
       Tier = tier,
-      Price = new Money(t.PriceCents / 100m, Currency.FromCode(t.Currency)),
+      Price = new Money(t.PriceCents / 100m, currency),
       Caps = new Dictionary<string, int>
       {
         [EntitlementKeys.HabitsMax] = t.HabitsMax,

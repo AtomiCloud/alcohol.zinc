@@ -87,6 +87,9 @@ public class KonnectGateway(IHttpClientFactory httpClientFactory, ILogger<Konnec
             Plan = new KonnectPlanRef { Key = tier },
             Labels = labels
           });
+        // Lost a create race (another mirror pass subscribed this customer
+        // first): the desired state exists, so treat it as success.
+        if (createRes.StatusCode == HttpStatusCode.Conflict) return new Unit();
         createRes.EnsureSuccessStatusCode();
         return new Unit();
       }

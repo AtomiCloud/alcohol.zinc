@@ -61,7 +61,15 @@ public class SubscriptionRenewalHostedService(
     }
     finally
     {
-      _gate.Release();
+      try
+      {
+        _gate.Release();
+      }
+      catch (ObjectDisposedException)
+      {
+        // Host shutdown disposed the gate while this pass was in flight;
+        // nothing left to release.
+      }
     }
   }
 

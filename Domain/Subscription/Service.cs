@@ -35,9 +35,11 @@ public class SubscriptionService(
 
     if (nowUtc > rec.PeriodEnd)
     {
-      // Past the period: only the grace window still grants the tier. An
-      // unknown tier has no plan, hence no grace to stand on.
-      var planRes = plans.GetPlan(rec.Tier);
+      // Past the period: only the grace window still grants the tier. The
+      // window is measured against the tier the renewal will charge
+      // (NextTier ?? Tier) so this backstop and RenewOne agree on when paid
+      // access stops. An unknown tier has no plan, hence no grace to stand on.
+      var planRes = plans.GetPlan(rec.NextTier ?? rec.Tier);
       if (!planRes.IsSuccess()) return FreeTier;
       if (nowUtc > rec.PeriodEnd.AddDays(planRes.Get().GracePeriodDays))
         return FreeTier;
