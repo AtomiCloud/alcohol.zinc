@@ -59,6 +59,8 @@ public class AtomiControllerBase(IAuthHelper h) : ControllerBase
         new NoActiveSubscription(nas.UserId)),
       SubscriptionBusyException sbe => this.Error(HttpStatusCode.Conflict,
         new RenewalInProgress(sbe.UserId)),
+      Auth.HandoffNotAvailableException hna => this.Error(HttpStatusCode.Forbidden,
+        new HandoffNotAvailable(hna.Platform, hna.Storefront)),
       _ => throw new AggregateException("Unhandled Exception", e),
     };
   }

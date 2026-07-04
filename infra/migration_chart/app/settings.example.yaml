@@ -132,6 +132,17 @@ ErrorPortal:
   Scheme: http
   Host: localhost:3000
   EnableExceptionResponse: true
+WebPortal:
+  Scheme: https
+  Host: portal.example.com
+  HandoffPath: /auth/handoff
+  RedirectPath: /billing
+  OttExpirySeconds: 300
+  Cta:
+    ios:
+      SubscribeAllowed: [US]
+    android:
+      SubscribeAllowed: [US]
 Database:
   Main:
     Host: zinc-maindb

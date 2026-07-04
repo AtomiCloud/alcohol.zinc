@@ -123,6 +123,10 @@ public static class DomainServices
 
     s.AddScoped<IKonnectGateway, KonnectGateway>()
       .AutoTrace<IKonnectGateway>();
+
+    // WEB HANDOFF (neon app -> web billing portal magic link)
+    s.AddScoped<Auth.IWebHandoffService, Auth.WebHandoffService>()
+      .AutoTrace<Auth.IWebHandoffService>();
     // PAYMENT
     s.AddScoped<IPaymentService, PaymentService>()
       .AutoTrace<IPaymentService>();

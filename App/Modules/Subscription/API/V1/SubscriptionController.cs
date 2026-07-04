@@ -1,4 +1,6 @@
 using System.Net.Mime;
+using App.Modules.Auth;
+using App.Modules.Auth.API.V1;
 using App.Modules.Common;
 using App.StartUp.Services.Auth;
 using App.Utility;
@@ -17,11 +19,29 @@ namespace App.Modules.Subscription.API.V1;
 public class SubscriptionController(
   ISubscriptionRepository subscriptionRepository,
   ISubscriptionManagementService managementService,
+  IWebHandoffService webHandoffService,
   IAuthHelper authHelper,
   SubscribeReqValidator subscribeValidator,
-  ChangeTierReqValidator changeTierValidator
+  ChangeTierReqValidator changeTierValidator,
+  WebHandoffReqValidator webHandoffValidator
 ) : AtomiControllerBase(authHelper)
 {
+  // Which subscription CTA the app may show for this platform + storefront.
+  // Server-decided so steering rules can change per landscape without an app
+  // release; clients treat unknown variants as neutral.
+  [Authorize, HttpGet("{userId}/cta")]
+  public async Task<ActionResult<SubscriptionCtaRes>> Cta(string userId,
+    [FromQuery] string? platform, [FromQuery] string? storefront)
+  {
+    var result = await this.GuardAsync(userId)
+      .ThenAwait(_ => webHandoffValidator.ValidateAsyncResult(
+        new WebHandoffReq(platform ?? string.Empty, storefront), "Invalid CTA query"))
+      .ThenAwait(q => webHandoffService.ResolveCta(userId, q.Platform, q.Storefront))
+      .Then(c => new SubscriptionCtaRes(c.Variant, c.Tier), Errors.MapNone);
+
+    return this.ReturnResult(result);
+  }
+
   [Authorize, HttpGet("{userId}")]
   public async Task<ActionResult<SubscriptionRes>> Get(string userId)
   {

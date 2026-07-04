@@ -34,6 +34,9 @@
     "ErrorPortal": {
       "$ref": "#/definitions/ErrorPortal"
     },
+    "WebPortal": {
+      "$ref": "#/definitions/WebPortal"
+    },
     "Auth": {
       "$ref": "#/definitions/Auth"
     },
@@ -942,6 +945,61 @@
         "Host": {
           "type": "string",
           "minLength": 1
+        }
+      }
+    },
+    "WebPortal": {
+      "title": "WebPortalOption",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "Scheme": {
+          "type": "string",
+          "enum": ["http", "https"]
+        },
+        "Host": {
+          "type": "string",
+          "minLength": 1
+        },
+        "HandoffPath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "RedirectPath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "OttExpirySeconds": {
+          "type": "integer",
+          "minimum": 30,
+          "maximum": 3600
+        },
+        "Cta": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "ios": {
+              "$ref": "#/definitions/WebPortal/definitions/CtaPlatform"
+            },
+            "android": {
+              "$ref": "#/definitions/WebPortal/definitions/CtaPlatform"
+            }
+          }
+        }
+      },
+      "definitions": {
+        "CtaPlatform": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "SubscribeAllowed": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Z]{2}$"
+              }
+            }
+          }
         }
       }
     },
