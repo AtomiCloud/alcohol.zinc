@@ -20,7 +20,7 @@ TOKEN=$(
   scripts/e2e/get-user-token.sh
 )
 curl -H "Authorization: Bearer $TOKEN" \
-  https://api.zinc.alcohol.pichu.cluster.atomi.cloud/api/v1/subscription/<userId>
+  https://api.zinc.alcohol.pichu.cluster.atomi.cloud/api/v1.0/Subscription/<userId>
 ```
 
 Notes:

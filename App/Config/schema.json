@@ -1001,7 +1001,8 @@
             }
           }
         }
-      }
+      },
+      "required": ["Scheme", "Host"]
     },
     "Auth": {
       "title": "AuthOption",
