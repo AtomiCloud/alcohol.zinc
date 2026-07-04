@@ -65,19 +65,22 @@ public class PaymentService(
     return repo.Search(search);
   }
 
-  // Update payment consent from webhook
+  // Update payment consent from webhook; the purpose is derived from the
+  // consent's merchant_trigger_reason (scheduled -> Subscription).
   public Task<Result<PaymentCustomerPrincipal?>> UpdatePaymentConsentAsync(
     string airwallexCustomerId,
     string? paymentConsentId,
-    PaymentConsentStatus? consentStatus)
+    PaymentConsentStatus? consentStatus,
+    ConsentPurpose purpose)
   {
     return repo.UpdatePaymentConsentByAirwallexCustomerId(
       airwallexCustomerId,
       paymentConsentId,
-      consentStatus);
+      consentStatus,
+      purpose);
   }
 
-  public Task<Result<PaymentConsentStatusResult>> GetPaymentConsentAsync(string userId)
+  public Task<Result<PaymentConsentStatusResult>> GetPaymentConsentAsync(string userId, ConsentPurpose purpose = ConsentPurpose.Penalty)
   {
     return repo.GetByUserId(userId)
       .Then(customer =>
@@ -87,19 +90,19 @@ public class PaymentService(
       )
       .Then(customer => new PaymentConsentStatusResult
       {
-        ConsentId = customer.Principal.Record.PaymentConsentId,
-        Status = customer.Principal.Record.ConsentStatus,
-        HasPaymentConsent = customer.Principal.Record.HasPaymentConsent
+        ConsentId = customer.Principal.Record.ConsentIdFor(purpose),
+        Status = customer.Principal.Record.ConsentStatusFor(purpose),
+        HasPaymentConsent = customer.Principal.Record.HasConsentFor(purpose)
       }, Errors.MapNone);
   }
 
-  public Task<Result<bool>> HasPaymentConsentAsync(string userId)
+  public Task<Result<bool>> HasPaymentConsentAsync(string userId, ConsentPurpose purpose = ConsentPurpose.Penalty)
   {
     return repo.GetByUserId(userId)
-      .Then(customer => customer?.Principal.Record.HasPaymentConsent ?? false, Errors.MapNone);
+      .Then(customer => customer?.Principal.Record.HasConsentFor(purpose) ?? false, Errors.MapNone);
   }
 
-  public Task<Result<Unit>> DisablePaymentConsentAsync(string userId)
+  public Task<Result<Unit>> DisablePaymentConsentAsync(string userId, ConsentPurpose purpose = ConsentPurpose.Penalty)
   {
     return repo.GetByUserId(userId)
       .Then(customer =>
@@ -109,17 +112,36 @@ public class PaymentService(
       )
       .Then(customer =>
       {
-        if (string.IsNullOrEmpty(customer.Principal.Record.PaymentConsentId))
+        if (string.IsNullOrEmpty(customer.Principal.Record.ConsentIdFor(purpose)))
         {
-          return new NotFoundException($"No payment consent found for userId: {userId}", typeof(PaymentCustomer), userId);
+          return new NotFoundException($"No {purpose} payment consent found for userId: {userId}", typeof(PaymentCustomer), userId);
         }
         return customer.ToResult();
       })
       .ThenAwait(customer =>
-        gateway.DisablePaymentConsentAsync(customer.Principal.Record.PaymentConsentId!)
-          .ThenAwait(_ => repo.DisablePaymentConsentAsync(userId))
+        gateway.DisablePaymentConsentAsync(customer.Principal.Record.ConsentIdFor(purpose)!)
+          .ThenAwait(_ => repo.DisablePaymentConsentAsync(userId, purpose))
           .Then(_ => new Unit(), Errors.MapNone)
       );
+  }
+
+  // Account deletion: revoke whatever consents exist, skipping missing ones.
+  public async Task<Result<Unit>> DisableAllPaymentConsentsAsync(string userId)
+  {
+    var customerRes = await repo.GetByUserId(userId);
+    if (!customerRes.IsSuccess()) return customerRes.FailureOrDefault()!;
+    var record = customerRes.Get()?.Principal.Record;
+    if (record == null) return new Unit();
+
+    foreach (var purpose in new[] { ConsentPurpose.Penalty, ConsentPurpose.Subscription })
+    {
+      if (string.IsNullOrEmpty(record.ConsentIdFor(purpose))) continue;
+      var disabled = await gateway.DisablePaymentConsentAsync(record.ConsentIdFor(purpose)!)
+        .ThenAwait(_ => repo.DisablePaymentConsentAsync(userId, purpose));
+      if (!disabled.IsSuccess()) return disabled.FailureOrDefault()!;
+    }
+
+    return new Unit();
   }
 
   public Task<Result<PaymentIntentResult>> CreatePaymentIntentAsync(string userId, CreatePaymentIntentRequest request)
@@ -163,7 +185,8 @@ public class PaymentService(
   public Task<Result<PaymentIntentResult>> ChargeStoredConsentAsync(
     string userId, Money amount, string description,
     string? idempotencyKey = null, string? existingIntentId = null,
-    Func<string, Task>? onIntentCreated = null)
+    Func<string, Task>? onIntentCreated = null,
+    ConsentPurpose purpose = ConsentPurpose.Penalty)
   {
     return repo.GetByUserId(userId)
       .Then(customer =>
@@ -172,13 +195,14 @@ public class PaymentService(
           : customer.ToResult()
       )
       .Then(customer =>
-        !customer.Principal.Record.HasPaymentConsent || string.IsNullOrEmpty(customer.Principal.Record.PaymentConsentId)
-          ? new NotFoundException($"No verified payment consent found for userId: {userId}", typeof(PaymentCustomer), userId)
+        !customer.Principal.Record.HasConsentFor(purpose) || string.IsNullOrEmpty(customer.Principal.Record.ConsentIdFor(purpose))
+          ? new NotFoundException($"No verified {purpose} payment consent found for userId: {userId}", typeof(PaymentCustomer), userId)
           : customer.ToResult()
       )
       .ThenAwait(customer =>
       {
         var r = customer.Principal.Record;
+        var consentId = r.ConsentIdFor(purpose)!;
 
         // Retry path: reconcile the previously-created intent instead of charging again.
         if (!string.IsNullOrEmpty(existingIntentId))
@@ -189,7 +213,7 @@ public class PaymentService(
                 // Money already moved on the prior attempt: do not re-charge.
                 ? intent.ToAsyncResult()
                 // Not yet settled: confirm the SAME intent (no new intent id).
-                : gateway.ConfirmPaymentIntentAsync(intent.Id, r.PaymentConsentId!, r.AirwallexCustomerId));
+                : gateway.ConfirmPaymentIntentAsync(intent.Id, consentId, r.AirwallexCustomerId));
         }
 
         var createReq = new CreatePaymentIntentRequest
@@ -215,7 +239,7 @@ public class PaymentService(
             // request_id and be rejected by Airwallex as duplicate_request.
             if (onIntentCreated != null) await onIntentCreated(intent.Id);
 
-            return await gateway.ConfirmPaymentIntentAsync(intent.Id, r.PaymentConsentId!, r.AirwallexCustomerId);
+            return await gateway.ConfirmPaymentIntentAsync(intent.Id, consentId, r.AirwallexCustomerId);
           });
       });
   }

@@ -1,3 +1,4 @@
+using Domain.Payment;
 using Domain.Subscription;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -59,6 +60,7 @@ public class SubscriptionRenewalTests
     row.Record.LastChargeIntentId.Should().BeNull("R3: a settled renewal must clear the intent id");
     payment.ChargeCalls.Should().ContainSingle();
     payment.ChargeCalls[0].IdempotencyKey.Should().Be($"sub-u1-pro-{periodEnd:yyyyMMdd}");
+    payment.ChargeCalls[0].Purpose.Should().Be(ConsentPurpose.Subscription);
   }
 
   [Fact]

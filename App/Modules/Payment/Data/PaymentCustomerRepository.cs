@@ -136,7 +136,8 @@ public class PaymentCustomerRepository(MainDbContext db, ILogger<PaymentCustomer
   public async Task<Result<PaymentCustomerPrincipal?>> UpdatePaymentConsentByAirwallexCustomerId(
     string airwallexCustomerId,
     string? paymentConsentId,
-    PaymentConsentStatus? consentStatus)
+    PaymentConsentStatus? consentStatus,
+    ConsentPurpose purpose)
   {
     try
     {
@@ -156,8 +157,16 @@ public class PaymentCustomerRepository(MainDbContext db, ILogger<PaymentCustomer
       // Convert enum to string for database storage
       var statusString = PaymentCustomerMapper.ConsentStatusToString(consentStatus);
 
-      data.PaymentConsentId = paymentConsentId;
-      data.PaymentConsentStatus = statusString;
+      if (purpose == ConsentPurpose.Subscription)
+      {
+        data.SubscriptionConsentId = paymentConsentId;
+        data.SubscriptionConsentStatus = statusString;
+      }
+      else
+      {
+        data.PaymentConsentId = paymentConsentId;
+        data.PaymentConsentStatus = statusString;
+      }
       data.UpdatedAt = DateTime.UtcNow;
 
       var updated = db.PaymentCustomers.Update(data);
@@ -174,20 +183,28 @@ public class PaymentCustomerRepository(MainDbContext db, ILogger<PaymentCustomer
     }
   }
 
-  public async Task<Result<PaymentCustomerPrincipal?>> DisablePaymentConsentAsync(string userId)
+  public async Task<Result<PaymentCustomerPrincipal?>> DisablePaymentConsentAsync(string userId, ConsentPurpose purpose)
   {
     try
     {
-      logger.LogInformation("Disabling PaymentConsent for UserId: {UserId}", userId);
+      logger.LogInformation("Disabling {Purpose} PaymentConsent for UserId: {UserId}", purpose, userId);
 
       var now = DateTime.UtcNow;
-      var rowsAffected = await db.PaymentCustomers
-        .Where(x => x.UserId == userId)
-        .ExecuteUpdateAsync(setter => setter
-          .SetProperty(p => p.PaymentConsentId, (string?)null)
-          .SetProperty(p => p.PaymentConsentStatus, (string?)null)
-          .SetProperty(p => p.UpdatedAt, now)
-        );
+      var rowsAffected = purpose == ConsentPurpose.Subscription
+        ? await db.PaymentCustomers
+          .Where(x => x.UserId == userId)
+          .ExecuteUpdateAsync(setter => setter
+            .SetProperty(p => p.SubscriptionConsentId, (string?)null)
+            .SetProperty(p => p.SubscriptionConsentStatus, (string?)null)
+            .SetProperty(p => p.UpdatedAt, now)
+          )
+        : await db.PaymentCustomers
+          .Where(x => x.UserId == userId)
+          .ExecuteUpdateAsync(setter => setter
+            .SetProperty(p => p.PaymentConsentId, (string?)null)
+            .SetProperty(p => p.PaymentConsentStatus, (string?)null)
+            .SetProperty(p => p.UpdatedAt, now)
+          );
 
       if (rowsAffected == 0)
       {

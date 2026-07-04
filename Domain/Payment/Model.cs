@@ -7,6 +7,17 @@ public enum PaymentConsentStatus
   RequiresCustomerAction
 }
 
+// Which charging relationship a stored consent authorizes, mirroring the card
+// networks' MIT classification. Kept separate per user so disputes, approval
+// scoring and revocation are scoped to the right agreement:
+//   Penalty      -> unscheduled merchant-initiated (event-driven, variable)
+//   Subscription -> recurring merchant-initiated (fixed cadence)
+public enum ConsentPurpose
+{
+  Penalty,
+  Subscription
+}
+
 public record PaymentCustomerSearch
 {
   public string? UserId { get; init; }
@@ -35,9 +46,26 @@ public record PaymentCustomerRecord
 {
   public required string UserId { get; init; }
   public required string AirwallexCustomerId { get; init; }
+
+  // Penalty (unscheduled MIT) consent — the original columns keep their names
+  // so existing data and call sites stay untouched.
   public string? PaymentConsentId { get; init; }
   public PaymentConsentStatus? ConsentStatus { get; init; }
   public required bool HasPaymentConsent { get; init; }
+
+  // Subscription (recurring MIT) consent.
+  public string? SubscriptionConsentId { get; init; }
+  public PaymentConsentStatus? SubscriptionConsentStatus { get; init; }
+  public required bool HasSubscriptionConsent { get; init; }
+
+  public string? ConsentIdFor(ConsentPurpose purpose)
+    => purpose == ConsentPurpose.Subscription ? this.SubscriptionConsentId : this.PaymentConsentId;
+
+  public PaymentConsentStatus? ConsentStatusFor(ConsentPurpose purpose)
+    => purpose == ConsentPurpose.Subscription ? this.SubscriptionConsentStatus : this.ConsentStatus;
+
+  public bool HasConsentFor(ConsentPurpose purpose)
+    => purpose == ConsentPurpose.Subscription ? this.HasSubscriptionConsent : this.HasPaymentConsent;
 }
 
 public record PaymentConsentInfo

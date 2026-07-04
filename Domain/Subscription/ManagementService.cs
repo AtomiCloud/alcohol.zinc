@@ -62,7 +62,9 @@ public class SubscriptionManagementService(
         return new SubscriptionBusyException(userId);
     }
 
-    var hasConsentRes = await payment.HasPaymentConsentAsync(userId);
+    // Subscriptions charge against the RECURRING consent — a user who only has
+    // the penalty (unscheduled) consent must set the subscription one up first.
+    var hasConsentRes = await payment.HasPaymentConsentAsync(userId, ConsentPurpose.Subscription);
     if (!hasConsentRes.IsSuccess()) return hasConsentRes.FailureOrDefault()!;
     if (!hasConsentRes.Get()) return new NoPaymentConsentException(userId);
 
@@ -122,7 +124,8 @@ public class SubscriptionManagementService(
         var saved = await repo.SetIntentId(rowId, intentId, chargeKey);
         if (!saved.IsSuccess())
           throw saved.FailureOrDefault() ?? new Exception($"SetIntentId failed for subscription {rowId}");
-      });
+      },
+      purpose: ConsentPurpose.Subscription);
 
     if (!chargeRes.IsSuccess())
     {
@@ -314,7 +317,8 @@ public class SubscriptionManagementService(
         var reconcile = await payment.ChargeStoredConsentAsync(
           rec.UserId, plan.Price, $"LazyTax {targetTier} subscription renewal",
           idempotencyKey: rec.LastChargeKey,
-          existingIntentId: rec.LastChargeIntentId);
+          existingIntentId: rec.LastChargeIntentId,
+          purpose: ConsentPurpose.Subscription);
 
         if (reconcile.IsSuccess() && reconcile.Get().Status == "SUCCEEDED")
           return await this.RollRenewedPeriod(sub, targetTier);
@@ -353,7 +357,8 @@ public class SubscriptionManagementService(
           var saved = await repo.SetIntentId(sub.Id, intentId, attemptKey);
           if (!saved.IsSuccess())
             throw saved.FailureOrDefault() ?? new Exception($"SetIntentId failed for subscription {sub.Id}");
-        });
+        },
+        purpose: ConsentPurpose.Subscription);
 
       if (chargeRes.IsSuccess() && chargeRes.Get().Status == "SUCCEEDED")
         return await this.RollRenewedPeriod(sub, targetTier);
