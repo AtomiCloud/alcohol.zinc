@@ -1,3 +1,15 @@
+## [1.25.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.24.0...v1.25.0) (2026-07-04)
+
+
+### ✨ Features ✨
+
+* paid subscription tiers with Airwallex billing + Konnect mirror ([3942e0b](https://github.com/AtomiCloud/alcohol.zinc/commit/3942e0b0ee8f7314cb67b2dc3f59557b5a99a0d5))
+
+
+### 🐛 Bug Fixes 🐛
+
+* address CodeRabbit review findings on subscription tiers ([fb22b26](https://github.com/AtomiCloud/alcohol.zinc/commit/fb22b26d0f165654e535c13bb8eadb6e2016654a))
+
 ## [1.24.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.23.0...v1.24.0) (2026-06-30)
 
 
