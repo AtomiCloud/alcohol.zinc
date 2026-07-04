@@ -126,6 +126,10 @@ public class PaymentService(
   }
 
   // Account deletion: revoke whatever consents exist, skipping missing ones.
+  // Every purpose is ATTEMPTED even when an earlier one fails — aborting on the
+  // first failure would leave the other mandate active at Airwallex with its
+  // stored id purged, i.e. unrevokable forever. The first failure is still
+  // surfaced (after all attempts) for callers that care.
   public async Task<Result<Unit>> DisableAllPaymentConsentsAsync(string userId)
   {
     var customerRes = await repo.GetByUserId(userId);
@@ -133,14 +137,25 @@ public class PaymentService(
     var record = customerRes.Get()?.Principal.Record;
     if (record == null) return new Unit();
 
+    Exception? firstFailure = null;
     foreach (var purpose in new[] { ConsentPurpose.Penalty, ConsentPurpose.Subscription })
     {
       if (string.IsNullOrEmpty(record.ConsentIdFor(purpose))) continue;
-      var disabled = await gateway.DisablePaymentConsentAsync(record.ConsentIdFor(purpose)!)
-        .ThenAwait(_ => repo.DisablePaymentConsentAsync(userId, purpose));
-      if (!disabled.IsSuccess()) return disabled.FailureOrDefault()!;
+      try
+      {
+        var disabled = await gateway.DisablePaymentConsentAsync(record.ConsentIdFor(purpose)!)
+          .ThenAwait(_ => repo.DisablePaymentConsentAsync(userId, purpose));
+        if (!disabled.IsSuccess()) firstFailure ??= disabled.FailureOrDefault();
+      }
+      catch (Exception ex)
+      {
+        // A gateway throw (e.g. transient Airwallex timeout) must not stop the
+        // remaining purposes from being revoked.
+        firstFailure ??= ex;
+      }
     }
 
+    if (firstFailure != null) return firstFailure;
     return new Unit();
   }
 

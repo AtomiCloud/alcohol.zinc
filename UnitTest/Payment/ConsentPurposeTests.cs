@@ -61,11 +61,21 @@ public class ConsentPurposeTests
     public Task<Result<PaymentIntentResult>> RetrievePaymentIntentAsync(string paymentIntentId)
       => Task.FromResult<Result<PaymentIntentResult>>(Intent(paymentIntentId, "REQUIRES_CUSTOMER_ACTION"));
 
+    public List<string> DisabledConsentIds { get; } = [];
+    public string? FailDisableFor { get; set; }
+
+    public Task<Result<Unit>> DisablePaymentConsentAsync(string paymentConsentId)
+    {
+      if (paymentConsentId == FailDisableFor)
+        return Task.FromResult<Result<Unit>>(new Exception($"gateway failed disabling {paymentConsentId}"));
+      DisabledConsentIds.Add(paymentConsentId);
+      return Task.FromResult<Result<Unit>>(new Unit());
+    }
+
     public Task<Result<string?>> GetCustomerIdByMerchantIdAsync(string merchantCustomerId) => throw new NotImplementedException();
     public Task<Result<string>> CreateCustomerAsync(string merchantCustomerId) => throw new NotImplementedException();
     public Task<Result<string>> GenerateClientSecretAsync(string customerId) => throw new NotImplementedException();
     public Task<Result<PaymentConsentInfo[]>> GetVerifiedPaymentConsentsAsync(string customerId) => throw new NotImplementedException();
-    public Task<Result<Unit>> DisablePaymentConsentAsync(string paymentConsentId) => throw new NotImplementedException();
   }
 
   private sealed class FakeRepo(PaymentCustomer customer) : IPaymentCustomerRepository
@@ -76,9 +86,16 @@ public class ConsentPurposeTests
     public Task<Result<PaymentCustomer?>> GetById(Guid id) => throw new NotImplementedException();
     public Task<Result<IEnumerable<PaymentCustomerPrincipal>>> Search(PaymentCustomerSearch search) => throw new NotImplementedException();
     public Task<Result<PaymentCustomerPrincipal>> Create(string userId, string airwallexCustomerId) => throw new NotImplementedException();
+    public List<ConsentPurpose> DisabledPurposes { get; } = [];
+
     public Task<Result<PaymentCustomerPrincipal?>> UpdatePaymentConsentByAirwallexCustomerId(
       string airwallexCustomerId, string? paymentConsentId, PaymentConsentStatus? consentStatus, ConsentPurpose purpose) => throw new NotImplementedException();
-    public Task<Result<PaymentCustomerPrincipal?>> DisablePaymentConsentAsync(string userId, ConsentPurpose purpose) => throw new NotImplementedException();
+
+    public Task<Result<PaymentCustomerPrincipal?>> DisablePaymentConsentAsync(string userId, ConsentPurpose purpose)
+    {
+      DisabledPurposes.Add(purpose);
+      return Task.FromResult<Result<PaymentCustomerPrincipal?>>(customer.Principal);
+    }
   }
 
   private static PaymentService Svc(PaymentCustomer customer, RecordingGateway gateway)
@@ -139,6 +156,60 @@ public class ConsentPurposeTests
     res.IsSuccess().Should().BeFalse();
     res.FailureOrDefault().Should().BeOfType<NotFoundException>();
     gateway.ConfirmedConsentIds.Should().BeEmpty();
+  }
+
+  [Fact]
+  public async Task DisableAll_RevokesBothPurposes()
+  {
+    var gateway = new RecordingGateway();
+    var svc = Svc(Customer(penaltyConsent: "cst_pen", subscriptionConsent: "cst_sub"), gateway);
+
+    var res = await svc.DisableAllPaymentConsentsAsync(UserId);
+
+    res.IsSuccess().Should().BeTrue();
+    gateway.DisabledConsentIds.Should().BeEquivalentTo("cst_pen", "cst_sub");
+  }
+
+  [Fact]
+  public async Task DisableAll_SkipsMissingConsents()
+  {
+    var gateway = new RecordingGateway();
+    var svc = Svc(Customer(penaltyConsent: null, subscriptionConsent: "cst_sub"), gateway);
+
+    var res = await svc.DisableAllPaymentConsentsAsync(UserId);
+
+    res.IsSuccess().Should().BeTrue();
+    gateway.DisabledConsentIds.Should().BeEquivalentTo("cst_sub");
+  }
+
+  [Fact]
+  public async Task DisableAll_PenaltyFailure_StillRevokesSubscription()
+  {
+    // Aborting on the first failure would orphan the other mandate at Airwallex
+    // forever (the stored id is purged right after during account deletion).
+    var gateway = new RecordingGateway { FailDisableFor = "cst_pen" };
+    var svc = Svc(Customer(penaltyConsent: "cst_pen", subscriptionConsent: "cst_sub"), gateway);
+
+    var res = await svc.DisableAllPaymentConsentsAsync(UserId);
+
+    res.IsSuccess().Should().BeFalse("the failure must still be surfaced after all attempts");
+    gateway.DisabledConsentIds.Should().BeEquivalentTo("cst_sub");
+  }
+
+  [Fact]
+  public async Task Charge_ReconcileBranch_ConfirmsWithSubscriptionConsent()
+  {
+    // The existingIntentId retry path must also use the purpose's consent.
+    var gateway = new RecordingGateway();
+    var svc = Svc(Customer(penaltyConsent: "cst_pen", subscriptionConsent: "cst_sub"), gateway);
+
+    var res = await svc.ChargeStoredConsentAsync(
+      UserId, new Money(5m, Currency.FromCode("USD")), "sub renewal",
+      existingIntentId: "int_prev",
+      purpose: ConsentPurpose.Subscription);
+
+    res.IsSuccess().Should().BeTrue();
+    gateway.ConfirmedConsentIds.Should().ContainSingle().Which.Should().Be("cst_sub");
   }
 
   [Fact]

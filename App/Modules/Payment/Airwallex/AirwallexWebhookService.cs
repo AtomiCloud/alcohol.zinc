@@ -54,6 +54,16 @@ public class AirwallexWebhookService(
       "Processing payment consent event: {EventName}, CustomerId: {CustomerId}, ConsentId: {ConsentId}, Status: {Status}, Purpose: {Purpose}",
       evt.Name, customerId, consentId, status, purpose);
 
+    // Classification depends on the client setting merchant_trigger_reason at
+    // consent creation (docs/payment-consents.md). An empty reason classifies
+    // as Penalty by design (legacy consents), but a NEW consent arriving
+    // without one is a frontend contract violation worth surfacing loudly —
+    // a mislabelled subscription consent would overwrite the penalty columns.
+    if (string.IsNullOrEmpty(evt.Data.Object.MerchantTriggerReason))
+      logger.LogWarning(
+        "Consent {ConsentId} for {CustomerId} carries no merchant_trigger_reason; classified as Penalty — verify the client sets it",
+        consentId, customerId);
+
     return paymentService
       .UpdatePaymentConsentAsync(customerId, consentId, status, purpose)
       .ThenAwait(customer =>
