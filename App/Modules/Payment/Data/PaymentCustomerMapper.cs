@@ -48,12 +48,13 @@ public static class PaymentCustomerMapper
     {
       UserId = data.UserId,
       AirwallexCustomerId = data.AirwallexCustomerId,
-      PaymentConsentId = data.PaymentConsentId,
-      ConsentStatus = ParseConsentStatus(data.PaymentConsentStatus),
-      HasPaymentConsent = data.PaymentConsentId != null && ParseConsentStatus(data.PaymentConsentStatus) == PaymentConsentStatus.Verified,
-      SubscriptionConsentId = data.SubscriptionConsentId,
-      SubscriptionConsentStatus = ParseConsentStatus(data.SubscriptionConsentStatus),
-      HasSubscriptionConsent = data.SubscriptionConsentId != null && ParseConsentStatus(data.SubscriptionConsentStatus) == PaymentConsentStatus.Verified
+      Consents = data.Consents.ToDictionary(
+        c => (ConsentPurpose)c.Purpose,
+        c => new StoredPaymentConsent
+        {
+          ConsentId = c.ConsentId,
+          Status = ParseConsentStatus(c.Status)
+        })
     };
   }
 

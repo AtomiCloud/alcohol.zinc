@@ -24,15 +24,21 @@ public class ConsentPurposeTests
       {
         UserId = UserId,
         AirwallexCustomerId = "cus_1",
-        PaymentConsentId = penaltyConsent,
-        ConsentStatus = penaltyConsent != null ? PaymentConsentStatus.Verified : null,
-        HasPaymentConsent = penaltyConsent != null,
-        SubscriptionConsentId = subscriptionConsent,
-        SubscriptionConsentStatus = subscriptionConsent != null ? PaymentConsentStatus.Verified : null,
-        HasSubscriptionConsent = subscriptionConsent != null
+        Consents = Consents(penaltyConsent, subscriptionConsent)
       }
     }
   };
+
+  private static Dictionary<ConsentPurpose, StoredPaymentConsent> Consents(
+    string? penaltyConsent, string? subscriptionConsent)
+  {
+    var d = new Dictionary<ConsentPurpose, StoredPaymentConsent>();
+    if (penaltyConsent != null)
+      d[ConsentPurpose.Penalty] = new StoredPaymentConsent { ConsentId = penaltyConsent, Status = PaymentConsentStatus.Verified };
+    if (subscriptionConsent != null)
+      d[ConsentPurpose.Subscription] = new StoredPaymentConsent { ConsentId = subscriptionConsent, Status = PaymentConsentStatus.Verified };
+    return d;
+  }
 
   private static PaymentIntentResult Intent(string id, string status) => new()
   {

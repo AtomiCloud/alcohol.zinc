@@ -25,10 +25,10 @@ public class ChargeStoredConsentTests
       {
         UserId = UserId,
         AirwallexCustomerId = "cus_1",
-        PaymentConsentId = "cst_1",
-        ConsentStatus = PaymentConsentStatus.Verified,
-        HasPaymentConsent = true,
-        HasSubscriptionConsent = false
+        Consents = new Dictionary<ConsentPurpose, StoredPaymentConsent>
+        {
+          [ConsentPurpose.Penalty] = new() { ConsentId = "cst_1", Status = PaymentConsentStatus.Verified }
+        }
       }
     }
   };

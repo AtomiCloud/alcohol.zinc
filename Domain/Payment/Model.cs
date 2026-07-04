@@ -42,30 +42,37 @@ public record PaymentCustomerPrincipal
   public required DateTime UpdatedAt { get; init; }
 }
 
+// One stored consent (a purpose-scoped Airwallex mandate) of a customer.
+public record StoredPaymentConsent
+{
+  public required string ConsentId { get; init; }
+  public PaymentConsentStatus? Status { get; init; }
+  public bool Verified => this.Status == PaymentConsentStatus.Verified;
+}
+
 public record PaymentCustomerRecord
 {
   public required string UserId { get; init; }
   public required string AirwallexCustomerId { get; init; }
 
-  // Penalty (unscheduled MIT) consent — the original columns keep their names
-  // so existing data and call sites stay untouched.
-  public string? PaymentConsentId { get; init; }
-  public PaymentConsentStatus? ConsentStatus { get; init; }
-  public required bool HasPaymentConsent { get; init; }
-
-  // Subscription (recurring MIT) consent.
-  public string? SubscriptionConsentId { get; init; }
-  public PaymentConsentStatus? SubscriptionConsentStatus { get; init; }
-  public required bool HasSubscriptionConsent { get; init; }
+  // At most one consent per purpose (unique (customer, purpose) in storage).
+  public IReadOnlyDictionary<ConsentPurpose, StoredPaymentConsent> Consents { get; init; }
+    = new Dictionary<ConsentPurpose, StoredPaymentConsent>();
 
   public string? ConsentIdFor(ConsentPurpose purpose)
-    => purpose == ConsentPurpose.Subscription ? this.SubscriptionConsentId : this.PaymentConsentId;
+    => this.Consents.TryGetValue(purpose, out var c) ? c.ConsentId : null;
 
   public PaymentConsentStatus? ConsentStatusFor(ConsentPurpose purpose)
-    => purpose == ConsentPurpose.Subscription ? this.SubscriptionConsentStatus : this.ConsentStatus;
+    => this.Consents.TryGetValue(purpose, out var c) ? c.Status : null;
 
   public bool HasConsentFor(ConsentPurpose purpose)
-    => purpose == ConsentPurpose.Subscription ? this.HasSubscriptionConsent : this.HasPaymentConsent;
+    => this.Consents.TryGetValue(purpose, out var c) && c.Verified;
+
+  // Compatibility conveniences (penalty = the original single consent).
+  public string? PaymentConsentId => this.ConsentIdFor(ConsentPurpose.Penalty);
+  public PaymentConsentStatus? ConsentStatus => this.ConsentStatusFor(ConsentPurpose.Penalty);
+  public bool HasPaymentConsent => this.HasConsentFor(ConsentPurpose.Penalty);
+  public bool HasSubscriptionConsent => this.HasConsentFor(ConsentPurpose.Subscription);
 }
 
 public record PaymentConsentInfo

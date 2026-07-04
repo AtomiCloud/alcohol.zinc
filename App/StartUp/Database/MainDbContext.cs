@@ -35,6 +35,7 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
   public DbSet<HabitVersionData> HabitVersions { get; set; }
   public DbSet<HabitExecutionData> HabitExecutions { get; set; }
   public DbSet<PaymentCustomerData> PaymentCustomers { get; set; }
+  public DbSet<PaymentConsentData> PaymentConsents { get; set; }
   // Protections & Vacation
   public DbSet<VacationPeriodData> VacationPeriods { get; set; }
   public DbSet<UserProtectionData> UserProtections { get; set; }
@@ -123,6 +124,14 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
     var paymentCustomer = modelBuilder.Entity<PaymentCustomerData>();
     paymentCustomer.HasIndex(x => x.UserId).IsUnique();  // One payment customer per user
     paymentCustomer.HasIndex(x => x.AirwallexCustomerId);
+
+    // Purpose-scoped consents: at most one per (customer, purpose).
+    var paymentConsent = modelBuilder.Entity<PaymentConsentData>();
+    paymentConsent.HasIndex(x => new { x.PaymentCustomerId, x.Purpose }).IsUnique();
+    paymentConsent.HasOne(x => x.PaymentCustomer)
+                  .WithMany(x => x.Consents)
+                  .HasForeignKey(x => x.PaymentCustomerId)
+                  .OnDelete(DeleteBehavior.Cascade);
 
     // VacationPeriods
     var vacation = modelBuilder.Entity<VacationPeriodData>();

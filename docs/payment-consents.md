@@ -3,10 +3,15 @@
 Each user can hold **two** stored Airwallex consents, mirroring the card
 networks' merchant-initiated-transaction (MIT) classification:
 
-| Purpose        | MIT class         | Used by                           | Columns on PaymentCustomer                            |
-| -------------- | ----------------- | --------------------------------- | ----------------------------------------------------- |
-| `penalty`      | unscheduled (COF) | penalty drain (habit failures)    | `PaymentConsentId` / `PaymentConsentStatus`           |
-| `subscription` | recurring         | subscription subscribe + renewals | `SubscriptionConsentId` / `SubscriptionConsentStatus` |
+| Purpose        | MIT class         | Used by                           |
+| -------------- | ----------------- | --------------------------------- |
+| `penalty`      | unscheduled (COF) | penalty drain (habit failures)    |
+| `subscription` | recurring         | subscription subscribe + renewals |
+
+Consents live in their own table — `PaymentConsents(Id, PaymentCustomerId FK,
+Purpose, ConsentId, Status, CreatedAt, UpdatedAt)` with a unique
+`(PaymentCustomerId, Purpose)` index — so future purposes are a new enum value,
+not a schema change. Disabling a consent deletes its row.
 
 Why: recurring-labelled charges get better issuer approval rates and cleaner
 chargeback treatment than unscheduled ones, and revoking one agreement must not
@@ -44,7 +49,9 @@ webhook routes the consent id into the matching column pair.
 
 ## Existing users
 
-Pre-split consents stay in the penalty columns untouched — zero migration of
-data, only two new nullable columns (`AddSubscriptionConsent`). Users
-subscribing for the first time are prompted for the recurring consent by the
-checkout flow (argon ticket 86ey5m5bp).
+The `SeparatePaymentConsents` migration moves every pre-split consent from the
+old `PaymentCustomers` columns into the table as the **penalty** consent (that
+is what the single consent was used as), then drops the columns; `Down()`
+restores them. Verified against a real Postgres round-trip (up → data present,
+down → columns restored). Users subscribing for the first time are prompted for
+the recurring consent by the checkout flow (argon ticket 86ey5m5bp).

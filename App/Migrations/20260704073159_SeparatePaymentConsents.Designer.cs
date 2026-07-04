@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace App.Migrations
 {
     [DbContext(typeof(MainDbContext))]
-    [Migration("20260704065327_AddSubscriptionConsent")]
-    partial class AddSubscriptionConsent
+    [Migration("20260704073159_SeparatePaymentConsents")]
+    partial class SeparatePaymentConsents
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -357,6 +357,41 @@ namespace App.Migrations
                     b.ToTable("HabitVersions");
                 });
 
+            modelBuilder.Entity("App.Modules.Payment.Data.PaymentConsentData", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConsentId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("PaymentCustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Purpose")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PaymentCustomerId", "Purpose")
+                        .IsUnique();
+
+                    b.ToTable("PaymentConsents");
+                });
+
             modelBuilder.Entity("App.Modules.Payment.Data.PaymentCustomerData", b =>
                 {
                     b.Property<Guid>("Id")
@@ -370,22 +405,6 @@ namespace App.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("PaymentConsentId")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("PaymentConsentStatus")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<string>("SubscriptionConsentId")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("SubscriptionConsentStatus")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -781,6 +800,17 @@ namespace App.Migrations
                     b.Navigation("Habit");
                 });
 
+            modelBuilder.Entity("App.Modules.Payment.Data.PaymentConsentData", b =>
+                {
+                    b.HasOne("App.Modules.Payment.Data.PaymentCustomerData", "PaymentCustomer")
+                        .WithMany("Consents")
+                        .HasForeignKey("PaymentCustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("PaymentCustomer");
+                });
+
             modelBuilder.Entity("App.Modules.Penalty.Data.CharityBalanceData", b =>
                 {
                     b.HasOne("App.Modules.Charities.Data.CharityData", "Charity")
@@ -887,6 +917,11 @@ namespace App.Migrations
             modelBuilder.Entity("App.Modules.HabitVersion.Data.HabitVersionData", b =>
                 {
                     b.Navigation("Executions");
+                });
+
+            modelBuilder.Entity("App.Modules.Payment.Data.PaymentCustomerData", b =>
+                {
+                    b.Navigation("Consents");
                 });
 #pragma warning restore 612, 618
         }
