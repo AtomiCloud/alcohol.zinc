@@ -1,3 +1,23 @@
+## [1.26.1](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.26.0...v1.26.1) (2026-07-04)
+
+
+### 🐛 Bug Fixes 🐛
+
+* align subscription tier prices with launch pricing (pro 499, ultimate 799) ([610c1c3](https://github.com/AtomiCloud/alcohol.zinc/commit/610c1c3726c49d983660c2c9e01adc1a6440c859))
+
+## [1.26.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.25.0...v1.26.0) (2026-07-04)
+
+
+### ✨ Features ✨
+
+* purpose-scoped payment consents (penalty vs subscription MIT) ([3f4e8d4](https://github.com/AtomiCloud/alcohol.zinc/commit/3f4e8d4a418211f9620d131977b3180579037e10))
+
+
+### 🐛 Bug Fixes 🐛
+
+* address consent-separation review findings ([a27a5fa](https://github.com/AtomiCloud/alcohol.zinc/commit/a27a5fa2c933762cac1e96269f6e54b26fd165eb))
+* guard consent-row delete with the consent id actually revoked ([585a265](https://github.com/AtomiCloud/alcohol.zinc/commit/585a265c3bc8ef566e1691434c088dd2b6feaaea)), closes [#63](https://github.com/AtomiCloud/alcohol.zinc/issues/63)
+
 ## [1.25.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.24.0...v1.25.0) (2026-07-04)
 
 

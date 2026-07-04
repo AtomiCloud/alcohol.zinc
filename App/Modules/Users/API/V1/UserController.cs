@@ -148,12 +148,13 @@ public class UserController(
     var result = await this.GuardAsync(sub)
       .ThenAwait(_ => service.DeleteAccount(sub!, appOption.Value.BlockAccountDeletionOnDebt, async () =>
       {
-        // Best-effort: revoke the stored Airwallex payment consent/mandate before the payment row
-        // is purged (runs only after the debt gate passes). A missing consent (most users) or a
-        // provider error must NOT block deletion. DisablePaymentConsentAsync can THROW on transient
-        // failures (e.g. an Airwallex timeout the gateway rethrows), so we swallow it here — the
-        // gateway already logs the error — and always resolve to success.
-        try { await paymentService.DisablePaymentConsentAsync(sub!); }
+        // Best-effort: revoke ALL stored Airwallex payment consents/mandates (penalty +
+        // subscription) before the payment row is purged (runs only after the debt gate
+        // passes). A missing consent (most users) or a provider error must NOT block
+        // deletion. The call can THROW on transient failures (e.g. an Airwallex timeout
+        // the gateway rethrows), so we swallow it here — the gateway already logs the
+        // error — and always resolve to success.
+        try { await paymentService.DisableAllPaymentConsentsAsync(sub!); }
         catch { /* best-effort — failure already logged downstream; never block deletion */ }
         return new Unit();
       }))

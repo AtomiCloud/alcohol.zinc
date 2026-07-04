@@ -80,13 +80,22 @@ public class DeleteAccountAirwallexE2ETests : IAsyncLifetime
 
     // Seed the user + a PaymentCustomer pointing at the real sandbox consent.
     _db.Users.Add(new UserData { Id = "user-A", Username = "awx_e2e", Email = "awx_e2e@test.local", Active = true });
+    var customerId = Guid.NewGuid();
     _db.PaymentCustomers.Add(new PaymentCustomerData
     {
-      Id = Guid.NewGuid(),
+      Id = customerId,
       UserId = "user-A",
       AirwallexCustomerId = _customerId,
-      PaymentConsentId = _consentId,
-      PaymentConsentStatus = "VERIFIED",
+      CreatedAt = DateTime.UtcNow,
+      UpdatedAt = DateTime.UtcNow,
+    });
+    _db.PaymentConsents.Add(new PaymentConsentData
+    {
+      Id = Guid.NewGuid(),
+      PaymentCustomerId = customerId,
+      Purpose = (int)Domain.Payment.ConsentPurpose.Penalty,
+      ConsentId = _consentId,
+      Status = "VERIFIED",
       CreatedAt = DateTime.UtcNow,
       UpdatedAt = DateTime.UtcNow,
     });

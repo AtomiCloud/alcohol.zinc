@@ -35,17 +35,26 @@ public static class PaymentCustomerMapper
       Principal = new PaymentCustomerPrincipal
       {
         Id = data.Id,
-        Record = new PaymentCustomerRecord
-        {
-          UserId = data.UserId,
-          AirwallexCustomerId = data.AirwallexCustomerId,
-          PaymentConsentId = data.PaymentConsentId,
-          ConsentStatus = ParseConsentStatus(data.PaymentConsentStatus),
-          HasPaymentConsent = data.PaymentConsentId != null && ParseConsentStatus(data.PaymentConsentStatus) == PaymentConsentStatus.Verified
-        },
+        Record = data.ToRecord(),
         CreatedAt = data.CreatedAt,
         UpdatedAt = data.UpdatedAt
       }
+    };
+  }
+
+  private static PaymentCustomerRecord ToRecord(this PaymentCustomerData data)
+  {
+    return new PaymentCustomerRecord
+    {
+      UserId = data.UserId,
+      AirwallexCustomerId = data.AirwallexCustomerId,
+      Consents = data.Consents.ToDictionary(
+        c => (ConsentPurpose)c.Purpose,
+        c => new StoredPaymentConsent
+        {
+          ConsentId = c.ConsentId,
+          Status = ParseConsentStatus(c.Status)
+        })
     };
   }
 
@@ -54,14 +63,7 @@ public static class PaymentCustomerMapper
     return new PaymentCustomerPrincipal
     {
       Id = data.Id,
-      Record = new PaymentCustomerRecord
-      {
-        UserId = data.UserId,
-        AirwallexCustomerId = data.AirwallexCustomerId,
-        PaymentConsentId = data.PaymentConsentId,
-        ConsentStatus = ParseConsentStatus(data.PaymentConsentStatus),
-        HasPaymentConsent = data.PaymentConsentId != null && ParseConsentStatus(data.PaymentConsentStatus) == PaymentConsentStatus.Verified
-      },
+      Record = data.ToRecord(),
       CreatedAt = data.CreatedAt,
       UpdatedAt = data.UpdatedAt
     };

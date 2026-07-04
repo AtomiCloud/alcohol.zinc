@@ -20,12 +20,19 @@ public class AirwallexEventAdapter
     return (id, record, complete);
   }
 
-  // Process payment consent events (for consent verification)
-  public (string CustomerId, string? ConsentId, PaymentConsentStatus? Status) ProcessPaymentConsentEvent(AirwallexEvent evt)
+  // Process payment consent events (for consent verification). The purpose is
+  // classified from the consent's MIT trigger reason: a consent created for
+  // scheduled (recurring) charging belongs to subscriptions; anything else is
+  // the penalty (unscheduled) consent — including legacy consents created
+  // before the split, which carry no scheduled reason.
+  public (string CustomerId, string? ConsentId, PaymentConsentStatus? Status, ConsentPurpose Purpose) ProcessPaymentConsentEvent(AirwallexEvent evt)
   {
     var customerId = evt.Data.Object.CustomerId;
     var consentId = evt.Data.Object.Id;
     var statusString = evt.Data.Object.Status;
+    var purpose = string.Equals(evt.Data.Object.MerchantTriggerReason, "scheduled", StringComparison.OrdinalIgnoreCase)
+      ? ConsentPurpose.Subscription
+      : ConsentPurpose.Penalty;
 
     // Parse Airwallex status string to enum
     PaymentConsentStatus? status = statusString switch
@@ -36,6 +43,6 @@ public class AirwallexEventAdapter
       _ => null
     };
 
-    return (customerId, consentId, status);
+    return (customerId, consentId, status, purpose);
   }
 }

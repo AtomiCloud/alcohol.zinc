@@ -15,6 +15,7 @@ public class PaymentCustomerRepository(MainDbContext db, ILogger<PaymentCustomer
 
       var data = await db
         .PaymentCustomers
+        .Include(x => x.Consents)
         .Where(x => x.UserId == userId)
         .FirstOrDefaultAsync();
 
@@ -41,6 +42,7 @@ public class PaymentCustomerRepository(MainDbContext db, ILogger<PaymentCustomer
 
       var data = await db
         .PaymentCustomers
+        .Include(x => x.Consents)
         .Where(x => x.Id == id)
         .FirstOrDefaultAsync();
 
@@ -65,7 +67,7 @@ public class PaymentCustomerRepository(MainDbContext db, ILogger<PaymentCustomer
     {
       logger.LogInformation("Searching PaymentCustomers");
 
-      var query = db.PaymentCustomers.AsQueryable();
+      var query = db.PaymentCustomers.Include(x => x.Consents).AsQueryable();
 
       if (!string.IsNullOrEmpty(search.UserId))
         query = query.Where(x => x.UserId == search.UserId);
@@ -75,10 +77,11 @@ public class PaymentCustomerRepository(MainDbContext db, ILogger<PaymentCustomer
 
       if (search.HasPaymentConsent.HasValue)
       {
+        // Historic semantics: filters on the penalty consent's existence.
         if (search.HasPaymentConsent.Value)
-          query = query.Where(x => x.PaymentConsentId != null);
+          query = query.Where(x => x.Consents.Any(c => c.Purpose == (int)ConsentPurpose.Penalty));
         else
-          query = query.Where(x => x.PaymentConsentId == null);
+          query = query.Where(x => !x.Consents.Any(c => c.Purpose == (int)ConsentPurpose.Penalty));
       }
 
       if (search.CreatedBefore.HasValue)
@@ -113,8 +116,6 @@ public class PaymentCustomerRepository(MainDbContext db, ILogger<PaymentCustomer
         Id = Guid.NewGuid(),
         UserId = userId,
         AirwallexCustomerId = airwallexCustomerId,
-        PaymentConsentId = null,
-        PaymentConsentStatus = null,
         CreatedAt = now,
         UpdatedAt = now
       };
@@ -136,7 +137,8 @@ public class PaymentCustomerRepository(MainDbContext db, ILogger<PaymentCustomer
   public async Task<Result<PaymentCustomerPrincipal?>> UpdatePaymentConsentByAirwallexCustomerId(
     string airwallexCustomerId,
     string? paymentConsentId,
-    PaymentConsentStatus? consentStatus)
+    PaymentConsentStatus? consentStatus,
+    ConsentPurpose purpose)
   {
     try
     {
@@ -144,6 +146,7 @@ public class PaymentCustomerRepository(MainDbContext db, ILogger<PaymentCustomer
 
       var data = await db
         .PaymentCustomers
+        .Include(x => x.Consents)
         .Where(x => x.AirwallexCustomerId == airwallexCustomerId)
         .FirstOrDefaultAsync();
 
@@ -155,10 +158,33 @@ public class PaymentCustomerRepository(MainDbContext db, ILogger<PaymentCustomer
 
       // Convert enum to string for database storage
       var statusString = PaymentCustomerMapper.ConsentStatusToString(consentStatus);
+      var now = DateTime.UtcNow;
 
-      data.PaymentConsentId = paymentConsentId;
-      data.PaymentConsentStatus = statusString;
-      data.UpdatedAt = DateTime.UtcNow;
+      var consent = data.Consents.FirstOrDefault(c => c.Purpose == (int)purpose);
+      if (paymentConsentId == null)
+      {
+        if (consent != null) db.PaymentConsents.Remove(consent);
+      }
+      else if (consent == null)
+      {
+        db.PaymentConsents.Add(new PaymentConsentData
+        {
+          Id = Guid.NewGuid(),
+          PaymentCustomerId = data.Id,
+          Purpose = (int)purpose,
+          ConsentId = paymentConsentId,
+          Status = statusString,
+          CreatedAt = now,
+          UpdatedAt = now
+        });
+      }
+      else
+      {
+        consent.ConsentId = paymentConsentId;
+        consent.Status = statusString;
+        consent.UpdatedAt = now;
+      }
+      data.UpdatedAt = now;
 
       var updated = db.PaymentCustomers.Update(data);
       await db.SaveChangesAsync();
@@ -174,20 +200,28 @@ public class PaymentCustomerRepository(MainDbContext db, ILogger<PaymentCustomer
     }
   }
 
-  public async Task<Result<PaymentCustomerPrincipal?>> DisablePaymentConsentAsync(string userId)
+  public async Task<Result<PaymentCustomerPrincipal?>> DisablePaymentConsentAsync(string userId, ConsentPurpose purpose, string expectedConsentId)
   {
     try
     {
-      logger.LogInformation("Disabling PaymentConsent for UserId: {UserId}", userId);
+      logger.LogInformation("Disabling {Purpose} PaymentConsent for UserId: {UserId}", purpose, userId);
 
       var now = DateTime.UtcNow;
+      // Deleting the row (not nulling) keeps the invariant: a consent row always
+      // carries a consent id. Guarded on the consent id that was actually revoked
+      // at the gateway, so a newer consent stored concurrently survives.
+      var deleted = await db.PaymentConsents
+        .Where(c => c.Purpose == (int)purpose
+                    && c.PaymentCustomer!.UserId == userId
+                    && c.ConsentId == expectedConsentId)
+        .ExecuteDeleteAsync();
+      if (deleted == 0)
+        logger.LogInformation(
+          "{Purpose} consent for {UserId} was already replaced/removed; leaving the current row intact",
+          purpose, userId);
       var rowsAffected = await db.PaymentCustomers
         .Where(x => x.UserId == userId)
-        .ExecuteUpdateAsync(setter => setter
-          .SetProperty(p => p.PaymentConsentId, (string?)null)
-          .SetProperty(p => p.PaymentConsentStatus, (string?)null)
-          .SetProperty(p => p.UpdatedAt, now)
-        );
+        .ExecuteUpdateAsync(setter => setter.SetProperty(p => p.UpdatedAt, now));
 
       if (rowsAffected == 0)
       {
