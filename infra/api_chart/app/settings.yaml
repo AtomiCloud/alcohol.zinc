@@ -198,10 +198,6 @@ HttpClient:
   AIRWALLEX:
     BaseAddress: 'https://api.airwallex.com'
     Timeout: 60
-  KONNECT:
-    BaseAddress: 'https://us.api.konghq.com'
-    Timeout: 60
-    BearerAuth: supersecret
 Auth:
   Enabled: true
   Management:
@@ -245,9 +241,12 @@ Disbursement:
   DonorFirstName: LazyTax
   DonorLastName: Donations
   DonorEmail: donations@lazytax.club
-# Subscription tier catalog + renewal worker. This config is the enforcement
-# source of truth; the Kong Konnect catalog mirrors it (docs/KONNECT_SETUP.md).
-# free caps must stay >= the legacy stub defaults (10/10/3/7) — validated at startup.
+# Subscription tier catalog + renewal worker. Single source of truth for tiers,
+# caps and prices. MUST match the public pricing page (alcohol.argon
+# src/lib/billing/pricing.ts + components/landing/Pricing.tsx):
+#   free: 2 habits, 10 skips/mo, no vacation mode, no freezes
+#   pro $4.99: 10 habits, 20 skips/mo, 6 vacations/yr, freeze base 14
+#   ultimate $7.99: unlimited habits, 60 skips/mo, 12 vacations/yr, freeze base 30
 Subscription:
   RenewalEnabled: false
   GracePeriodDays: 7
@@ -255,23 +254,21 @@ Subscription:
     free:
       PriceCents: 0
       Currency: USD
-      HabitsMax: 10
+      HabitsMax: 2
       SkipsMonthly: 10
-      VacationWindowsYearly: 3
-      FreezeBase: 7
+      VacationWindowsYearly: 0
+      FreezeBase: 0
     pro:
-      # Launch price ($4.99) — must match the argon checkout display (alcohol.argon src/lib/billing/pricing.ts)
       PriceCents: 499
       Currency: USD
-      HabitsMax: 25
+      HabitsMax: 10
       SkipsMonthly: 20
       VacationWindowsYearly: 6
       FreezeBase: 14
     ultimate:
-      # Launch price ($7.99) — must match the argon checkout display
       PriceCents: 799
       Currency: USD
-      HabitsMax: 100
+      HabitsMax: 2147483647
       SkipsMonthly: 60
       VacationWindowsYearly: 12
       FreezeBase: 30

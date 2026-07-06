@@ -147,19 +147,16 @@ public static class OptionsExtensions
     // Register Disbursement (charity payout) Options
     services.RegisterOption<DisbursementOption>(DisbursementOption.Key);
 
-    // Register Subscription (tier catalog + renewal) Options
+    // Register Subscription (tier catalog + renewal) Options.
+    // Note: the free tier deliberately sits below the pre-subscription stub
+    // defaults (product decision 2026-07-06: free = 2 habits, no vacation/
+    // freeze). Existing users keep over-cap entities but cannot create more;
+    // grandfathering is a pre-production decision.
     services.RegisterOption<SubscriptionOption>(SubscriptionOption.Key)
       .Validate(c => c.Tiers.Keys.All(x => SubscriptionTiers.Any(t => t == x)),
         "Subscription.Tiers keys (Config File) must be in SubscriptionTiers (Class)")
       .Validate(c => c.Tiers.ContainsKey(Registry.SubscriptionTiers.Free),
-        "Subscription.Tiers (Config File) must contain the 'free' tier")
-      // R1 guard: the free tier must grant at least what the pre-subscription
-      // stub hardcoded (10/10/3/7), or existing users would instantly hit
-      // TierInsufficient on habits/skips they already have.
-      .Validate(c => !c.Tiers.TryGetValue(Registry.SubscriptionTiers.Free, out var free)
-                     || (free.HabitsMax >= 10 && free.SkipsMonthly >= 10
-                         && free.VacationWindowsYearly >= 3 && free.FreezeBase >= 7),
-        "Subscription.Tiers.free caps must be >= the legacy defaults (10 habits, 10 skips, 3 vacations, 7 freeze)");
+        "Subscription.Tiers (Config File) must contain the 'free' tier");
 
     return services;
   }

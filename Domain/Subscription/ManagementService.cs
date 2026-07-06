@@ -9,7 +9,6 @@ public class SubscriptionManagementService(
   ISubscriptionRepository repo,
   ISubscriptionPlanProvider plans,
   IPaymentService payment,
-  IKonnectGateway konnect,
   ILogger<SubscriptionManagementService> logger
 ) : ISubscriptionManagementService
 {
@@ -97,8 +96,6 @@ public class SubscriptionManagementService(
         PeriodEnd = periodEnd,
         CancelAtPeriodEnd = false,
         NextTier = null,
-        KonnectCustomerId = existing?.Record.KonnectCustomerId,
-        KonnectSyncedAt = existing?.Record.KonnectSyncedAt,
         LastChargeIntentId = existing?.Record.LastChargeIntentId,
         LastChargeKey = existing?.Record.LastChargeKey
       });
@@ -140,6 +137,7 @@ public class SubscriptionManagementService(
 
     var activated = await repo.Activate(rowId, tier, periodStart, periodEnd, DateTime.UtcNow);
     if (!activated.IsSuccess()) return activated.FailureOrDefault()!;
+
     if (!activated.Get())
     {
       // A renewal claimed the row between our lease check and the charge. The
@@ -150,8 +148,6 @@ public class SubscriptionManagementService(
         rowId, intent.Id);
       return new SubscriptionBusyException(userId);
     }
-
-    await this.MirrorBestEffort(rowId, userId);
 
     return await repo.GetByUserId(userId).Then(s => s!, Errors.MapNone);
   }
@@ -271,7 +267,6 @@ public class SubscriptionManagementService(
     {
       var cancelled = await repo.MarkCancelled(sub.Id);
       if (!cancelled.IsSuccess()) return cancelled.FailureOrDefault()!;
-      await this.MirrorBestEffort(sub.Id, rec.UserId);
       return 1;
     }
 
@@ -286,7 +281,6 @@ public class SubscriptionManagementService(
     {
       var lapsed = await repo.MarkCancelled(sub.Id);
       if (!lapsed.IsSuccess()) return lapsed.FailureOrDefault()!;
-      await this.MirrorBestEffort(sub.Id, rec.UserId);
       return 1;
     }
 
@@ -369,7 +363,6 @@ public class SubscriptionManagementService(
       {
         var graced = await repo.MarkGrace(sub.Id);
         if (!graced.IsSuccess()) return graced.FailureOrDefault()!;
-        await this.MirrorBestEffort(sub.Id, rec.UserId);
       }
 
       return 0;
@@ -398,86 +391,7 @@ public class SubscriptionManagementService(
       return 0;
     }
 
-    await this.MirrorBestEffort(sub.Id, sub.Record.UserId);
     return 1;
   }
 
-  public async Task<Result<int>> ProcessKonnectMirror(int batchSize)
-  {
-    return await repo.GetUnsynced(batchSize)
-      .ThenAwait(async unsynced =>
-      {
-        var synced = 0;
-        foreach (var sub in unsynced)
-        {
-          if (await this.MirrorOne(sub)) synced++;
-        }
-
-        return (Result<int>)synced;
-      });
-  }
-
-  // Best-effort mirror after a state change: failures are logged only — the row's
-  // KonnectSyncedAt watermark stays stale so ProcessKonnectMirror retries later.
-  private async Task MirrorBestEffort(Guid id, string userId)
-  {
-    try
-    {
-      var subRes = await repo.GetByUserId(userId);
-      if (!subRes.IsSuccess() || subRes.Get() is not { } sub) return;
-      await this.MirrorOne(sub);
-    }
-    catch (Exception ex)
-    {
-      logger.LogWarning(ex, "Konnect mirror threw for subscription {Id}; will retry via worker", id);
-    }
-  }
-
-  private async Task<bool> MirrorOne(UserSubscriptionPrincipal sub)
-  {
-    try
-    {
-      var rec = sub.Record;
-      var customerRes = rec.KonnectCustomerId is { } cid
-        ? (Result<string>)cid
-        : await konnect.UpsertCustomer(rec.UserId);
-      if (!customerRes.IsSuccess())
-      {
-        logger.LogWarning(customerRes.FailureOrDefault(),
-          "Konnect customer upsert failed for {UserId}; will retry via worker", rec.UserId);
-        return false;
-      }
-
-      var customerId = customerRes.Get();
-      // Cancelled/PendingActivation mirror as the free tier; Konnect only needs
-      // the effective entitlement-granting plan.
-      var effectiveTier = rec.Status is SubscriptionStatus.Active or SubscriptionStatus.Grace
-        ? rec.Tier
-        : SubscriptionService.FreeTier;
-
-      var subRes = await konnect.UpsertSubscription(
-        customerId, effectiveTier, rec.PeriodStart, rec.PeriodEnd, rec.Status.ToString());
-      if (!subRes.IsSuccess())
-      {
-        logger.LogWarning(subRes.FailureOrDefault(),
-          "Konnect subscription upsert failed for {UserId}; will retry via worker", rec.UserId);
-        return false;
-      }
-
-      var marked = await repo.MarkKonnectSynced(sub.Id, customerId, DateTime.UtcNow);
-      if (!marked.IsSuccess())
-      {
-        logger.LogWarning(marked.FailureOrDefault(),
-          "MarkKonnectSynced failed for subscription {Id}", sub.Id);
-        return false;
-      }
-
-      return true;
-    }
-    catch (Exception ex)
-    {
-      logger.LogWarning(ex, "Konnect mirror threw for subscription {Id}; will retry via worker", sub.Id);
-      return false;
-    }
-  }
 }

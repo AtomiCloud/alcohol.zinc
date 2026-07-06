@@ -186,7 +186,6 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
     var subscription = modelBuilder.Entity<UserSubscriptionData>();
     subscription.HasIndex(x => x.UserId).IsUnique();
     subscription.HasIndex(x => new { x.Status, x.PeriodEnd }); // renewal scan: GetDue
-    subscription.HasIndex(x => x.KonnectSyncedAt);             // mirror-retry scan
     subscription.HasOne(x => x.User)
                 .WithMany()
                 .HasForeignKey(x => x.UserId)

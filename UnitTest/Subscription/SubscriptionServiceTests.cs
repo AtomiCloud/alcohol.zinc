@@ -24,8 +24,6 @@ public class SubscriptionServiceTests
         PeriodEnd = periodEnd ?? DateTime.UtcNow.AddDays(15),
         CancelAtPeriodEnd = cancelAtPeriodEnd,
         NextTier = null,
-        KonnectCustomerId = null,
-        KonnectSyncedAt = null,
         LastChargeIntentId = null
       },
       CreatedAt = DateTime.UtcNow,
@@ -95,7 +93,7 @@ public class SubscriptionServiceTests
   {
     var svc = Svc(new FakeSubscriptionRepository());
     ((int)await svc.GetLimitForTier("pro", "ent.skips.monthly")).Should().Be(20);
-    ((int)await svc.GetLimitForTier("ultimate", "ent.habits.max")).Should().Be(100);
+    ((int)await svc.GetLimitForTier("ultimate", "ent.habits.max")).Should().Be(int.MaxValue);
   }
 
   [Fact]
@@ -115,17 +113,17 @@ public class SubscriptionServiceTests
     res.FailureOrDefault().Should().BeOfType<InvalidSubscriptionTierException>();
   }
 
-  // R1 pin: the free tier must grant at least the legacy stub's caps
-  // (10 habits, 10 skips/month, 3 vacations/year, freeze base 7), or existing
-  // users would instantly hit TierInsufficient on things they already have.
+  // Product matrix pin (2026-07-06, must match the public pricing page):
+  // free = 2 habits, 10 skips/month, no vacation mode, no freezes.
+  // Existing users keep over-cap entities but cannot create more.
   [Theory]
-  [InlineData("ent.habits.max", 10)]
+  [InlineData("ent.habits.max", 2)]
   [InlineData("ent.skips.monthly", 10)]
-  [InlineData("ent.vacation.windows.yearly", 3)]
-  [InlineData("ent.freeze.base", 7)]
-  public async Task R1_FreeTier_AtLeastLegacyStubDefaults(string key, int legacyDefault)
+  [InlineData("ent.vacation.windows.yearly", 0)]
+  [InlineData("ent.freeze.base", 0)]
+  public async Task FreeTier_MatchesPublicPricingPage(string key, int cap)
   {
     var svc = Svc(new FakeSubscriptionRepository());
-    ((int)await svc.GetLimitForTier("free", key)).Should().BeGreaterThanOrEqualTo(legacyDefault);
+    ((int)await svc.GetLimitForTier("free", key)).Should().Be(cap);
   }
 }

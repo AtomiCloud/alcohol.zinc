@@ -188,29 +188,7 @@ public sealed class FakeSubscriptionRepository : ISubscriptionRepository
     return Task.FromResult<Result<List<UserSubscriptionPrincipal>>>(due);
   }
 
-  public Task<Result<List<UserSubscriptionPrincipal>>> GetUnsynced(int batchSize)
-  {
-    Calls.Add("GetUnsynced");
-    var unsynced = _byUser.Values
-      .Where(x => x.Record.KonnectSyncedAt == null || x.Record.KonnectSyncedAt < x.UpdatedAt)
-      .Take(batchSize)
-      .ToList();
-    return Task.FromResult<Result<List<UserSubscriptionPrincipal>>>(unsynced);
-  }
 
-  public Task<Result<Unit>> MarkKonnectSynced(Guid id, string konnectCustomerId, DateTime at)
-  {
-    Calls.Add("MarkKonnectSynced");
-    // Does not bump UpdatedAt (mirrors the real repository's watermark semantics).
-    var row = this.ById(id);
-    if (row == null)
-      return Task.FromResult<Result<Unit>>(new InvalidOperationException($"UserSubscription {id} not found"));
-    this.Put(row with
-    {
-      Record = row.Record with { KonnectCustomerId = konnectCustomerId, KonnectSyncedAt = at }
-    });
-    return Task.FromResult<Result<Unit>>(new Unit());
-  }
 }
 
 public sealed class FakePlanProvider(Dictionary<string, SubscriptionPlan> plans) : ISubscriptionPlanProvider
@@ -220,8 +198,8 @@ public sealed class FakePlanProvider(Dictionary<string, SubscriptionPlan> plans)
     return new FakePlanProvider(new Dictionary<string, SubscriptionPlan>
     {
       ["free"] = Plan("free", 0m),
-      ["pro"] = Plan("pro", 5m),
-      ["ultimate"] = Plan("ultimate", 15m)
+      ["pro"] = Plan("pro", 4.99m),
+      ["ultimate"] = Plan("ultimate", 7.99m)
     });
   }
 
@@ -232,10 +210,10 @@ public sealed class FakePlanProvider(Dictionary<string, SubscriptionPlan> plans)
       Price = new Money(price, Currency.FromCode("USD")),
       Caps = new Dictionary<string, int>
       {
-        ["ent.habits.max"] = tier switch { "free" => 10, "pro" => 25, _ => 100 },
+        ["ent.habits.max"] = tier switch { "free" => 2, "pro" => 10, _ => int.MaxValue },
         ["ent.skips.monthly"] = tier switch { "free" => 10, "pro" => 20, _ => 60 },
-        ["ent.vacation.windows.yearly"] = tier switch { "free" => 3, "pro" => 6, _ => 12 },
-        ["ent.freeze.base"] = tier switch { "free" => 7, "pro" => 14, _ => 30 }
+        ["ent.vacation.windows.yearly"] = tier switch { "free" => 0, "pro" => 6, _ => 12 },
+        ["ent.freeze.base"] = tier switch { "free" => 0, "pro" => 14, _ => 30 }
       },
       GracePeriodDays = graceDays
     };
@@ -244,31 +222,6 @@ public sealed class FakePlanProvider(Dictionary<string, SubscriptionPlan> plans)
     => plans.TryGetValue(tier, out var p) ? p : new InvalidSubscriptionTierException(tier);
 }
 
-public sealed class FakeKonnectGateway : IKonnectGateway
-{
-  public bool FailCustomer { get; set; }
-  public bool FailSubscription { get; set; }
-
-  public List<string> UpsertCustomerCalls { get; } = [];
-  public List<(string CustomerId, string Tier, string Status)> UpsertSubscriptionCalls { get; } = [];
-
-  public Task<Result<string>> UpsertCustomer(string userId)
-  {
-    UpsertCustomerCalls.Add(userId);
-    if (FailCustomer)
-      return Task.FromResult<Result<string>>(new Exception("konnect down"));
-    return Task.FromResult<Result<string>>($"kc-{userId}");
-  }
-
-  public Task<Result<Unit>> UpsertSubscription(
-    string konnectCustomerId, string tier, DateTime periodStart, DateTime periodEnd, string status)
-  {
-    UpsertSubscriptionCalls.Add((konnectCustomerId, tier, status));
-    if (FailSubscription)
-      return Task.FromResult<Result<Unit>>(new Exception("konnect down"));
-    return Task.FromResult<Result<Unit>>(new Unit());
-  }
-}
 
 // Payment fake tailored to the subscription flows: implements
 // HasPaymentConsentAsync + ChargeStoredConsentAsync (the penalty fake throws on

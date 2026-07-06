@@ -11,7 +11,6 @@ using App.Modules.Penalty.Data;
 using App.Modules.Protection.Data;
 using App.Modules.Subscription;
 using App.Modules.Subscription.Data;
-using App.Modules.Subscription.Konnect;
 using App.Modules.System;
 using App.Modules.Users.Data;
 using App.Modules.Vacation;
@@ -108,7 +107,7 @@ public static class DomainServices
     s.AddScoped<IEntitlementService, EntitlementService>()
       .AutoTrace<IEntitlementService>();
 
-    // SUBSCRIPTION (local table + config catalog; Konnect is a mirror)
+    // SUBSCRIPTION (local table + config catalog)
     s.AddScoped<ISubscriptionService, Domain.Subscription.SubscriptionService>()
       .AutoTrace<ISubscriptionService>();
 
@@ -121,8 +120,6 @@ public static class DomainServices
     s.AddScoped<ISubscriptionPlanProvider, SubscriptionPlanProvider>()
       .AutoTrace<ISubscriptionPlanProvider>();
 
-    s.AddScoped<IKonnectGateway, KonnectGateway>()
-      .AutoTrace<IKonnectGateway>();
 
     // WEB HANDOFF (neon app -> web billing portal magic link)
     s.AddScoped<Auth.IWebHandoffService, Auth.WebHandoffService>()

@@ -22,11 +22,6 @@ public class UserSubscriptionData
   [MaxLength(32)]
   public string? NextTier { get; set; }
 
-  [MaxLength(256)]
-  public string? KonnectCustomerId { get; set; }
-
-  // Mirror watermark: NULL or < UpdatedAt means the Konnect mirror is stale.
-  public DateTime? KonnectSyncedAt { get; set; }
 
   // Intent id of an in-flight charge attempt only; cleared once the charge settles.
   [MaxLength(256)]

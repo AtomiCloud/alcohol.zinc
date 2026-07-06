@@ -3,8 +3,8 @@ using CSharp_Result;
 namespace Domain.Subscription;
 
 // Real ISubscriptionService: tier from the local subscription table, limits from
-// the local plan catalog (config). Konnect is a mirror and is never consulted on
-// this hot path. Consumers (EntitlementService, HabitOverviewService) are
+// the local plan catalog (config) — zinc is the single source of truth for
+// plans and usage. Consumers (EntitlementService, HabitOverviewService) are
 // unchanged.
 public class SubscriptionService(
   ISubscriptionRepository repo,
