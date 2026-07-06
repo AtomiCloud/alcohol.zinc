@@ -17,7 +17,8 @@ public class SubscriptionManagementServiceTests
   private static UserSubscriptionPrincipal Row(
     string userId, string tier, SubscriptionStatus status,
     DateTime? periodEnd = null, bool cancelAtPeriodEnd = false, string? nextTier = null,
-    string? intentId = null, string? chargeKey = null, DateTime? renewingUntil = null)
+    string? intentId = null, string? chargeKey = null, DateTime? renewingUntil = null,
+    DateTime? periodStart = null)
     => new()
     {
       Id = Guid.NewGuid(),
@@ -26,7 +27,7 @@ public class SubscriptionManagementServiceTests
         UserId = userId,
         Tier = tier,
         Status = status,
-        PeriodStart = DateTime.UtcNow.AddMonths(-1),
+        PeriodStart = periodStart ?? DateTime.UtcNow.AddMonths(-1),
         PeriodEnd = periodEnd ?? DateTime.UtcNow.AddDays(15),
         CancelAtPeriodEnd = cancelAtPeriodEnd,
         NextTier = nextTier,
@@ -159,11 +160,15 @@ public class SubscriptionManagementServiceTests
 
 
   [Fact]
-  public async Task Subscribe_UpgradeWhileActive_ChargesFullAndResetsPeriod()
+  public async Task Subscribe_Upgrade_ChargesProratedDiffAndKeepsAnniversary()
   {
-    var oldPeriodEnd = DateTime.UtcNow.AddDays(3);
+    // pro -> ultimate with 20 of 30 days remaining: the user already paid pro
+    // for this period, so the charge is (7.99 - 4.99) * 20/30 ≈ $2.00 and the
+    // billing anniversary must NOT move.
+    var periodStart = DateTime.UtcNow.AddDays(-10);
+    var periodEnd = DateTime.UtcNow.AddDays(20);
     var repo = new FakeSubscriptionRepository(
-      Row("u1", "pro", SubscriptionStatus.Active, periodEnd: oldPeriodEnd));
+      Row("u1", "pro", SubscriptionStatus.Active, periodStart: periodStart, periodEnd: periodEnd));
     var payment = FakeSubscriptionPaymentService.Succeeds("int_2");
 
     var res = await Svc(repo, payment).Subscribe("u1", "ultimate");
@@ -171,11 +176,56 @@ public class SubscriptionManagementServiceTests
     res.IsSuccess().Should().BeTrue();
     var row = repo.Row("u1")!;
     row.Record.Tier.Should().Be("ultimate");
-    row.Record.PeriodEnd.Should().BeAfter(oldPeriodEnd, "an upgrade resets the period from now");
+    row.Record.PeriodStart.Should().Be(periodStart, "an upgrade must not move the anniversary");
+    row.Record.PeriodEnd.Should().Be(periodEnd, "an upgrade must not move the anniversary");
+
     payment.ChargeCalls.Should().ContainSingle();
-    payment.ChargeCalls[0].Amount.Amount.Should().Be(7.99m, "no proration: the full new-tier price");
-    payment.ChargeCalls[0].IdempotencyKey.Should().StartWith("sub-u1-ultimate-",
-      "the tier in the key prevents the old tier's settled intent from paying for the upgrade");
+    var expected = Math.Floor((7.99m - 4.99m) * 20m / 30m * 100m) / 100m; // rounded down
+    payment.ChargeCalls[0].Amount.Amount.Should().BeApproximately(expected, 0.01m,
+      "only the prorated price difference is charged (the seconds between test and service clocks shift it by far less than a cent)");
+    payment.ChargeCalls[0].Amount.Amount.Should().BeLessThan(7.99m - 4.99m);
+    payment.ChargeCalls[0].IdempotencyKey.Should().StartWith("sub-u1-ultimate-upg-",
+      "the -upg- namespace keeps upgrade charges from colliding with subscribe/renewal intents");
+  }
+
+  [Fact]
+  public async Task Subscribe_UpgradeMomentsBeforeRenewal_FlipsFreeOfCharge()
+  {
+    // Remaining fraction prorates to $0: the tier flips without a charge — the
+    // imminent renewal bills the full new price anyway.
+    var periodStart = DateTime.UtcNow.AddDays(-30);
+    var periodEnd = DateTime.UtcNow.AddSeconds(5);
+    var repo = new FakeSubscriptionRepository(
+      Row("u1", "pro", SubscriptionStatus.Active, periodStart: periodStart, periodEnd: periodEnd));
+    var payment = FakeSubscriptionPaymentService.Succeeds("unused");
+
+    var res = await Svc(repo, payment).Subscribe("u1", "ultimate");
+
+    res.IsSuccess().Should().BeTrue();
+    repo.Row("u1")!.Record.Tier.Should().Be("ultimate");
+    repo.Row("u1")!.Record.PeriodEnd.Should().Be(periodEnd);
+    payment.ChargeCalls.Should().BeEmpty("a $0 proration must not attempt a charge");
+  }
+
+  [Fact]
+  public async Task Subscribe_UpgradeRetryAfterConfirmFailure_ReconcilesSameIntent()
+  {
+    var periodStart = DateTime.UtcNow.AddDays(-10);
+    var periodEnd = DateTime.UtcNow.AddDays(20);
+    var repo = new FakeSubscriptionRepository(
+      Row("u1", "pro", SubscriptionStatus.Active, periodStart: periodStart, periodEnd: periodEnd));
+    var failing = FakeSubscriptionPaymentService.CreatesThenFails("int_u1", new Exception("confirm blip"));
+    await Svc(repo, failing).Subscribe("u1", "ultimate");
+    repo.Row("u1")!.Record.Tier.Should().Be("pro", "a failed upgrade must not change the tier");
+
+    var succeeding = FakeSubscriptionPaymentService.Succeeds("int_u1");
+    var res = await Svc(repo, succeeding).Subscribe("u1", "ultimate");
+
+    res.IsSuccess().Should().BeTrue();
+    succeeding.ChargeCalls.Should().ContainSingle();
+    succeeding.ChargeCalls[0].ExistingIntentId.Should().Be("int_u1",
+      "a same-day upgrade retry must reconcile the recorded intent, not mint a new one");
+    repo.Row("u1")!.Record.Tier.Should().Be("ultimate");
   }
 
   [Fact]
