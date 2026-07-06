@@ -1,3 +1,10 @@
+## [1.29.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.28.0...v1.29.0) (2026-07-06)
+
+
+### ✨ Features ✨
+
+* prorated upgrades — charge the difference, keep the anniversary ([1518795](https://github.com/AtomiCloud/alcohol.zinc/commit/1518795b0d831a8eb80b82bdca3df1ed346823c2))
+
 ## [1.28.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.27.0...v1.28.0) (2026-07-06)
 
 
