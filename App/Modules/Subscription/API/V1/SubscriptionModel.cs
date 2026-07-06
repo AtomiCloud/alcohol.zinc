@@ -13,6 +13,18 @@ public record SubscriptionCtaRes(
   string Tier
 );
 
+// One tier of the public plan catalog. habitsMax is null when unlimited.
+public record PlanRes(
+  string Key,
+  long PriceCents,
+  string Currency,
+  int? HabitsMax,
+  bool HabitsUnlimited,
+  int SkipsMonthly,
+  int VacationWindowsYearly,
+  int FreezeBase
+);
+
 public record SubscriptionRes(
   string UserId,
   string Tier,
