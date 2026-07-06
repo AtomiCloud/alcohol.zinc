@@ -50,8 +50,5 @@ public interface ISubscriptionRepository
   // Renewal scan: Status in (Active, Grace) AND PeriodEnd <= nowUtc.
   Task<Result<List<UserSubscriptionPrincipal>>> GetDue(DateTime nowUtc, int batchSize);
 
-  // Mirror-retry scan: KonnectSyncedAt IS NULL OR KonnectSyncedAt < UpdatedAt.
-  Task<Result<List<UserSubscriptionPrincipal>>> GetUnsynced(int batchSize);
 
-  Task<Result<Unit>> MarkKonnectSynced(Guid id, string konnectCustomerId, DateTime at);
 }

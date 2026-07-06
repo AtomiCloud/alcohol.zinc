@@ -12,9 +12,8 @@ public class SubscriptionRenewalTests
 
   private static SubscriptionManagementService Svc(
     FakeSubscriptionRepository repo,
-    FakeSubscriptionPaymentService payment,
-    FakeKonnectGateway? konnect = null)
-    => new(repo, FakePlanProvider.Default(), payment, konnect ?? new FakeKonnectGateway(),
+    FakeSubscriptionPaymentService payment)
+    => new(repo, FakePlanProvider.Default(), payment,
       NullLogger<SubscriptionManagementService>.Instance);
 
   private static UserSubscriptionPrincipal DueRow(
@@ -33,8 +32,6 @@ public class SubscriptionRenewalTests
         PeriodEnd = periodEnd,
         CancelAtPeriodEnd = cancelAtPeriodEnd,
         NextTier = nextTier,
-        KonnectCustomerId = null,
-        KonnectSyncedAt = null,
         LastChargeIntentId = intentId,
         LastChargeKey = chargeKey
       },
@@ -129,7 +126,7 @@ public class SubscriptionRenewalTests
     payment.ChargeCalls[0].ExistingIntentId.Should().BeNull(
       "an intent from another tier's charge key must be ignored, not confirmed");
     payment.ChargeCalls[0].IdempotencyKey.Should().Be($"sub-u1-pro-{periodEnd:yyyyMMdd}");
-    payment.ChargeCalls[0].Amount.Amount.Should().Be(5m, "the renewal charges the pro price");
+    payment.ChargeCalls[0].Amount.Amount.Should().Be(4.99m, "the renewal charges the pro price");
   }
 
   [Fact]
@@ -230,15 +227,12 @@ public class SubscriptionRenewalTests
     var repo = new FakeSubscriptionRepository(
       DueRow("u1", "pro", SubscriptionStatus.Active, Now.AddDays(-1), cancelAtPeriodEnd: true));
     var payment = FakeSubscriptionPaymentService.Succeeds("int_r1");
-    var konnect = new FakeKonnectGateway();
 
-    var res = await Svc(repo, payment, konnect).ProcessRenewals(Now, 100);
+    var res = await Svc(repo, payment).ProcessRenewals(Now, 100);
 
     res.IsSuccess().Should().BeTrue();
     repo.Row("u1")!.Record.Status.Should().Be(SubscriptionStatus.Cancelled);
     payment.ChargeCalls.Should().BeEmpty();
-    konnect.UpsertSubscriptionCalls.Should().ContainSingle(x => x.Tier == "free",
-      "a cancelled row mirrors as the free plan");
   }
 
   [Fact]
@@ -256,7 +250,7 @@ public class SubscriptionRenewalTests
     row.Record.Tier.Should().Be("pro");
     row.Record.NextTier.Should().BeNull();
     payment.ChargeCalls.Should().ContainSingle();
-    payment.ChargeCalls[0].Amount.Amount.Should().Be(5m, "the downgraded tier's price is charged");
+    payment.ChargeCalls[0].Amount.Amount.Should().Be(4.99m, "the downgraded tier's price is charged");
   }
 
   [Fact]

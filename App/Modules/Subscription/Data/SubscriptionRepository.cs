@@ -61,8 +61,6 @@ public class SubscriptionRepository(MainDbContext db, ILogger<SubscriptionReposi
       existing.PeriodEnd = record.PeriodEnd;
       existing.CancelAtPeriodEnd = record.CancelAtPeriodEnd;
       existing.NextTier = record.NextTier;
-      existing.KonnectCustomerId = record.KonnectCustomerId;
-      existing.KonnectSyncedAt = record.KonnectSyncedAt;
       existing.LastChargeIntentId = record.LastChargeIntentId;
       existing.LastChargeKey = record.LastChargeKey;
       existing.RenewingUntil = record.RenewingUntil;
@@ -253,8 +251,7 @@ public class SubscriptionRepository(MainDbContext db, ILogger<SubscriptionReposi
     try
     {
       // Atomic claim: only when the period is still the expected one and no
-      // live lease exists. Deliberately does NOT touch UpdatedAt (not a
-      // state change the Konnect mirror cares about).
+      // live lease exists. Deliberately does NOT touch UpdatedAt.
       var rows = await db.UserSubscriptions
         .Where(x => x.Id == id
                     && x.PeriodEnd == expectedPeriodEnd
@@ -310,45 +307,5 @@ public class SubscriptionRepository(MainDbContext db, ILogger<SubscriptionReposi
     }
   }
 
-  public async Task<Result<List<UserSubscriptionPrincipal>>> GetUnsynced(int batchSize)
-  {
-    try
-    {
-      var data = await db.UserSubscriptions
-        .AsNoTracking()
-        .Where(x => x.KonnectSyncedAt == null || x.KonnectSyncedAt < x.UpdatedAt)
-        .OrderBy(x => x.UpdatedAt)
-        .Take(batchSize)
-        .ToListAsync();
 
-      return data.Select(x => x.ToPrincipal()).ToList();
-    }
-    catch (Exception e)
-    {
-      logger.LogError(e, "Failed querying unsynced UserSubscriptions");
-      return e;
-    }
-  }
-
-  public async Task<Result<Unit>> MarkKonnectSynced(Guid id, string konnectCustomerId, DateTime at)
-  {
-    try
-    {
-      // Deliberately does NOT touch UpdatedAt: the watermark comparison
-      // (KonnectSyncedAt < UpdatedAt) is what detects staleness.
-      var rows = await db.UserSubscriptions
-        .Where(x => x.Id == id)
-        .ExecuteUpdateAsync(s => s
-          .SetProperty(x => x.KonnectCustomerId, konnectCustomerId)
-          .SetProperty(x => x.KonnectSyncedAt, at));
-
-      if (rows == 0) return new InvalidOperationException($"UserSubscription {id} not found");
-      return new Unit();
-    }
-    catch (Exception e)
-    {
-      logger.LogError(e, "Failed marking Konnect synced for UserSubscription {Id}", id);
-      return e;
-    }
-  }
 }

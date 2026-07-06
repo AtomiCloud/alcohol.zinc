@@ -18,8 +18,6 @@ public static class UserSubscriptionMapper
         PeriodEnd = data.PeriodEnd,
         CancelAtPeriodEnd = data.CancelAtPeriodEnd,
         NextTier = data.NextTier,
-        KonnectCustomerId = data.KonnectCustomerId,
-        KonnectSyncedAt = data.KonnectSyncedAt,
         LastChargeIntentId = data.LastChargeIntentId,
         LastChargeKey = data.LastChargeKey,
         RenewingUntil = data.RenewingUntil
@@ -42,8 +40,6 @@ public static class UserSubscriptionMapper
       PeriodEnd = record.PeriodEnd,
       CancelAtPeriodEnd = record.CancelAtPeriodEnd,
       NextTier = record.NextTier,
-      KonnectCustomerId = record.KonnectCustomerId,
-      KonnectSyncedAt = record.KonnectSyncedAt,
       LastChargeIntentId = record.LastChargeIntentId,
       LastChargeKey = record.LastChargeKey,
       RenewingUntil = record.RenewingUntil,

@@ -21,6 +21,4 @@ public interface ISubscriptionManagementService
   // state this pass (renewed or cancelled).
   Task<Result<int>> ProcessRenewals(DateTime nowUtc, int batchSize);
 
-  // Mirror worker entrypoint: re-pushes rows whose Konnect mirror is stale.
-  Task<Result<int>> ProcessKonnectMirror(int batchSize);
 }

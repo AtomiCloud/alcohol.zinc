@@ -5,9 +5,9 @@ using Microsoft.Extensions.Options;
 namespace App.Modules.Subscription;
 
 // Daily subscription maintenance: charges due renewals (rolling periods, moving
-// failures into grace, cancelling lapsed/cancel-requested rows), then retries any
-// stale Konnect mirrors. Idempotency keys make a cross-replica double tick
-// charge-safe; this in-process gate just avoids overlapping work.
+// failures into grace, cancelling lapsed/cancel-requested rows). Idempotency
+// keys make a cross-replica double tick charge-safe; this in-process gate just
+// avoids overlapping work.
 public class SubscriptionRenewalHostedService(
   IServiceProvider serviceProvider,
   IOptionsMonitor<SubscriptionOption> options,
@@ -48,12 +48,6 @@ public class SubscriptionRenewalHostedService(
         logger.LogInformation("Subscription renewal settled {Count} subscription(s)", (int)renewals);
       else
         logger.LogError(renewals.FailureOrDefault(), "Subscription renewal error");
-
-      var mirrored = await svc.ProcessKonnectMirror(200);
-      if (mirrored.IsSuccess())
-        logger.LogInformation("Konnect mirror synced {Count} subscription(s)", (int)mirrored);
-      else
-        logger.LogError(mirrored.FailureOrDefault(), "Konnect mirror error");
     }
     catch (Exception e)
     {

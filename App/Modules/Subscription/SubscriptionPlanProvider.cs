@@ -7,8 +7,8 @@ using NodaMoney;
 
 namespace App.Modules.Subscription;
 
-// Plan catalog over SubscriptionOption config: the enforcement source of truth.
-// Konnect mirrors these definitions (docs/KONNECT_SETUP.md) but is never read here.
+// Plan catalog over SubscriptionOption config: the single source of truth for
+// tiers, caps and prices.
 public class SubscriptionPlanProvider(IOptionsMonitor<SubscriptionOption> options)
   : ISubscriptionPlanProvider
 {

@@ -1,6 +1,12 @@
 # Subscriptions via Kong Konnect — Design
 
-**Status:** Draft / research
+> **⚠️ SUPERSEDED (2026-07-06):** Konnect was removed entirely. zinc's config
+> (`Subscription:` in settings.yaml) is the single source of truth for tiers,
+> caps and prices, zinc tracks all usage in its own database, and Airwallex is
+> the only external payment dependency. This document is kept as the historical
+> record of the evaluation; see `docs/payment-consents.md` for the live design.
+
+**Status:** Superseded / historical
 **Service:** alcohol.zinc (habit-accountability API, .NET 8, Clean Architecture)
 **Author:** research pass, 2026-07-02
 

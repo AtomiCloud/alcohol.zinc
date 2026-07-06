@@ -4,16 +4,14 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace UnitTest.Subscription;
 
-// Subscribe / Cancel / ChangeTier state-transition matrix, including the
-// Konnect-mirror-must-never-fail-a-purchase guarantee.
+// Subscribe / Cancel / ChangeTier state-transition matrix.
 public class SubscriptionManagementServiceTests
 {
   private static SubscriptionManagementService Svc(
     FakeSubscriptionRepository repo,
     FakeSubscriptionPaymentService payment,
-    FakeKonnectGateway? konnect = null,
     FakePlanProvider? plans = null)
-    => new(repo, plans ?? FakePlanProvider.Default(), payment, konnect ?? new FakeKonnectGateway(),
+    => new(repo, plans ?? FakePlanProvider.Default(), payment,
       NullLogger<SubscriptionManagementService>.Instance);
 
   private static UserSubscriptionPrincipal Row(
@@ -32,8 +30,6 @@ public class SubscriptionManagementServiceTests
         PeriodEnd = periodEnd ?? DateTime.UtcNow.AddDays(15),
         CancelAtPeriodEnd = cancelAtPeriodEnd,
         NextTier = nextTier,
-        KonnectCustomerId = null,
-        KonnectSyncedAt = null,
         LastChargeIntentId = intentId,
         LastChargeKey = chargeKey,
         RenewingUntil = renewingUntil
@@ -47,9 +43,8 @@ public class SubscriptionManagementServiceTests
   {
     var repo = new FakeSubscriptionRepository();
     var payment = FakeSubscriptionPaymentService.Succeeds("int_1");
-    var konnect = new FakeKonnectGateway();
 
-    var res = await Svc(repo, payment, konnect).Subscribe("u1", "pro");
+    var res = await Svc(repo, payment).Subscribe("u1", "pro");
 
     res.IsSuccess().Should().BeTrue();
     var row = repo.Row("u1")!;
@@ -58,13 +53,11 @@ public class SubscriptionManagementServiceTests
     row.Record.LastChargeIntentId.Should().BeNull("settled charges must not linger as reconcilable intents");
 
     payment.ChargeCalls.Should().HaveCount(1);
-    payment.ChargeCalls[0].Amount.Amount.Should().Be(5m);
+    payment.ChargeCalls[0].Amount.Amount.Should().Be(4.99m);
     payment.ChargeCalls[0].IdempotencyKey.Should().StartWith("sub-u1-pro-");
     payment.ChargeCalls[0].Purpose.Should().Be(ConsentPurpose.Subscription,
       "subscription fees must ride the recurring consent, never the penalty one");
     payment.HasConsentCalls.Should().ContainSingle().Which.Should().Be(ConsentPurpose.Subscription);
-
-    konnect.UpsertSubscriptionCalls.Should().ContainSingle(x => x.Tier == "pro");
   }
 
   [Fact]
@@ -164,20 +157,6 @@ public class SubscriptionManagementServiceTests
     repo.Row("u1")!.Record.Status.Should().Be(SubscriptionStatus.Active);
   }
 
-  [Fact]
-  public async Task Subscribe_KonnectFailure_PurchaseStillSucceeds()
-  {
-    var repo = new FakeSubscriptionRepository();
-    var payment = FakeSubscriptionPaymentService.Succeeds("int_1");
-    var konnect = new FakeKonnectGateway { FailCustomer = true };
-
-    var res = await Svc(repo, payment, konnect).Subscribe("u1", "pro");
-
-    res.IsSuccess().Should().BeTrue("the Konnect mirror must never fail a purchase");
-    var row = repo.Row("u1")!;
-    row.Record.Status.Should().Be(SubscriptionStatus.Active);
-    row.Record.KonnectSyncedAt.Should().BeNull("the stale watermark lets the worker retry the mirror");
-  }
 
   [Fact]
   public async Task Subscribe_UpgradeWhileActive_ChargesFullAndResetsPeriod()
@@ -194,7 +173,7 @@ public class SubscriptionManagementServiceTests
     row.Record.Tier.Should().Be("ultimate");
     row.Record.PeriodEnd.Should().BeAfter(oldPeriodEnd, "an upgrade resets the period from now");
     payment.ChargeCalls.Should().ContainSingle();
-    payment.ChargeCalls[0].Amount.Amount.Should().Be(15m, "no proration: the full new-tier price");
+    payment.ChargeCalls[0].Amount.Amount.Should().Be(7.99m, "no proration: the full new-tier price");
     payment.ChargeCalls[0].IdempotencyKey.Should().StartWith("sub-u1-ultimate-",
       "the tier in the key prevents the old tier's settled intent from paying for the upgrade");
   }
@@ -343,19 +322,4 @@ public class SubscriptionManagementServiceTests
     payment.ChargeCalls.Should().ContainSingle();
   }
 
-  [Fact]
-  public async Task ProcessKonnectMirror_RetriesUnsyncedRows()
-  {
-    var repo = new FakeSubscriptionRepository(Row("u1", "pro", SubscriptionStatus.Active));
-    var payment = FakeSubscriptionPaymentService.Succeeds("unused");
-    var konnect = new FakeKonnectGateway();
-
-    var res = await Svc(repo, payment, konnect).ProcessKonnectMirror(10);
-
-    res.IsSuccess().Should().BeTrue();
-    ((int)res).Should().Be(1);
-    konnect.UpsertCustomerCalls.Should().ContainSingle(x => x == "u1");
-    repo.Row("u1")!.Record.KonnectSyncedAt.Should().NotBeNull();
-    repo.Row("u1")!.Record.KonnectCustomerId.Should().Be("kc-u1");
-  }
 }

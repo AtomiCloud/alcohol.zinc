@@ -26,12 +26,6 @@ public record UserSubscriptionRecord
   // Pending downgrade target, applied when the period rolls (never mid-period).
   public string? NextTier { get; init; }
 
-  public string? KonnectCustomerId { get; init; }
-
-  // Mirror watermark: null or older than UpdatedAt means the Konnect mirror is
-  // stale and the daily worker should re-push this row.
-  public DateTime? KonnectSyncedAt { get; init; }
-
   // Airwallex intent id of an IN-FLIGHT (not yet succeeded) charge attempt only.
   // Cleared on Activate/RollPeriod so a settled period's intent can never be
   // reconciled as payment for a later charge (which would renew for free).
@@ -57,8 +51,8 @@ public record UserSubscriptionPrincipal
   public required DateTime UpdatedAt { get; init; }
 }
 
-// Resolved caps + price for one tier, sourced from local config (Konnect is a
-// mirror, not the enforcement source).
+// Resolved caps + price for one tier, sourced from local config — the single
+// source of truth for plans.
 public record SubscriptionPlan
 {
   public required string Tier { get; init; }

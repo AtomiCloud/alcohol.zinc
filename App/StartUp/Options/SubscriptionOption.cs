@@ -2,9 +2,9 @@ using System.ComponentModel.DataAnnotations;
 
 namespace App.StartUp.Options;
 
-// Subscription tier catalog + renewal worker settings. This config is the
-// enforcement source of truth; the Kong Konnect catalog mirrors it (see
-// docs/KONNECT_SETUP.md) and is never consulted for limits at runtime.
+// Subscription tier catalog + renewal worker settings — the single source of
+// truth for tiers, caps and prices. Keep in sync with the public pricing page
+// (alcohol.argon src/lib/billing/pricing.ts + Pricing.tsx).
 public class SubscriptionOption
 {
   public const string Key = "Subscription";
