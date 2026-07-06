@@ -2,6 +2,7 @@ using CSharp_Result;
 using Domain.Exceptions;
 using Domain.Payment;
 using Microsoft.Extensions.Logging;
+using NodaMoney;
 
 namespace Domain.Subscription;
 
@@ -43,15 +44,17 @@ public class SubscriptionManagementService(
       return new AlreadySubscribedException(existing.Record.Tier, tier);
 
     var isTierSwitch = existing?.Record.Status is SubscriptionStatus.Active;
+    SubscriptionPlan? currentPlan = null;
     if (isTierSwitch)
     {
       var currentPlanRes = plans.GetPlan(existing!.Record.Tier);
       if (!currentPlanRes.IsSuccess()) return currentPlanRes.FailureOrDefault()!;
+      currentPlan = currentPlanRes.Get();
 
       // Only an upgrade (strictly higher price) charges immediately. A cheaper
       // (or equal-priced) tier is a downgrade: schedule it for the period roll
       // instead of charging now and destroying the paid remainder.
-      if (plan.Price.Amount <= currentPlanRes.Get().Price.Amount)
+      if (plan.Price.Amount <= currentPlan.Price.Amount)
         return await this.ScheduleDowngrade(userId, existing, tier);
 
       // The renewal worker holds this row's charge lease: an upgrade Activate
@@ -70,6 +73,9 @@ public class SubscriptionManagementService(
     var now = DateTime.UtcNow;
     var periodStart = now;
     var periodEnd = now.AddMonths(1);
+    var chargeAmount = plan.Price;
+    var chargeDescription = $"LazyTax {tier} subscription";
+    var chargeKey = $"sub-{userId}-{tier}-{now:yyyyMMdd}";
 
     Guid rowId;
     string? storedIntentId;
@@ -81,6 +87,23 @@ public class SubscriptionManagementService(
       rowId = existing!.Id;
       storedIntentId = existing.Record.LastChargeIntentId;
       storedChargeKey = existing.Record.LastChargeKey;
+
+      // PRORATED upgrade: the user already paid the current tier for this
+      // period, so charge only the price DIFFERENCE for the remaining fraction
+      // of it — and keep the billing anniversary (the next renewal charges the
+      // full new-tier price on the existing PeriodEnd). Rounded DOWN to the
+      // cent, in the user's favor.
+      periodStart = existing.Record.PeriodStart;
+      periodEnd = existing.Record.PeriodEnd;
+      var periodSeconds = (periodEnd - periodStart).TotalSeconds;
+      var remainingSeconds = Math.Max(0d, (periodEnd - now).TotalSeconds);
+      var fraction = periodSeconds <= 0 ? 0m : (decimal)(remainingSeconds / periodSeconds);
+      var proratedCents = Math.Floor((plan.Price.Amount - currentPlan!.Price.Amount) * fraction * 100m);
+      chargeAmount = new Money(proratedCents / 100m, plan.Price.Currency);
+      chargeDescription = $"LazyTax {tier} subscription upgrade (prorated)";
+      // The -upg- namespace can never collide with (or be paid by) a subscribe
+      // or renewal intent; retries on the same day reconcile the same intent.
+      chargeKey = $"sub-{userId}-{tier}-upg-{now:yyyyMMdd}";
     }
     else
     {
@@ -105,15 +128,24 @@ public class SubscriptionManagementService(
       storedChargeKey = upserted.Get().Record.LastChargeKey;
     }
 
+    // Upgrading moments before the anniversary can prorate to $0: flip the tier
+    // without a charge attempt — the imminent renewal bills the full new price.
+    if (isTierSwitch && chargeAmount.Amount <= 0m)
+    {
+      var flipped = await repo.Activate(rowId, tier, periodStart, periodEnd, now);
+      if (!flipped.IsSuccess()) return flipped.FailureOrDefault()!;
+      if (!flipped.Get()) return new SubscriptionBusyException(userId);
+      return await repo.GetByUserId(userId).Then(s => s!, Errors.MapNone);
+    }
+
     // Tier + date in the key so this logical charge is distinct per tier and per
     // day. A stored intent is only reconciled when it was created under the SAME
     // key — a leftover intent from a different tier or period has a different
     // price and must never be able to "pay" for this charge.
-    var chargeKey = $"sub-{userId}-{tier}-{periodStart:yyyyMMdd}";
     var existingIntentId = storedChargeKey == chargeKey ? storedIntentId : null;
 
     var chargeRes = await payment.ChargeStoredConsentAsync(
-      userId, plan.Price, $"LazyTax {tier} subscription",
+      userId, chargeAmount, chargeDescription,
       idempotencyKey: chargeKey,
       existingIntentId: existingIntentId,
       onIntentCreated: async intentId =>
