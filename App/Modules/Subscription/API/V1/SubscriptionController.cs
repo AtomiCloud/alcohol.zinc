@@ -1,8 +1,8 @@
 using System.Net.Mime;
 using App.Modules.Auth;
-using App.StartUp.Options;
 using App.Modules.Auth.API.V1;
 using App.Modules.Common;
+using App.StartUp.Options;
 using App.StartUp.Services.Auth;
 using App.Utility;
 using Asp.Versioning;
