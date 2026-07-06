@@ -1,3 +1,14 @@
+## [1.28.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.27.0...v1.28.0) (2026-07-06)
+
+
+### ⚠ BREAKING CHANGES
+
+* remove Kong Konnect; zinc config is the single source of truth
+
+### ✨ Features ✨
+
+* remove Kong Konnect; zinc config is the single source of truth ([f71766b](https://github.com/AtomiCloud/alcohol.zinc/commit/f71766bc6b5facf099e8a3b753792bb83f8dd3f9))
+
 ## [1.27.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.26.1...v1.27.0) (2026-07-04)
 
 
