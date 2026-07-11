@@ -10,6 +10,7 @@ using App.StartUp.Services.Auth;
 using App.Utility;
 using Asp.Versioning;
 using CSharp_Result;
+using Domain.Notification;
 using Domain.Payment;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -26,6 +27,7 @@ public class PaymentController(
   ConfirmPaymentIntentReqValidator confirmPaymentIntentReqValidator,
   AirwallexWebhookService webhookService,
   IAuthManagement authManagement,
+  IEmailNotifier notifier,
   IAuthHelper authHelper
 ) : AtomiControllerBase(authHelper)
 {
@@ -70,12 +72,22 @@ public class PaymentController(
   {
     var result = await this.GuardAsync(userId)
       .ThenAwait(_ => ParsePurpose(purpose))
-      .ThenAwait(p => service.DisablePaymentConsentAsync(userId, p)
-        // The Logto claim only tracks the penalty consent (gates habit flows).
-        .ThenAwait(_ => p == ConsentPurpose.Penalty
-          ? authManagement.SetClaim(userId, LogtoClaims.HasPaymentConsent, "false")
-            .Then(_ => new Unit(), Errors.MapNone)
-          : new Unit().ToAsyncResult()));
+      .ThenAwait(async p =>
+      {
+        var disabled = await service.DisablePaymentConsentAsync(userId, p)
+          // The Logto claim only tracks the penalty consent (gates habit flows).
+          .ThenAwait(_ => p == ConsentPurpose.Penalty
+            ? authManagement.SetClaim(userId, LogtoClaims.HasPaymentConsent, "false")
+              .Then(_ => new Unit(), Errors.MapNone)
+            : new Unit().ToAsyncResult());
+
+        // Security notification for the user-initiated revoke only — account
+        // deletion purges consents via a different path and must not email.
+        if (disabled.IsSuccess())
+          await notifier.NotifyConsentChanged(
+            userId, linked: false, AirwallexWebhookService.PurposeLabel(p), DateTime.UtcNow);
+        return disabled;
+      });
 
     return this.ReturnUnitResult(result);
   }

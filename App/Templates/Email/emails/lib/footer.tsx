@@ -8,53 +8,53 @@ interface FooterProps {
   userEmail?: string;
 }
 
-export const Footer = ({ baseUrl, supportEmail, whatsappUrl, telegramUrl, userEmail }: FooterProps) => {
+/**
+ * Muted footer echoing the argon site footer: support contact, legal links,
+ * registered address. Transactional emails — no unsubscribe management needed.
+ */
+export const Footer = ({ baseUrl, supportEmail, whatsappUrl, telegramUrl }: FooterProps) => {
+  const year = new Date().getFullYear();
   return (
-    <Section className="bg-gray-200 px-4 py-4 sm:px-8 sm:py-6 border-t-4 border-gray-800">
-      <Text className="text-sm text-gray-900 font-semibold mb-4 text-center sm:text-left">
-        Need help? We're here to support you!
-      </Text>
-
-      <div className="flex flex-col gap-2 mb-4 text-center sm:text-left">
-        <Link href={`mailto:${supportEmail}`} className="text-sm text-primary font-semibold underline">
-          📧 Email Support: {supportEmail}
+    <Section className="px-9 pb-7">
+      <Hr className="border-solid border-[#e2e8f0] border-t my-0 mb-4" />
+      <Text className="text-[11.5px] leading-[1.6] text-[#94a3b8] m-0 mb-1.5">
+        You&apos;re receiving this because you have a LazyTax account. Questions?{' '}
+        <Link href={`mailto:${supportEmail}`} className="text-[#94a3b8] underline">
+          {supportEmail}
         </Link>
-
+      </Text>
+      <Text className="text-[11.5px] leading-[1.6] text-[#94a3b8] m-0 mb-1.5">
+        <Link href={`${baseUrl}/legal/privacy`} className="text-[#94a3b8] underline">
+          Privacy
+        </Link>
+        {' · '}
+        <Link href={`${baseUrl}/legal/terms`} className="text-[#94a3b8] underline">
+          Terms
+        </Link>
+        {' · '}
+        <Link href={`${baseUrl}/legal/refund`} className="text-[#94a3b8] underline">
+          Refunds
+        </Link>
         {whatsappUrl && (
-          <Link href={whatsappUrl} className="text-sm text-primary font-semibold underline">
-            💬 WhatsApp Support
-          </Link>
+          <>
+            {' · '}
+            <Link href={whatsappUrl} className="text-[#94a3b8] underline">
+              WhatsApp
+            </Link>
+          </>
         )}
-
         {telegramUrl && (
-          <Link href={telegramUrl} className="text-sm text-primary font-semibold underline">
-            📱 Telegram Support
-          </Link>
+          <>
+            {' · '}
+            <Link href={telegramUrl} className="text-[#94a3b8] underline">
+              Telegram
+            </Link>
+          </>
         )}
-      </div>
-
-      <Hr className="border-gray-800 border-2 my-4" />
-
-      <Text className="text-xs text-gray-900 font-bold mb-2 text-center sm:text-left">
-        © 2024 LazyTax.Club. All rights reserved.
       </Text>
-
-      <div className="flex flex-col sm:flex-row gap-1 sm:gap-4 text-center sm:text-left">
-        <Link href={`${baseUrl}/privacy`} className="text-xs text-gray-800 font-semibold underline">
-          Privacy Policy
-        </Link>
-        <Link href={`${baseUrl}/terms`} className="text-xs text-gray-800 font-semibold underline">
-          Terms of Service
-        </Link>
-        {userEmail && (
-          <Link
-            href={`${baseUrl}/unsubscribe?email=${encodeURIComponent(userEmail)}`}
-            className="text-xs text-gray-800 font-semibold underline"
-          >
-            Unsubscribe
-          </Link>
-        )}
-      </div>
+      <Text className="text-[11.5px] leading-[1.6] text-[#94a3b8] m-0">
+        © {year} LazyTax · 60 Paya Lebar Road, #06-28, Paya Lebar Square, Singapore 409051
+      </Text>
     </Section>
   );
 };

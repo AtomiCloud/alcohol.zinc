@@ -1,6 +1,8 @@
+using Domain.Notification;
 using Domain.Payment;
 using Domain.Subscription;
 using Microsoft.Extensions.Logging.Abstractions;
+using UnitTest.Notification;
 
 namespace UnitTest.Subscription;
 
@@ -10,8 +12,10 @@ public class SubscriptionManagementServiceTests
   private static SubscriptionManagementService Svc(
     FakeSubscriptionRepository repo,
     FakeSubscriptionPaymentService payment,
-    FakePlanProvider? plans = null)
+    FakePlanProvider? plans = null,
+    IEmailNotifier? notifier = null)
     => new(repo, plans ?? FakePlanProvider.Default(), payment,
+      notifier ?? new RecordingEmailNotifier(),
       NullLogger<SubscriptionManagementService>.Instance);
 
   private static UserSubscriptionPrincipal Row(
@@ -370,6 +374,59 @@ public class SubscriptionManagementServiceTests
     res.IsSuccess().Should().BeTrue();
     repo.Row("u1")!.Record.Status.Should().Be(SubscriptionStatus.Active);
     payment.ChargeCalls.Should().ContainSingle();
+  }
+
+  [Fact]
+  public async Task EmailMatrix_SubscribeEmailsReceipt_CancelAndDowngradeEmailConfirmation()
+  {
+    // First subscribe -> one purchase receipt with the charged amount.
+    var notifier = new RecordingEmailNotifier();
+    var repo = new FakeSubscriptionRepository();
+    await Svc(repo, FakeSubscriptionPaymentService.Succeeds("int_1"), notifier: notifier).Subscribe("u1", "pro");
+    notifier.SubscriptionPurchased.Should().ContainSingle();
+    notifier.SubscriptionPurchased[0].UserId.Should().Be("u1");
+    notifier.SubscriptionPurchased[0].Tier.Should().Be("pro");
+    notifier.SubscriptionPurchased[0].Amount.Amount.Should().Be(4.99m);
+
+    // Cancel -> one change confirmation, effective at period end, target free.
+    notifier = new RecordingEmailNotifier();
+    var row = Row("u2", "pro", SubscriptionStatus.Active);
+    repo = new FakeSubscriptionRepository(row);
+    await Svc(repo, FakeSubscriptionPaymentService.Succeeds("unused"), notifier: notifier).Cancel("u2");
+    notifier.SubscriptionChanged.Should().ContainSingle()
+      .Which.Should().Be(("u2", "pro", SubscriptionService.FreeTier, row.Record.PeriodEnd));
+
+    // Scheduled downgrade -> one change confirmation ultimate -> pro.
+    notifier = new RecordingEmailNotifier();
+    row = Row("u3", "ultimate", SubscriptionStatus.Active);
+    repo = new FakeSubscriptionRepository(row);
+    await Svc(repo, FakeSubscriptionPaymentService.Succeeds("unused"), notifier: notifier).ChangeTier("u3", "pro");
+    notifier.SubscriptionChanged.Should().ContainSingle()
+      .Which.Should().Be(("u3", "ultimate", "pro", row.Record.PeriodEnd));
+    notifier.SubscriptionPurchased.Should().BeEmpty("a scheduled downgrade charges nothing");
+
+    // Failed subscribe (charge declined) -> no receipt.
+    notifier = new RecordingEmailNotifier();
+    repo = new FakeSubscriptionRepository();
+    await Svc(repo, FakeSubscriptionPaymentService.WithStatus("int_2", "REQUIRES_PAYMENT_METHOD"), notifier: notifier)
+      .Subscribe("u4", "pro");
+    notifier.SubscriptionPurchased.Should().BeEmpty();
+  }
+
+  [Fact]
+  public async Task ThrowingNotifier_MoneyStatePersistsBeforeTheEmailAttempt()
+  {
+    // Interactive call sites rely on the notifier's never-throw contract (the
+    // real EmailNotifier swallows everything). If that contract were violated,
+    // the activation must already be durable — the email always runs after the
+    // money write.
+    var repo = new FakeSubscriptionRepository();
+    var act = async () => await Svc(
+        repo, FakeSubscriptionPaymentService.Succeeds("int_1"), notifier: new ThrowingEmailNotifier())
+      .Subscribe("u1", "pro");
+
+    await act.Should().ThrowAsync<InvalidOperationException>();
+    repo.Row("u1")!.Record.Status.Should().Be(SubscriptionStatus.Active);
   }
 
 }

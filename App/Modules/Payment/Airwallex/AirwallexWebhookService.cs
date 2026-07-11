@@ -4,6 +4,7 @@ using App.StartUp.Registry;
 using App.StartUp.Services.Auth;
 using App.Utility;
 using CSharp_Result;
+using Domain.Notification;
 using Domain.Payment;
 
 namespace App.Modules.Payment.Airwallex;
@@ -13,6 +14,7 @@ public class AirwallexWebhookService(
   IAuthManagement authManagement,
   AirwallexEventAdapter adapter,
   AirwallexHmacCalculator airwallexHmacCalculator,
+  IEmailNotifier notifier,
   ILogger<AirwallexWebhookService> logger
 )
 {
@@ -66,19 +68,30 @@ public class AirwallexWebhookService(
 
     return paymentService
       .UpdatePaymentConsentAsync(customerId, consentId, status, purpose)
-      .ThenAwait(customer =>
+      .ThenAwait(async customer =>
       {
+        if (status == PaymentConsentStatus.Verified && customer != null)
+          // Best-effort confirmation; webhook replays may duplicate it — acceptable
+          // for a security notification.
+          await notifier.NotifyConsentChanged(
+            customer.Record.UserId, linked: true, PurposeLabel(purpose), DateTime.UtcNow);
+
         // The Logto claim gates penalty/habit flows only; the subscription
         // consent is checked against the DB by the subscription engine.
         if (status == PaymentConsentStatus.Verified && customer != null && purpose == ConsentPurpose.Penalty)
         {
           logger.LogInformation("Payment consent verified, updating Logto custom claim for userId: {UserId}", customer.Record.UserId);
-          return authManagement
+          return await authManagement
             .SetClaim(customer.Record.UserId, LogtoClaims.HasPaymentConsent, "true")
             .Then(_ => new Unit(), Errors.MapNone);
         }
-        return new Unit().ToAsyncResult();
+        return new Unit().ToResult();
       });
+  }
+
+  internal static string PurposeLabel(ConsentPurpose purpose)
+  {
+    return purpose == ConsentPurpose.Subscription ? "Subscription" : "Habit stakes";
   }
 
   // private Task<Result<Unit>> ProcessPaymentIntentEvent(AirwallexEvent evt)

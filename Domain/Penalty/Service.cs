@@ -1,5 +1,6 @@
 using CSharp_Result;
 using Domain.Exceptions;
+using Domain.Notification;
 using Domain.Payment;
 using Microsoft.Extensions.Logging;
 
@@ -8,6 +9,7 @@ namespace Domain.Penalty;
 public class PenaltyService(
   IPenaltyRepository repo,
   IPaymentService payment,
+  IEmailNotifier notifier,
   ILogger<PenaltyService> logger
 ) : IPenaltyService
 {
@@ -79,16 +81,26 @@ public class PenaltyService(
     {
       var intent = chargeResult.Get();
       if (intent.Status == "SUCCEEDED")
+      {
         // Terminal success: charge + atomic charity credit. Propagate a
         // persistence failure (the credit's transaction rolling back) instead
         // of silently counting it as success.
-        return await repo.MarkCharged(p.Id, intent.Id).Then(_ => 1, Errors.MapAll);
+        var charged = await repo.MarkCharged(p.Id, intent.Id).Then(_ => 1, Errors.MapAll);
+        if (charged.IsSuccess())
+          await notifier.NotifyPenaltyCharged(rec.UserId, rec.Amount, rec.CharityId, DateTime.UtcNow);
+        return charged;
+      }
 
       // REQUIRES_PAYMENT_METHOD / REQUIRES_CUSTOMER_ACTION / REQUIRES_CAPTURE -> not yet settled, retry.
       var attempts = rec.Attempts + 1;
       if (attempts >= maxAttempts)
-        return await repo.MarkFailed(p.Id, $"Max attempts reached, last status {intent.Status}")
+      {
+        var failed = await repo.MarkFailed(p.Id, $"Max attempts reached, last status {intent.Status}")
           .Then(_ => 1, Errors.MapAll);
+        if (failed.IsSuccess())
+          await notifier.NotifyPenaltyFailed(rec.UserId, rec.Amount, rec.CharityId, DateTime.UtcNow);
+        return failed;
+      }
 
       return await repo.MarkPending(p.Id, intent.Id, attempts).Then(_ => 0, Errors.MapAll);
     }
@@ -102,7 +114,12 @@ public class PenaltyService(
 
     // Transient/other error -> bump; exhaust to Failed.
     if (rec.Attempts + 1 >= maxAttempts)
-      return await repo.MarkFailed(p.Id, ex?.Message ?? "charge error").Then(_ => 1, Errors.MapAll);
+    {
+      var failed = await repo.MarkFailed(p.Id, ex?.Message ?? "charge error").Then(_ => 1, Errors.MapAll);
+      if (failed.IsSuccess())
+        await notifier.NotifyPenaltyFailed(rec.UserId, rec.Amount, rec.CharityId, DateTime.UtcNow);
+      return failed;
+    }
 
     return await repo.Bump(p.Id, ex?.Message ?? "charge error").Then(_ => 0, Errors.MapAll);
   }
