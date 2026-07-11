@@ -37,10 +37,19 @@ public class NfcTagRepository(MainDbContext db, ILogger<NfcTagRepository> logger
         data = new NfcTagData { Id = tagId, UserId = userId, HabitId = habitId };
         db.NfcTags.Add(data);
       }
+      else if (data.UserId != userId)
+      {
+        // Ownership re-checked here, not just in the service: the service's
+        // check reads a snapshot, so a competing claim committed between that
+        // read and this one would otherwise be silently re-pointed.
+        logger.LogWarning("NFC tag claim conflict for Id={Id}: owned by another user", tagId);
+        return new EntityConflict("NFC tag is already linked by another user", typeof(NfcTagPrincipal))
+          .ToException();
+      }
       else
       {
         logger.LogInformation("Re-linking NFC tag Id={Id} for UserId={UserId} to HabitId={HabitId}", tagId, userId, habitId);
-        data.HabitId = habitId;
+        data.ToData(new NfcTagRecord { HabitId = habitId });
       }
 
       await db.SaveChangesAsync();
@@ -81,9 +90,11 @@ public class NfcTagRepository(MainDbContext db, ILogger<NfcTagRepository> logger
   {
     try
     {
+      // Postgres sorts NULLS FIRST on DESC, so coalesce: a completed row must
+      // win over same-day failure/vacation rows (which have no CompletedAt).
       var data = await db.HabitExecutions.AsNoTracking()
         .Where(x => x.Date == date && x.HabitVersion!.HabitId == habitId)
-        .OrderByDescending(x => x.CompletedAt)
+        .OrderByDescending(x => x.CompletedAt ?? DateTime.MinValue)
         .FirstOrDefaultAsync();
       return data?.ToPrincipal();
     }

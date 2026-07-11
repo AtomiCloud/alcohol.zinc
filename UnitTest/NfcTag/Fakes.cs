@@ -1,3 +1,5 @@
+using App.Error.V1;
+using App.Utility;
 using CSharp_Result;
 using Domain.Habit;
 using Domain.NfcTag;
@@ -20,12 +22,19 @@ public sealed class FakeNfcTagRepository : INfcTagRepository
 
   public Task<Result<NfcTagPrincipal>> Upsert(string tagId, string userId, Guid habitId)
   {
-    var claimedAt = Tags.TryGetValue(tagId, out var existing) ? existing.ClaimedAt : DateTime.UtcNow;
+    // Mirrors the real repository: the update path never re-points a tag
+    // owned by someone else (defense-in-depth against the claim race).
+    if (Tags.TryGetValue(tagId, out var existing) && existing.UserId != userId)
+    {
+      return Task.FromResult<Result<NfcTagPrincipal>>(
+        new EntityConflict("NFC tag is already linked by another user", typeof(NfcTagPrincipal)).ToException());
+    }
+
     var tag = new NfcTagPrincipal
     {
       Id = tagId,
       UserId = userId,
-      ClaimedAt = claimedAt,
+      ClaimedAt = existing?.ClaimedAt ?? DateTime.UtcNow,
       Record = new NfcTagRecord { HabitId = habitId }
     };
     Tags[tagId] = tag;

@@ -136,9 +136,24 @@ public class NfcTagServiceTests
 
     var result = await svc.Resolve(Owner, TagId);
 
+    result.IsSuccess().Should().BeTrue();
     var resolution = (NfcTagResolution?)result;
     resolution.Should().NotBeNull();
     resolution!.TodayExecution.Should().BeNull();
+  }
+
+  [Fact]
+  public async Task Resolve_HabitDeletedAfterLinking_ReturnsNull()
+  {
+    var (svc, _, habits) = Make();
+    habits.Versions[(Owner, HabitA)] = Version(HabitA);
+    await svc.Link(Owner, TagId, HabitA);
+    habits.Versions.Remove((Owner, HabitA));
+
+    var result = await svc.Resolve(Owner, TagId);
+
+    result.IsSuccess().Should().BeTrue();
+    ((NfcTagResolution?)result).Should().BeNull("a dangling tag must resolve like an unclaimed one");
   }
 
   [Fact]

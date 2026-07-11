@@ -387,6 +387,11 @@ namespace App.Modules.Habit.Data
                     return (Unit?)null;
                 }
 
+                // Habit deletion is a soft delete, so the NfcTags FK cascade never
+                // fires — release the physical tag here or its id stays claimed
+                // forever (409 for other users, 404 for the owner).
+                await db.NfcTags.Where(x => x.HabitId == habitId).ExecuteDeleteAsync();
+
                 logger.LogInformation("Soft deleted habit for HabitId: {HabitId}", habitId);
                 return new Unit();
             }

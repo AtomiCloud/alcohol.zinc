@@ -136,8 +136,9 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
                   .HasForeignKey(x => x.PaymentCustomerId)
                   .OnDelete(DeleteBehavior.Cascade);
 
-    // NFC tags: natural key = tag id from the physical tag's URL. Cascade on
-    // habit delete releases the tag back to unclaimed (re-linkable).
+    // NFC tags: natural key = tag id from the physical tag's URL. The cascades
+    // cover hard deletes (user purge); habit deletion is a soft delete, so
+    // HabitRepository.Delete releases tags explicitly.
     var nfcTag = modelBuilder.Entity<NfcTagData>();
     nfcTag.HasIndex(x => x.UserId);
     nfcTag.HasOne(x => x.User)
