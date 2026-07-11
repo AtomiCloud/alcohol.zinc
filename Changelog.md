@@ -1,3 +1,20 @@
+## [1.31.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.30.1...v1.31.0) (2026-07-11)
+
+
+### ✨ Features ✨
+
+* NFC tag to habit mapping (NfcTag module) ([2993a90](https://github.com/AtomiCloud/alcohol.zinc/commit/2993a903d7f17a533984fa01d0ea13415e282c37))
+
+
+### 🐛 Bug Fixes 🐛
+
+* address NfcTag review findings ([c3e2da1](https://github.com/AtomiCloud/alcohol.zinc/commit/c3e2da18c0b0e0e95525e47eea1d51c02c0dd3ef))
+
+
+### 🧪 Tests 🧪
+
+* DB-backed NfcTag integration tests (real Postgres) ([60c2a7e](https://github.com/AtomiCloud/alcohol.zinc/commit/60c2a7eed1d22b56eec0a7d13580f3817c708d32))
+
 ## [1.30.1](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.30.0...v1.30.1) (2026-07-10)
 
 
