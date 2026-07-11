@@ -5,6 +5,7 @@ using App.Modules.Disbursement.Data;
 using App.Modules.Habit.Data;
 using App.Modules.HabitExecution.Data;
 using App.Modules.HabitVersion.Data;
+using App.Modules.NfcTag.Data;
 using App.Modules.Payment.Data;
 using App.Modules.Penalty.Data;
 using App.Modules.Protection.Data;
@@ -48,6 +49,8 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
   public DbSet<DisbursementData> Disbursements { get; set; }
   // Subscription (paid tiers)
   public DbSet<UserSubscriptionData> UserSubscriptions { get; set; }
+  // NFC tags (physical tag → habit mapping)
+  public DbSet<NfcTagData> NfcTags { get; set; }
   // public DbSet<CompletionData> Completions { get; set; }
   // public DbSet<StatsData> Stats { get; set; }
 
@@ -132,6 +135,19 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
                   .WithMany(x => x.Consents)
                   .HasForeignKey(x => x.PaymentCustomerId)
                   .OnDelete(DeleteBehavior.Cascade);
+
+    // NFC tags: natural key = tag id from the physical tag's URL. Cascade on
+    // habit delete releases the tag back to unclaimed (re-linkable).
+    var nfcTag = modelBuilder.Entity<NfcTagData>();
+    nfcTag.HasIndex(x => x.UserId);
+    nfcTag.HasOne(x => x.User)
+          .WithMany()
+          .HasForeignKey(x => x.UserId)
+          .OnDelete(DeleteBehavior.Cascade);
+    nfcTag.HasOne(x => x.Habit)
+          .WithMany()
+          .HasForeignKey(x => x.HabitId)
+          .OnDelete(DeleteBehavior.Cascade);
 
     // VacationPeriods
     var vacation = modelBuilder.Entity<VacationPeriodData>();
