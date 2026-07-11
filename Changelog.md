@@ -1,3 +1,17 @@
+## [1.30.1](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.30.0...v1.30.1) (2026-07-10)
+
+
+### 🐛 Bug Fixes 🐛
+
+* give TierInsufficient a human-readable default detail ([1f1a59a](https://github.com/AtomiCloud/alcohol.zinc/commit/1f1a59a9886fecbcf7ac26c52c394d5b1534cef0))
+
+## [1.30.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.29.0...v1.30.0) (2026-07-06)
+
+
+### ✨ Features ✨
+
+* public plan catalog endpoint for the pricing page ([a437e04](https://github.com/AtomiCloud/alcohol.zinc/commit/a437e04d82ae2454457aaa57270830f057165d9b))
+
 ## [1.29.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.28.0...v1.29.0) (2026-07-06)
 
 

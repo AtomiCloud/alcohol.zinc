@@ -2,6 +2,7 @@ using System.Net.Mime;
 using App.Modules.Auth;
 using App.Modules.Auth.API.V1;
 using App.Modules.Common;
+using App.StartUp.Options;
 using App.StartUp.Services.Auth;
 using App.Utility;
 using Asp.Versioning;
@@ -23,9 +24,21 @@ public class SubscriptionController(
   IAuthHelper authHelper,
   SubscribeReqValidator subscribeValidator,
   ChangeTierReqValidator changeTierValidator,
-  WebHandoffReqValidator webHandoffValidator
+  WebHandoffReqValidator webHandoffValidator,
+  Microsoft.Extensions.Options.IOptionsMonitor<SubscriptionOption> subscriptionOptions
 ) : AtomiControllerBase(authHelper)
 {
+  // Public plan catalog for the pricing page — the single source of truth for
+  // tiers, caps and prices (marketing presentation stays in the frontend).
+  // The literal "plans" segment wins over the {userId} route by ASP.NET
+  // routing precedence.
+  [AllowAnonymous, HttpGet("plans")]
+  [ResponseCache(Duration = 300, Location = ResponseCacheLocation.Any)]
+  public ActionResult<List<PlanRes>> Plans()
+  {
+    return this.Ok(subscriptionOptions.CurrentValue.ToPlansRes());
+  }
+
   // Which subscription CTA the app may show for this platform + storefront.
   // Server-decided so steering rules can change per landscape without an app
   // release; clients treat unknown variants as neutral.
