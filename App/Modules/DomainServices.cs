@@ -5,6 +5,8 @@ using App.Modules.Charities.Sync;
 using App.Modules.Configurations.Data;
 using App.Modules.Entitlement;
 using App.Modules.Habit.Data;
+using App.Modules.NfcTag;
+using App.Modules.NfcTag.Data;
 using App.Modules.Payment.Airwallex;
 using App.Modules.Payment.Data;
 using App.Modules.Penalty.Data;
@@ -24,6 +26,7 @@ using Domain.Configuration;
 using Domain.Disbursement;
 using Domain.Entitlement;
 using Domain.Habit;
+using Domain.NfcTag;
 using Domain.Payment;
 using Domain.Penalty;
 using Domain.Protection;
@@ -93,6 +96,12 @@ public static class DomainServices
       .AutoTrace<IVacationRepository>();
     s.AddScoped<IVacationService, VacationService>()
       .AutoTrace<IVacationService>();
+
+    // NFC tags
+    s.AddScoped<INfcTagRepository, NfcTagRepository>()
+      .AutoTrace<INfcTagRepository>();
+    s.AddScoped<INfcTagService, NfcTagService>()
+      .AutoTrace<INfcTagService>();
 
     // PENALTY
     s.AddScoped<IPenaltyService, PenaltyService>()
