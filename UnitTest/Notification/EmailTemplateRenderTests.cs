@@ -19,6 +19,7 @@ public class EmailTemplateRenderTests
     SupportEmail = "support@lazytax.club",
     Amount = "$5.00",
     CharityName = "Doctors Without Borders",
+    HabitName = "Morning run",
     ChargeDate = "12 July 2026",
     AttemptDate = "12 July 2026",
     Tier = "Pro",

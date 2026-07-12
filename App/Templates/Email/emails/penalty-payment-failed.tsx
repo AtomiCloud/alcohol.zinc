@@ -9,6 +9,7 @@ interface PenaltyPaymentFailedEmailProps {
   supportEmail: string;
   amount: string;
   charityName: string;
+  habitName: string;
   attemptDate: string;
 }
 
@@ -18,6 +19,7 @@ export const PenaltyPaymentFailedEmail = ({
   supportEmail = '{{ supportEmail }}',
   amount = '{{ amount }}',
   charityName = '{{ charityName }}',
+  habitName = '{{ habitName }}',
   attemptDate = '{{ attemptDate }}',
 }: PenaltyPaymentFailedEmailProps) => {
   return (
@@ -28,13 +30,13 @@ export const PenaltyPaymentFailedEmail = ({
       previewText={`Your ${amount} stake payment was declined`}
     >
       <Headline>Your stake payment didn&apos;t go through, {userName}</Headline>
-      <Paragraph>We tried to charge your card for your habit stake, but the payment was declined.</Paragraph>
+      <Paragraph>We tried to charge your card for your {habitName} stake, but the payment was declined.</Paragraph>
       <ReceiptCard
         amount={amount}
         amountLabel="pending — payment declined"
         rows={[
           { label: 'Charity', value: charityName },
-          { label: 'Amount due', value: amount },
+          { label: 'Habit', value: habitName },
           { label: 'Last attempt', value: attemptDate },
           { label: 'Status', value: 'Will retry automatically' },
         ]}
@@ -55,6 +57,7 @@ PenaltyPaymentFailedEmail.PreviewProps = {
   supportEmail: 'support@lazytax.club',
   amount: '$5.00',
   charityName: 'Doctors Without Borders',
+  habitName: 'Morning run',
   attemptDate: '12 July 2026',
 } as PenaltyPaymentFailedEmailProps;
 

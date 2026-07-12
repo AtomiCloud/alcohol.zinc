@@ -11,8 +11,8 @@ namespace Domain.Notification;
 /// </summary>
 public interface IEmailNotifier
 {
-  Task NotifyPenaltyCharged(string userId, Money amount, Guid charityId, DateTime chargedAtUtc);
-  Task NotifyPenaltyFailed(string userId, Money amount, Guid charityId, DateTime attemptedAtUtc);
+  Task NotifyPenaltyCharged(string userId, Money amount, Guid charityId, Guid habitExecutionId, DateTime chargedAtUtc);
+  Task NotifyPenaltyFailed(string userId, Money amount, Guid charityId, Guid habitExecutionId, DateTime attemptedAtUtc);
 
   /// <summary>First purchase or immediate upgrade receipt.</summary>
   Task NotifySubscriptionPurchased(string userId, string tier, Money amount, DateTime nextBillingUtc);

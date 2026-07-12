@@ -204,6 +204,7 @@ internal sealed class FakeSkipCountRepository(int usedSkips) : IHabitRepository
   public Task<Result<Unit?>> Delete(Guid habitId, string userId) => throw new NotImplementedException();
   public Task<Result<List<FailedExecutionRow>>> CreateFailedExecutions(List<Guid> habitIds, DateOnly date) => throw new NotImplementedException();
   public Task<Result<int>> CreateExecutionsForVersionsWithStatus(List<Guid> habitVersionIds, DateOnly date, ExecutionStatus status) => throw new NotImplementedException();
+  public Task<Result<string?>> GetTaskNameByExecutionId(Guid executionId) => throw new NotImplementedException();
   public Task<Result<DateOnly>> GetUserCurrentDate(string userId, Guid habitVersionId) => throw new NotImplementedException();
   public Task<Result<HabitExecutionPrincipal>> CompleteHabit(string userId, Guid habitVersionId, DateOnly date, string? notes) => throw new NotImplementedException();
   public Task<Result<HabitExecutionPrincipal>> SkipHabit(string userId, Guid habitVersionId, DateOnly date, string? notes) => throw new NotImplementedException();

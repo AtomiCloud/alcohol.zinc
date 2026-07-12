@@ -10,6 +10,7 @@ interface PenaltyChargedEmailProps {
   supportEmail: string;
   amount: string;
   charityName: string;
+  habitName: string;
   chargeDate: string;
 }
 
@@ -19,6 +20,7 @@ export const PenaltyChargedEmail = ({
   supportEmail = '{{ supportEmail }}',
   amount = '{{ amount }}',
   charityName = '{{ charityName }}',
+  habitName = '{{ habitName }}',
   chargeDate = '{{ chargeDate }}',
 }: PenaltyChargedEmailProps) => {
   return (
@@ -30,15 +32,15 @@ export const PenaltyChargedEmail = ({
     >
       <Headline>Your stake did some good, {userName}</Headline>
       <Paragraph>
-        You missed a staked habit, so your stake was charged and is headed to your chosen charity. That was the deal —
-        this isn&apos;t punishment, it&apos;s your commitment made real.
+        You missed {habitName}, so your stake was charged and is headed to your chosen charity. That was the deal — this
+        isn&apos;t punishment, it&apos;s your commitment made real.
       </Paragraph>
       <ReceiptCard
         amount={amount}
         amountLabel="donated on your behalf"
         rows={[
           { label: 'Charity', value: charityName, emphasis: 'emerald' },
-          { label: 'Stake', value: amount },
+          { label: 'Habit', value: habitName },
           { label: 'Charged on', value: chargeDate },
           { label: 'Donation', value: '100% minus processing fees' },
         ]}
@@ -62,6 +64,7 @@ PenaltyChargedEmail.PreviewProps = {
   supportEmail: 'support@lazytax.club',
   amount: '$5.00',
   charityName: 'Doctors Without Borders',
+  habitName: 'Morning run',
   chargeDate: '12 July 2026',
 } as PenaltyChargedEmailProps;
 

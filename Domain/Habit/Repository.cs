@@ -23,6 +23,8 @@ namespace Domain.Habit
         Task<Result<int>> CreateExecutionsForVersionsWithStatus(List<Guid> habitVersionIds, DateOnly date, ExecutionStatus status);
 
         // Habit Execution Methods
+        // Habit task name for an execution (penalty emails); null when the execution is gone.
+        Task<Result<string?>> GetTaskNameByExecutionId(Guid executionId);
         Task<Result<DateOnly>> GetUserCurrentDate(string userId, Guid habitVersionId);                    // Get current date in user's timezone
         Task<Result<HabitExecutionPrincipal>> CompleteHabit(string userId, Guid habitVersionId, DateOnly date, string? notes);
         Task<Result<HabitExecutionPrincipal>> SkipHabit(string userId, Guid habitVersionId, DateOnly date, string? notes);

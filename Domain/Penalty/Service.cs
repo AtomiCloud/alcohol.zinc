@@ -87,7 +87,7 @@ public class PenaltyService(
         // of silently counting it as success.
         var charged = await repo.MarkCharged(p.Id, intent.Id).Then(_ => 1, Errors.MapAll);
         if (charged.IsSuccess())
-          await notifier.NotifyPenaltyCharged(rec.UserId, rec.Amount, rec.CharityId, DateTime.UtcNow);
+          await notifier.NotifyPenaltyCharged(rec.UserId, rec.Amount, rec.CharityId, rec.HabitExecutionId, DateTime.UtcNow);
         return charged;
       }
 
@@ -98,7 +98,7 @@ public class PenaltyService(
         var failed = await repo.MarkFailed(p.Id, $"Max attempts reached, last status {intent.Status}")
           .Then(_ => 1, Errors.MapAll);
         if (failed.IsSuccess())
-          await notifier.NotifyPenaltyFailed(rec.UserId, rec.Amount, rec.CharityId, DateTime.UtcNow);
+          await notifier.NotifyPenaltyFailed(rec.UserId, rec.Amount, rec.CharityId, rec.HabitExecutionId, DateTime.UtcNow);
         return failed;
       }
 
@@ -117,7 +117,7 @@ public class PenaltyService(
     {
       var failed = await repo.MarkFailed(p.Id, ex?.Message ?? "charge error").Then(_ => 1, Errors.MapAll);
       if (failed.IsSuccess())
-        await notifier.NotifyPenaltyFailed(rec.UserId, rec.Amount, rec.CharityId, DateTime.UtcNow);
+        await notifier.NotifyPenaltyFailed(rec.UserId, rec.Amount, rec.CharityId, rec.HabitExecutionId, DateTime.UtcNow);
       return failed;
     }
 

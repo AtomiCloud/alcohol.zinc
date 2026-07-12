@@ -18,13 +18,13 @@ public sealed class RecordingEmailNotifier : IEmailNotifier
   public List<(string UserId, string Email, string Username)> Welcome { get; } = [];
   public List<(string UserId, bool Linked, string Purpose)> ConsentChanged { get; } = [];
 
-  public Task NotifyPenaltyCharged(string userId, Money amount, Guid charityId, DateTime chargedAtUtc)
+  public Task NotifyPenaltyCharged(string userId, Money amount, Guid charityId, Guid habitExecutionId, DateTime chargedAtUtc)
   {
     PenaltyCharged.Add((userId, amount, charityId));
     return Task.CompletedTask;
   }
 
-  public Task NotifyPenaltyFailed(string userId, Money amount, Guid charityId, DateTime attemptedAtUtc)
+  public Task NotifyPenaltyFailed(string userId, Money amount, Guid charityId, Guid habitExecutionId, DateTime attemptedAtUtc)
   {
     PenaltyFailed.Add((userId, amount, charityId));
     return Task.CompletedTask;
@@ -82,8 +82,8 @@ public sealed class ThrowingEmailNotifier : IEmailNotifier
 {
   private Task Boom() => throw new InvalidOperationException("email infrastructure down");
 
-  public Task NotifyPenaltyCharged(string userId, Money amount, Guid charityId, DateTime chargedAtUtc) => this.Boom();
-  public Task NotifyPenaltyFailed(string userId, Money amount, Guid charityId, DateTime attemptedAtUtc) => this.Boom();
+  public Task NotifyPenaltyCharged(string userId, Money amount, Guid charityId, Guid habitExecutionId, DateTime chargedAtUtc) => this.Boom();
+  public Task NotifyPenaltyFailed(string userId, Money amount, Guid charityId, Guid habitExecutionId, DateTime attemptedAtUtc) => this.Boom();
   public Task NotifySubscriptionPurchased(string userId, string tier, Money amount, DateTime nextBillingUtc) => this.Boom();
   public Task NotifySubscriptionRenewed(string userId, string tier, DateTime nextBillingUtc) => this.Boom();
   public Task NotifySubscriptionPaymentFailed(string userId, string tier, DateTime graceEndsUtc) => this.Boom();
