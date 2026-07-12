@@ -32,8 +32,8 @@ export const PenaltyChargedEmail = ({
     >
       <Headline>Your stake did some good, {userName}</Headline>
       <Paragraph>
-        You missed <b>{habitName}</b>, so your stake was charged and is headed to your chosen charity. That was the deal
-        — this isn&apos;t punishment, it&apos;s your commitment made real.
+        You missed {habitName}, so your stake was charged and is headed to your chosen charity. That was the deal — this
+        isn&apos;t punishment, it&apos;s your commitment made real.
       </Paragraph>
       <ReceiptCard
         amount={amount}

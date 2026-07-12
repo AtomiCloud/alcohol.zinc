@@ -30,9 +30,7 @@ export const PenaltyPaymentFailedEmail = ({
       previewText={`Your ${amount} stake payment was declined`}
     >
       <Headline>Your stake payment didn&apos;t go through, {userName}</Headline>
-      <Paragraph>
-        We tried to charge your card for your <b>{habitName}</b> stake, but the payment was declined.
-      </Paragraph>
+      <Paragraph>We tried to charge your card for your {habitName} stake, but the payment was declined.</Paragraph>
       <ReceiptCard
         amount={amount}
         amountLabel="pending — payment declined"
