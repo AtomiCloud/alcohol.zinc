@@ -40,7 +40,7 @@ export const PaymentConsentChangedEmail = ({
           { label: 'Change', value: changeSummary },
           { label: 'Purpose', value: purpose },
           { label: 'Date', value: changeDate },
-          { label: 'Not you?', value: 'Contact support right away' },
+          { label: 'Not you?', value: `Contact ${supportEmail}` },
         ]}
       />
       <CallToAction buttonText="Manage billing" buttonUrl={`${baseUrl}/billing`} />
