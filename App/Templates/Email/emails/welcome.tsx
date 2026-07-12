@@ -41,13 +41,16 @@ export const WelcomeEmail = ({
           { label: 'Step 1', value: 'Create a tiny habit' },
           { label: 'Step 2', value: 'Stake it (optional)' },
           { label: 'Step 3', value: 'Tap done, daily' },
-          { label: 'Miss a day?', value: '100% to your charity', emphasis: 'emerald' },
+          { label: 'Miss a day?', value: '100% to your charity*', emphasis: 'emerald' },
         ]}
       />
       <CallToAction buttonText="Start your first habit" buttonUrl={`${baseUrl}/app`} />
       <FinePrint>
         Pro tip from us: start with &ldquo;put on gym clothes&rdquo;, not &ldquo;go to the gym&rdquo;. Tiny habits stick
         — overpromising kills momentum before you start. We&apos;re not your parent, we trust you.
+      </FinePrint>
+      <FinePrint>
+        *100% of your stake minus payment gateway (Airwallex) and donation platform (Pledge.to) processing fees.
       </FinePrint>
     </EmailLayout>
   );

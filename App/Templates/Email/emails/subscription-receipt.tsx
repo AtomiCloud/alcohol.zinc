@@ -32,7 +32,7 @@ export const SubscriptionReceiptEmail = ({
     >
       <Headline>Thanks, {userName} — here&apos;s your receipt</Headline>
       <Paragraph>
-        Your LazyTax {tier} subscription is active. Every subscription keeps the lights on so 100% of stakes can go to
+        Your LazyTax {tier} subscription is active. Every subscription keeps the lights on so 100% of stakes* can go to
         charity.
       </Paragraph>
       <ReceiptCard
@@ -52,6 +52,9 @@ export const SubscriptionReceiptEmail = ({
         <Link href={`${baseUrl}/legal/refund`} className="text-violet underline">
           Refund policy
         </Link>
+      </FinePrint>
+      <FinePrint>
+        *100% of each stake minus payment gateway (Airwallex) and donation platform (Pledge.to) processing fees.
       </FinePrint>
     </EmailLayout>
   );

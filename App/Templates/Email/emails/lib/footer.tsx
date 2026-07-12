@@ -53,7 +53,7 @@ export const Footer = ({ baseUrl, supportEmail, whatsappUrl, telegramUrl }: Foot
         )}
       </Text>
       <Text className="text-[11.5px] leading-[1.6] text-[#94a3b8] m-0">
-        © {year} LazyTax · 60 Paya Lebar Road, #06-28, Paya Lebar Square, Singapore 409051
+        © {year} LazyTax · 2108 N ST #15772, Sacramento, CA 95816, USA
       </Text>
     </Section>
   );
