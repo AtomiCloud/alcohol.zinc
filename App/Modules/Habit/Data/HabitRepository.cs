@@ -449,6 +449,22 @@ namespace App.Modules.Habit.Data
             }
         }
 
+        public async Task<Result<string?>> GetTaskNameByExecutionId(Guid executionId)
+        {
+            try
+            {
+                return await (from e in db.HabitExecutions
+                              join hv in db.HabitVersions on e.HabitVersionId equals hv.Id
+                              where e.Id == executionId
+                              select hv.Task).AsNoTracking().FirstOrDefaultAsync();
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Failed to get task name for execution: {ExecutionId}", executionId);
+                throw;
+            }
+        }
+
         public async Task<Result<DateOnly>> GetUserCurrentDate(string userId, Guid habitVersionId)
         {
             try

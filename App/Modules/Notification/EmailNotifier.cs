@@ -5,6 +5,7 @@ using App.StartUp.Registry;
 using App.StartUp.Smtp;
 using CSharp_Result;
 using Domain.Charity;
+using Domain.Habit;
 using Domain.Notification;
 using Domain.Subscription;
 using Domain.User;
@@ -18,6 +19,7 @@ public class EmailNotifier(
   ISmtpClientFactory factory,
   IUserRepository users,
   ICharityService charities,
+  IHabitRepository habits,
   ISubscriptionPlanProvider plans,
   IOptionsMonitor<WebPortalOption> portal,
   ILogger<EmailNotifier> logger
@@ -25,7 +27,8 @@ public class EmailNotifier(
 {
   public const string SupportEmail = "support@lazytax.club";
 
-  public async Task NotifyPenaltyCharged(string userId, Money amount, Guid charityId, DateTime chargedAtUtc)
+  public async Task NotifyPenaltyCharged(string userId, Money amount, Guid charityId, Guid habitExecutionId,
+    DateTime chargedAtUtc)
   {
     await this.SendSafe(userId, EmailTemplates.PenaltyCharged, EmailTemplates.PenaltyChargedSubject,
       async user => new
@@ -35,11 +38,13 @@ public class EmailNotifier(
         SupportEmail,
         Amount = FormatMoney(amount),
         CharityName = await this.CharityName(charityId),
+        HabitName = await this.HabitName(habitExecutionId),
         ChargeDate = FormatDate(chargedAtUtc),
       });
   }
 
-  public async Task NotifyPenaltyFailed(string userId, Money amount, Guid charityId, DateTime attemptedAtUtc)
+  public async Task NotifyPenaltyFailed(string userId, Money amount, Guid charityId, Guid habitExecutionId,
+    DateTime attemptedAtUtc)
   {
     await this.SendSafe(userId, EmailTemplates.PenaltyPaymentFailed, EmailTemplates.PenaltyPaymentFailedSubject,
       async user => new
@@ -49,6 +54,7 @@ public class EmailNotifier(
         SupportEmail,
         Amount = FormatMoney(amount),
         CharityName = await this.CharityName(charityId),
+        HabitName = await this.HabitName(habitExecutionId),
         AttemptDate = FormatDate(attemptedAtUtc),
       });
   }
@@ -210,6 +216,13 @@ public class EmailNotifier(
     var res = await charities.Get(charityId);
     var name = res.IsSuccess() ? res.Get()?.Principal.Record.Name : null;
     return string.IsNullOrWhiteSpace(name) ? "your chosen charity" : name;
+  }
+
+  private async Task<string> HabitName(Guid habitExecutionId)
+  {
+    var res = await habits.GetTaskNameByExecutionId(habitExecutionId);
+    var name = res.IsSuccess() ? res.Get() : null;
+    return string.IsNullOrWhiteSpace(name) ? "your habit" : name;
   }
 
   private string PlanPrice(string tier)

@@ -136,6 +136,9 @@ public sealed class FakeHabitRepository(CallLog? log = null) : IHabitRepository
     return Task.FromResult<Result<List<FailedExecutionRow>>>(rows);
   }
 
+  public Task<Result<string?>> GetTaskNameByExecutionId(Guid executionId)
+    => Task.FromResult<Result<string?>>((string?)null);
+
   public Task<Result<DateOnly>> GetUserCurrentDate(string userId, Guid habitVersionId)
     => Task.FromResult<Result<DateOnly>>(CurrentDate);
 

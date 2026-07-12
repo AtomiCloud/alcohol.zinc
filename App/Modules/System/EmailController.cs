@@ -32,6 +32,7 @@ public class EmailController(IEmailRenderer renderer, ISmtpClientFactory factory
       SupportEmail,
       Amount = "$5.00",
       CharityName = "Doctors Without Borders",
+      HabitName = "Morning run",
       ChargeDate = "12 July 2026",
     }),
     [EmailTemplates.PenaltyPaymentFailed] = (EmailTemplates.PenaltyPaymentFailedSubject, to => new
@@ -41,6 +42,7 @@ public class EmailController(IEmailRenderer renderer, ISmtpClientFactory factory
       SupportEmail,
       Amount = "$5.00",
       CharityName = "Doctors Without Borders",
+      HabitName = "Morning run",
       AttemptDate = "12 July 2026",
     }),
     [EmailTemplates.SubscriptionReceipt] = (EmailTemplates.SubscriptionReceiptSubject, to => new
