@@ -28,7 +28,6 @@ export const PaymentConsentChangedEmail = ({
       supportEmail={supportEmail}
       subject="Your payment method changed"
       previewText={`${changeSummary} for ${purpose}`}
-      strip="neutral"
     >
       <Headline>{changeSummary}</Headline>
       <Paragraph>

@@ -21,7 +21,6 @@ export const WelcomeEmail = ({
       supportEmail={supportEmail}
       subject="Welcome to LazyTax — let's build habits that stick"
       previewText="Simple daily check-ins. Stakes that donate to charity. Rewards when you succeed."
-      strip="gradient"
     >
       <Section className="text-center mb-3">
         <Img

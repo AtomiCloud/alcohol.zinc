@@ -33,7 +33,6 @@ export const MemberThankYouEmail = ({
       subject="Thank you for being a LazyTax member"
       previewText={`Hi ${userName}, thanks for being a valued LazyTax member`}
       userEmail={userEmail}
-      strip="gradient"
     >
       <Headline>Thank you, {userName}</Headline>
       <Paragraph>

@@ -29,7 +29,6 @@ export const SubscriptionReceiptEmail = ({
       supportEmail={supportEmail}
       subject="Your LazyTax receipt"
       previewText={`Your LazyTax ${tier} subscription is active`}
-      strip="gradient"
     >
       <Headline>Thanks, {userName} — here&apos;s your receipt</Headline>
       <Paragraph>

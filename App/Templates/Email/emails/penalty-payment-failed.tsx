@@ -26,7 +26,6 @@ export const PenaltyPaymentFailedEmail = ({
       supportEmail={supportEmail}
       subject="We couldn't process your stake"
       previewText={`Your ${amount} stake payment was declined`}
-      strip="danger"
     >
       <Headline>Your stake payment didn&apos;t go through, {userName}</Headline>
       <Paragraph>We tried to charge your card for your habit stake, but the payment was declined.</Paragraph>

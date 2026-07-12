@@ -25,7 +25,6 @@ export const SubscriptionCancelledEmail = ({
       supportEmail={supportEmail}
       subject="Your subscription change is confirmed"
       previewText={`${changeSummary} — effective ${effectiveDate}`}
-      strip="neutral"
     >
       <Headline>Change confirmed, {userName}</Headline>
       <Paragraph>

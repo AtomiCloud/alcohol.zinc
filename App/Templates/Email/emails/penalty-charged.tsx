@@ -27,7 +27,6 @@ export const PenaltyChargedEmail = ({
       supportEmail={supportEmail}
       subject="Your stake went to charity"
       previewText={`Your ${amount} stake is headed to ${charityName}`}
-      strip="emerald"
     >
       <Headline>Your stake did some good, {userName}</Headline>
       <Paragraph>

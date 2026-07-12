@@ -26,7 +26,6 @@ export const SubscriptionPaymentFailedEmail = ({
       supportEmail={supportEmail}
       subject="Payment failed — your plan needs attention"
       previewText={`Your ${tier} renewal was declined — you have until ${graceEndsDate}`}
-      strip="amber"
     >
       <Headline>
         We couldn&apos;t renew your {tier} plan, {userName}
