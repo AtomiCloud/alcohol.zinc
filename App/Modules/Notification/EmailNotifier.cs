@@ -67,7 +67,7 @@ public class EmailNotifier(
         BaseUrl = this.BaseUrl(),
         UserName = DisplayName(user),
         SupportEmail,
-        Tier = tier,
+        Tier = FormatTier(tier),
         Amount = FormatMoney(amount),
         ChargeDate = FormatDate(DateTime.UtcNow),
         NextBillingDate = FormatDate(nextBillingUtc),
@@ -82,7 +82,7 @@ public class EmailNotifier(
         BaseUrl = this.BaseUrl(),
         UserName = DisplayName(user),
         SupportEmail,
-        Tier = tier,
+        Tier = FormatTier(tier),
         Amount = this.PlanPrice(tier),
         ChargeDate = FormatDate(DateTime.UtcNow),
         NextBillingDate = FormatDate(nextBillingUtc),
@@ -98,7 +98,7 @@ public class EmailNotifier(
         BaseUrl = this.BaseUrl(),
         UserName = DisplayName(user),
         SupportEmail,
-        Tier = tier,
+        Tier = FormatTier(tier),
         Amount = this.PlanPrice(tier),
         GraceEndsDate = FormatDate(graceEndsUtc),
       }));
@@ -112,7 +112,7 @@ public class EmailNotifier(
         BaseUrl = this.BaseUrl(),
         UserName = DisplayName(user),
         SupportEmail,
-        ChangeSummary = $"{fromTier} → {toTier}",
+        ChangeSummary = $"{FormatTier(fromTier)} → {FormatTier(toTier)}",
         EffectiveDate = FormatDate(effectiveUtc),
       }));
   }
@@ -125,7 +125,7 @@ public class EmailNotifier(
         BaseUrl = this.BaseUrl(),
         UserName = DisplayName(user),
         SupportEmail,
-        ChangeSummary = $"{tier} ended (payment not collected)",
+        ChangeSummary = $"{FormatTier(tier)} ended (payment not collected)",
         EffectiveDate = FormatDate(endedAtUtc),
       }));
   }
@@ -235,6 +235,12 @@ public class EmailNotifier(
   {
     var username = user?.Principal.Record.Username;
     return string.IsNullOrWhiteSpace(username) ? "there" : username;
+  }
+
+  /// <summary>Tier keys are stored lowercase ("ultimate"); emails show them title-cased.</summary>
+  private static string FormatTier(string tier)
+  {
+    return string.IsNullOrEmpty(tier) ? tier : char.ToUpperInvariant(tier[0]) + tier[1..];
   }
 
   private static string FormatMoney(Money m)
