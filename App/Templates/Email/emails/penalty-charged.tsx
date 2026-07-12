@@ -46,9 +46,8 @@ export const PenaltyChargedEmail = ({
       <CallToAction buttonText="Open your dashboard" buttonUrl={`${baseUrl}/app`} />
       <FinePrint>
         100% of what you paid — minus payment gateway (Airwallex) and donation platform (Pledge.to) fees — goes to{' '}
-        {charityName}. We livestream the donation process at the end of every month. Donations are generally
-        non-refundable once disbursed; if this charge was a technical error, contact us within 14 days and we&apos;ll
-        make it right.{' '}
+        {charityName}. Donations are generally non-refundable once disbursed; if this charge was a technical error,
+        contact us within 14 days and we&apos;ll make it right.{' '}
         <Link href={`${baseUrl}/legal/refund`} className="text-violet underline">
           Refund policy
         </Link>
