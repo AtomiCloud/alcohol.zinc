@@ -7,6 +7,7 @@ using App.Modules.Entitlement;
 using App.Modules.Habit.Data;
 using App.Modules.NfcTag;
 using App.Modules.NfcTag.Data;
+using App.Modules.Notification;
 using App.Modules.Payment.Airwallex;
 using App.Modules.Payment.Data;
 using App.Modules.Penalty.Data;
@@ -27,6 +28,7 @@ using Domain.Disbursement;
 using Domain.Entitlement;
 using Domain.Habit;
 using Domain.NfcTag;
+using Domain.Notification;
 using Domain.Payment;
 using Domain.Penalty;
 using Domain.Protection;
@@ -148,6 +150,10 @@ public static class DomainServices
     s.AddScoped<AirwallexWebhookService>();
     s.AddScoped<AirwallexEventAdapter>();
     s.AddScoped<AirwallexHmacCalculator>();
+
+    // NOTIFICATION (best-effort transactional email)
+    s.AddScoped<IEmailNotifier, EmailNotifier>()
+      .AutoTrace<IEmailNotifier>();
 
     // Transaction Manager
     s.AddScoped<ITransactionManager, TransactionManager>()

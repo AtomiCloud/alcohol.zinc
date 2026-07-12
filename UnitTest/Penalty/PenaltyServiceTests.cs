@@ -1,9 +1,11 @@
 using CSharp_Result;
 using Domain.Exceptions;
+using Domain.Notification;
 using Domain.Payment;
 using Domain.Penalty;
 using Microsoft.Extensions.Logging.Abstractions;
 using NodaMoney;
+using UnitTest.Notification;
 
 namespace UnitTest.Penalty;
 
@@ -88,8 +90,9 @@ public class PenaltyServiceTests
       }
     };
 
-  private static PenaltyService Build(FakePenaltyRepository repo, FakePaymentService payment)
-    => new(repo, payment, NullLogger<PenaltyService>.Instance);
+  private static PenaltyService Build(
+    FakePenaltyRepository repo, FakePaymentService payment, IEmailNotifier? notifier = null)
+    => new(repo, payment, notifier ?? new RecordingEmailNotifier(), NullLogger<PenaltyService>.Instance);
 
   [Fact]
   public async Task Succeeded_MarksChargedOnce_AndCounts()
@@ -181,6 +184,59 @@ public class PenaltyServiceTests
     repo.BumpCalls[0].Id.Should().Be(pending.Id);
     repo.MarkFailedCalls.Should().BeEmpty();
     repo.MarkSkippedCalls.Should().BeEmpty();
+  }
+
+  [Fact]
+  public async Task EmailMatrix_ChargedEmailsOnce_RetriesAndSkipsStaySilent()
+  {
+    // Terminal transitions email exactly once; non-terminal ones never do.
+    var notifier = new RecordingEmailNotifier();
+    var charged = Pending();
+    var repo = new FakePenaltyRepository(charged);
+    var svc = Build(repo, FakePaymentService.Succeeds("pi_1"), notifier);
+    await svc.ProcessPending(batchSize: 10, maxAttempts: 5);
+    notifier.PenaltyCharged.Should().ContainSingle()
+      .Which.Should().Be((charged.Record.UserId, charged.Record.Amount, charged.Record.CharityId));
+    notifier.PenaltyFailed.Should().BeEmpty();
+
+    // Retry (below max) -> silent.
+    notifier = new RecordingEmailNotifier();
+    svc = Build(new FakePenaltyRepository(Pending(attempts: 0)),
+      FakePaymentService.WithStatus("pi_2", "REQUIRES_CUSTOMER_ACTION"), notifier);
+    await svc.ProcessPending(batchSize: 10, maxAttempts: 5);
+    notifier.PenaltyCharged.Should().BeEmpty();
+    notifier.PenaltyFailed.Should().BeEmpty();
+
+    // Max attempts -> exactly one failure email.
+    notifier = new RecordingEmailNotifier();
+    svc = Build(new FakePenaltyRepository(Pending(attempts: 4)),
+      FakePaymentService.WithStatus("pi_3", "REQUIRES_PAYMENT_METHOD"), notifier);
+    await svc.ProcessPending(batchSize: 10, maxAttempts: 5);
+    notifier.PenaltyFailed.Should().ContainSingle();
+    notifier.PenaltyCharged.Should().BeEmpty();
+
+    // No consent (skip) -> silent.
+    notifier = new RecordingEmailNotifier();
+    svc = Build(new FakePenaltyRepository(Pending()),
+      FakePaymentService.Fails(new NotFoundException("no consent", typeof(PaymentCustomer), "user-1")), notifier);
+    await svc.ProcessPending(batchSize: 10, maxAttempts: 5);
+    notifier.PenaltyCharged.Should().BeEmpty();
+    notifier.PenaltyFailed.Should().BeEmpty();
+  }
+
+  [Fact]
+  public async Task ThrowingNotifier_DoesNotChangeChargeOutcome()
+  {
+    // The notifier contract says it never throws; if it ever does, the drain's
+    // isolation must still record the money outcome correctly.
+    var pending = Pending();
+    var repo = new FakePenaltyRepository(pending);
+    var svc = Build(repo, FakePaymentService.Succeeds("pi_ok"), new ThrowingEmailNotifier());
+
+    var res = await svc.ProcessPending(batchSize: 10, maxAttempts: 5);
+
+    res.IsSuccess().Should().BeTrue();
+    repo.MarkChargedCalls.Should().ContainSingle().Which.Should().Be((pending.Id, "pi_ok"));
   }
 
   [Fact]

@@ -10,6 +10,7 @@ using CSharp_Result;
 using Domain.Exceptions;
 using Domain.Payment;
 using Domain.Penalty;
+using IntTest.Notification;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -75,7 +76,7 @@ public class PenaltyIntegrationTests : IAsyncLifetime
     => new(db, NullLogger<PenaltyRepository>.Instance);
 
   private static PenaltyService Service(IPenaltyRepository repo, IPaymentService payment)
-    => new(repo, payment, NullLogger<PenaltyService>.Instance);
+    => new(repo, payment, new NoopEmailNotifier(), NullLogger<PenaltyService>.Instance);
 
   private async Task<(string userId, Guid charityId)> SeedUserAndCharity()
   {

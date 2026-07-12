@@ -1,29 +1,21 @@
-import { Button, Section, Text } from '@react-email/components';
+import { Button, Section } from '@react-email/components';
 
 interface CallToActionProps {
-  title: string;
-  description?: string;
   buttonText: string;
   buttonUrl: string;
-  variant?: 'primary' | 'secondary' | 'accent';
 }
 
-export const CallToAction = ({ title, description, buttonText, buttonUrl, variant = 'primary' }: CallToActionProps) => {
-  const variantClasses = {
-    primary: 'bg-primary text-white border-4 border-gray-900',
-    secondary: 'bg-secondary text-white border-4 border-gray-900',
-    accent: 'bg-accent text-white border-4 border-gray-900',
-  };
-
+/**
+ * THE LazyTax brand CTA: the orange→fuchsia→violet gradient pill from the
+ * argon landing Hero/FinalCTA. bg-brand supplies the solid orange
+ * background-color fallback for clients that strip background-image (Outlook).
+ */
+export const CallToAction = ({ buttonText, buttonUrl }: CallToActionProps) => {
   return (
-    <Section className="bg-gray-200 border-4 border-gray-800 rounded-lg p-4 sm:p-6 my-4 sm:my-6 text-center">
-      <Text className="text-base sm:text-lg font-black text-gray-900 mb-2 mt-0">{title}</Text>
-
-      {description && <Text className="text-sm sm:text-base text-gray-900 font-semibold mb-4 mt-0">{description}</Text>}
-
+    <Section className="text-center my-6">
       <Button
         href={buttonUrl}
-        className={`${variantClasses[variant]} px-4 py-2 sm:px-6 sm:py-3 rounded-lg font-black text-sm inline-block no-underline`}
+        className="bg-brand [background-image:linear-gradient(to_right,#f97316,#d946ef,#7c3aed)] text-white font-semibold text-[15px] no-underline rounded-xl px-8 py-3.5 min-w-[240px] inline-block"
       >
         {buttonText}
       </Button>

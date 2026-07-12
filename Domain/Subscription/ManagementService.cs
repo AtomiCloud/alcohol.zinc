@@ -1,5 +1,6 @@
 using CSharp_Result;
 using Domain.Exceptions;
+using Domain.Notification;
 using Domain.Payment;
 using Microsoft.Extensions.Logging;
 using NodaMoney;
@@ -10,6 +11,7 @@ public class SubscriptionManagementService(
   ISubscriptionRepository repo,
   ISubscriptionPlanProvider plans,
   IPaymentService payment,
+  IEmailNotifier notifier,
   ILogger<SubscriptionManagementService> logger
 ) : ISubscriptionManagementService
 {
@@ -181,7 +183,10 @@ public class SubscriptionManagementService(
       return new SubscriptionBusyException(userId);
     }
 
-    return await repo.GetByUserId(userId).Then(s => s!, Errors.MapNone);
+    var result = await repo.GetByUserId(userId).Then(s => s!, Errors.MapNone);
+    if (result.IsSuccess())
+      await notifier.NotifySubscriptionPurchased(userId, tier, chargeAmount, periodEnd);
+    return result;
   }
 
   public async Task<Result<UserSubscriptionPrincipal>> Cancel(string userId)
@@ -193,9 +198,13 @@ public class SubscriptionManagementService(
     if (existing?.Record.Status is not (SubscriptionStatus.Active or SubscriptionStatus.Grace))
       return new NoActiveSubscriptionException(userId);
 
-    return await repo.SetCancelAtPeriodEnd(existing.Id, true)
+    var cancelled = await repo.SetCancelAtPeriodEnd(existing.Id, true)
       .ThenAwait(_ => repo.GetByUserId(userId))
       .Then(s => s!, Errors.MapNone);
+    if (cancelled.IsSuccess())
+      await notifier.NotifySubscriptionChanged(
+        userId, existing.Record.Tier, SubscriptionService.FreeTier, existing.Record.PeriodEnd);
+    return cancelled;
   }
 
   public async Task<Result<UserSubscriptionPrincipal>> ChangeTier(string userId, string tier)
@@ -241,7 +250,10 @@ public class SubscriptionManagementService(
       if (!uncancel.IsSuccess()) return uncancel.FailureOrDefault()!;
     }
 
-    return await repo.GetByUserId(userId).Then(s => s!, Errors.MapNone);
+    var scheduled = await repo.GetByUserId(userId).Then(s => s!, Errors.MapNone);
+    if (scheduled.IsSuccess())
+      await notifier.NotifySubscriptionChanged(userId, existing.Record.Tier, tier, existing.Record.PeriodEnd);
+    return scheduled;
   }
 
   public async Task<Result<int>> ProcessRenewals(DateTime nowUtc, int batchSize)
@@ -313,6 +325,7 @@ public class SubscriptionManagementService(
     {
       var lapsed = await repo.MarkCancelled(sub.Id);
       if (!lapsed.IsSuccess()) return lapsed.FailureOrDefault()!;
+      await notifier.NotifySubscriptionEnded(rec.UserId, rec.Tier, nowUtc);
       return 1;
     }
 
@@ -391,10 +404,14 @@ public class SubscriptionManagementService(
 
       // Not settled (declined, requires action, no consent, transient error):
       // enter/stay in Grace and let tomorrow's pass retry until the window lapses.
+      // The Active->Grace transition happens exactly once, so the failure email
+      // fires once — daily grace retries stay silent.
       if (rec.Status != SubscriptionStatus.Grace)
       {
         var graced = await repo.MarkGrace(sub.Id);
         if (!graced.IsSuccess()) return graced.FailureOrDefault()!;
+        await notifier.NotifySubscriptionPaymentFailed(
+          rec.UserId, rec.Tier, rec.PeriodEnd.AddDays(plan.GracePeriodDays));
       }
 
       return 0;
@@ -423,6 +440,10 @@ public class SubscriptionManagementService(
       return 0;
     }
 
+    // The rolled guard above is the idempotency point: reconcile and fresh-charge
+    // paths both land here, but only the pass that actually rolls emails.
+    await notifier.NotifySubscriptionRenewed(
+      sub.Record.UserId, targetTier, sub.Record.PeriodEnd.AddMonths(1));
     return 1;
   }
 

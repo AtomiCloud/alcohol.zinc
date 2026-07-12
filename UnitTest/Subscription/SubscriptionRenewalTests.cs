@@ -1,6 +1,8 @@
+using Domain.Notification;
 using Domain.Payment;
 using Domain.Subscription;
 using Microsoft.Extensions.Logging.Abstractions;
+using UnitTest.Notification;
 
 namespace UnitTest.Subscription;
 
@@ -12,8 +14,10 @@ public class SubscriptionRenewalTests
 
   private static SubscriptionManagementService Svc(
     FakeSubscriptionRepository repo,
-    FakeSubscriptionPaymentService payment)
+    FakeSubscriptionPaymentService payment,
+    IEmailNotifier? notifier = null)
     => new(repo, FakePlanProvider.Default(), payment,
+      notifier ?? new RecordingEmailNotifier(),
       NullLogger<SubscriptionManagementService>.Instance);
 
   private static UserSubscriptionPrincipal DueRow(
@@ -291,5 +295,71 @@ public class SubscriptionRenewalTests
     res.IsSuccess().Should().BeTrue();
     ((int)res).Should().Be(1);
     repo.Row("u2")!.Record.PeriodEnd.Should().BeAfter(Now, "u2 renewed despite u1's failure");
+  }
+
+  [Fact]
+  public async Task EmailMatrix_RollEmailsReceipt_GraceEntryEmailsFailure_RetriesStaySilent()
+  {
+    // Successful roll -> exactly one receipt.
+    var periodEnd = Now.AddDays(-1);
+    var notifier = new RecordingEmailNotifier();
+    var repo = new FakeSubscriptionRepository(DueRow("u1", "pro", SubscriptionStatus.Active, periodEnd));
+    await Svc(repo, FakeSubscriptionPaymentService.Succeeds("int_r1"), notifier).ProcessRenewals(Now, 100);
+    notifier.SubscriptionRenewed.Should().ContainSingle()
+      .Which.Should().Be(("u1", "pro", periodEnd.AddMonths(1)));
+    notifier.SubscriptionPaymentFailed.Should().BeEmpty();
+
+    // Active -> Grace transition -> exactly one failure email, with the grace deadline.
+    notifier = new RecordingEmailNotifier();
+    repo = new FakeSubscriptionRepository(DueRow("u2", "pro", SubscriptionStatus.Active, periodEnd));
+    await Svc(repo, FakeSubscriptionPaymentService.WithStatus("int_r2", "REQUIRES_PAYMENT_METHOD"), notifier)
+      .ProcessRenewals(Now, 100);
+    notifier.SubscriptionPaymentFailed.Should().ContainSingle()
+      .Which.Should().Be(("u2", "pro", periodEnd.AddDays(7)));
+    notifier.SubscriptionRenewed.Should().BeEmpty();
+
+    // Already-Grace daily retry failing again -> silent (no email spam).
+    notifier = new RecordingEmailNotifier();
+    repo = new FakeSubscriptionRepository(DueRow("u3", "pro", SubscriptionStatus.Grace, Now.AddDays(-3)));
+    await Svc(repo, FakeSubscriptionPaymentService.WithStatus("int_r3", "REQUIRES_PAYMENT_METHOD"), notifier)
+      .ProcessRenewals(Now, 100);
+    notifier.SubscriptionPaymentFailed.Should().BeEmpty();
+    notifier.SubscriptionRenewed.Should().BeEmpty();
+    notifier.SubscriptionEnded.Should().BeEmpty();
+  }
+
+  [Fact]
+  public async Task EmailMatrix_GraceExpiryEmailsEnded_ScheduledCancelStaysSilent()
+  {
+    // Grace window exhausted -> one "ended" email.
+    var notifier = new RecordingEmailNotifier();
+    var repo = new FakeSubscriptionRepository(
+      DueRow("u1", "pro", SubscriptionStatus.Grace, Now.AddDays(-10)));
+    await Svc(repo, FakeSubscriptionPaymentService.Succeeds("int_r1"), notifier).ProcessRenewals(Now, 100);
+    notifier.SubscriptionEnded.Should().ContainSingle().Which.Should().Be(("u1", "pro"));
+    notifier.SubscriptionRenewed.Should().BeEmpty();
+
+    // Scheduled cancel taking effect at renewal -> silent: the confirmation
+    // email was already sent when the user requested the cancel.
+    notifier = new RecordingEmailNotifier();
+    repo = new FakeSubscriptionRepository(
+      DueRow("u2", "pro", SubscriptionStatus.Active, Now.AddDays(-1), cancelAtPeriodEnd: true));
+    await Svc(repo, FakeSubscriptionPaymentService.Succeeds("int_r2"), notifier).ProcessRenewals(Now, 100);
+    notifier.SubscriptionEnded.Should().BeEmpty();
+    notifier.SubscriptionChanged.Should().BeEmpty();
+    notifier.SubscriptionRenewed.Should().BeEmpty();
+  }
+
+  [Fact]
+  public async Task ThrowingNotifier_DoesNotFailTheRenewalPass()
+  {
+    var repo = new FakeSubscriptionRepository(
+      DueRow("u1", "pro", SubscriptionStatus.Active, Now.AddDays(-1)));
+
+    var res = await Svc(repo, FakeSubscriptionPaymentService.Succeeds("int_r1"), new ThrowingEmailNotifier())
+      .ProcessRenewals(Now, 100);
+
+    res.IsSuccess().Should().BeTrue("email failures are isolated per row and never fail the drain");
+    repo.Row("u1")!.Record.PeriodEnd.Should().BeAfter(Now, "the roll itself persisted before the email attempt");
   }
 }

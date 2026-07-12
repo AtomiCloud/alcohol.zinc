@@ -8,6 +8,7 @@ using App.StartUp.Services.Auth;
 using App.Utility;
 using Asp.Versioning;
 using CSharp_Result;
+using Domain.Notification;
 using Domain.Payment;
 using Domain.User;
 using Microsoft.AspNetCore.Authorization;
@@ -29,6 +30,7 @@ public class UserController(
   ITokenDataExtractor tokenDataExtractor,
   IOptions<AppOption> appOption,
   IPaymentService paymentService,
+  IEmailNotifier notifier,
   IAuthHelper h
 ) : AtomiControllerBase(h)
 {
@@ -101,7 +103,7 @@ public class UserController(
       return this.ReturnResult(x);
     }
 
-    var user = await createUserReqValidator
+    var created = await createUserReqValidator
       .ValidateAsyncResult(req, "Invalid CreateUserReq")
       .ThenAwait(x => tokenDataExtractor.ExtractFromToken(x.IdToken, x.AccessToken))
       .Then<UserToken, UserToken>(x => x.Sub == id
@@ -109,8 +111,17 @@ public class UserController(
         : new DomainProblemException(new InvalidUserToken("Sub of tokens do not match auth token", "ID/Access", []))
       )
       .ThenAwait(x =>
-        service.Create(id, x.ToRecord(), () => authManagement.SetClaim(id, LogtoClaims.ZincUpdated, "true")))
-      .Then(x => x.ToRes(), Errors.MapAll);
+        service.Create(id, x.ToRecord(), () => authManagement.SetClaim(id, LogtoClaims.ZincUpdated, "true")));
+
+    // Welcome email fires only after the create transaction has committed;
+    // duplicate Creates fail on the PK conflict, so this sends at most once.
+    if (created.IsSuccess())
+    {
+      var principal = created.Get();
+      await notifier.NotifyWelcome(principal.Id, principal.Record.Email, principal.Record.Username);
+    }
+
+    var user = created.Then(x => x.ToRes(), Errors.MapAll);
     return this.ReturnResult(user);
   }
 
