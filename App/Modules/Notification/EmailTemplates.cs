@@ -29,4 +29,5 @@ public static class EmailTemplates
   public const string PaymentConsentChangedSubject = "Your payment method changed";
 
   public const string MemberThankYou = "member-thank-you";
+  public const string MemberThankYouSubject = "Thank you for being a LazyTax member";
 }

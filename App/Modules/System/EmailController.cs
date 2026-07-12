@@ -85,7 +85,7 @@ public class EmailController(IEmailRenderer renderer, ISmtpClientFactory factory
       Purpose = "Habit stakes",
       ChangeDate = "12 July 2026",
     }),
-    [EmailTemplates.MemberThankYou] = ("Thank you for being a LazyTax member", to => new
+    [EmailTemplates.MemberThankYou] = (EmailTemplates.MemberThankYouSubject, to => new
     {
       BaseUrl,
       UserName = to.Split("@")[0],
