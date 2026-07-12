@@ -1,3 +1,5 @@
+## [1.33.1](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.33.0...v1.33.1) (2026-07-12)
+
 ## [1.33.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.32.0...v1.33.0) (2026-07-12)
 
 
