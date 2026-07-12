@@ -1,3 +1,10 @@
+## [1.33.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.32.0...v1.33.0) (2026-07-12)
+
+
+### ✨ Features ✨
+
+* show the habit name in penalty emails ([c1a826a](https://github.com/AtomiCloud/alcohol.zinc/commit/c1a826a4e6f3c461d6ca0094c98628643c8c1de0))
+
 ## [1.32.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.31.0...v1.32.0) (2026-07-12)
 
 
