@@ -122,3 +122,45 @@ Settings are managed through YAML files with environment-specific overrides:
 - Integration tests include JUnit test logger for CI/CD
 - Test projects reference the main App project for integration testing
 - usually only Get for a specific entity using id will return the full model (full aggregate), because loading everything for action like list is very time consuming, does that make sense to you?
+
+## E2E testing against pichu (API token + DB seeding)
+
+There is **no separate "user" vs "admin" token** — it is ONE machine (M2M) app credential, and the requested `scope` decides its power. The M2M `sub` is the app id, **not a real user** (no `Users` row), so it can create habits but `Configuration`/`Vacation`/`UserProtections` fail on the FK to `Users`. For user-scoped scenarios, seed a `Users` row directly in the DB.
+
+**1. Pull M2M creds** (pichu / `alcohol` ns). Use `go-template`+`index` — `jsonpath='{.data.KEY}'` returns empty:
+
+```bash
+kubectl -n alcohol --context pichu get secret zinc -o go-template='{{ index .data "AUTH_CLIENT_ID" }}' | base64 -d
+kubectl -n alcohol --context pichu get secret zinc -o go-template='{{ index .data "AUTH_CLIENT_SECRET" }}' | base64 -d
+```
+
+Logto host = `AUTH_DOMAIN` = `https://api.lithium.alcohol.pichu.cluster.atomi.cloud`.
+
+**2. Mint the token** (Logto client_credentials):
+
+```bash
+curl -s -X POST "https://api.lithium.alcohol.pichu.cluster.atomi.cloud/oidc/token" \
+  -u "$CLIENT_ID:$CLIENT_SECRET" \
+  --data-urlencode "grant_type=client_credentials" \
+  --data-urlencode "resource=https://api.zinc.alcohol.pichu" \
+  --data-urlencode "scope=admin"
+```
+
+- `resource` MUST be the zinc audience `https://api.zinc.alcohol.pichu` (settings.pichu.yaml `Auth.Settings.Audience`).
+- `scope=admin` → **admin** token (claim `scope=admin`; the `OnlyAdmin` policy is Field `scope`, Target `admin`). `scope=all` → **no** scope claim → non-admin caller (still not a real user). The app already holds the Logto role `Machine Zinc Admin`, so no RBAC change is needed.
+
+**3. Call the API:** `curl -H "Authorization: Bearer $TOKEN" https://api.zinc.alcohol.pichu.cluster.atomi.cloud/api/v1/...`
+
+**Trigger the nightly job on demand (admin-only, date-controllable):**
+`POST /api/v1/Habit/executions/mark-daily-failures` with body `{"date":"dd-MM-yyyy","habitIds":[...]}`.
+
+**Seed a real user for full scenarios** — the DB is **Neon** (external; creds in `zinc` secret `ATOMI_DATABASE__MAIN__{HOST,USER,PASSWORD,DATABASE}`). An in-cluster psql pod is blocked by Kyverno, so run psql locally:
+
+```bash
+docker run --rm -e PGPASSWORD=... -e PGSSLMODE=require postgres:16-alpine \
+  psql -h <host> -U admin -d main -c "..."
+```
+
+FK chain: `Users`(Id varchar PK) ← `Habits`(UserId), `VacationPeriods`(UserId), `UserProtections`(UserId, FreezeCurrent). `HabitVersions.HabitId` must match `Habits.Version`. Execution `Status` smallint: `1`=Completed `2`=Failed `3`=Skipped `4`=Frozen `5`=Vacation. Field formats: `notificationTime`=`HH:mm:ss`, `daysOfWeek`=full names (`Monday`), dates=`dd-MM-yyyy`.
+
+**Never commit the secret VALUES** — pull from the cluster secret each time; delete seeded rows and any cached token/password files afterward.
