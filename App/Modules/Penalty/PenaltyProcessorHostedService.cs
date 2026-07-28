@@ -1,9 +1,12 @@
+using App.StartUp.Options;
 using Domain.Penalty;
+using Microsoft.Extensions.Options;
 
 namespace App.Modules.Penalty;
 
 public class PenaltyProcessorHostedService(
   IServiceProvider serviceProvider,
+  IOptionsMonitor<PenaltyOption> options,
   ILogger<PenaltyProcessorHostedService> logger
 ) : IHostedService, IDisposable
 {
@@ -18,6 +21,12 @@ public class PenaltyProcessorHostedService(
 
   public Task StartAsync(CancellationToken cancellationToken)
   {
+    if (!options.CurrentValue.Enabled)
+    {
+      logger.LogInformation("PenaltyProcessorHostedService disabled (Penalty.Enabled=false); not scheduling");
+      return Task.CompletedTask;
+    }
+
     // Drain pending penalties every 15 minutes. Larger initial delay than the
     // failure job so daily failures are marked (enqueued) before draining.
     _timer = new Timer(async _ => await DoWork(), null, TimeSpan.FromMinutes(3), TimeSpan.FromMinutes(15));

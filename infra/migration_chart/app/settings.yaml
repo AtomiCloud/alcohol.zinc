@@ -232,6 +232,12 @@ Payment:
     Id: 'your-airwallex-client-id'
     Key: 'your-airwallex-api-key'
     Webhook: 'webhook-secret-key'
+# Auto-deduction kill-switch: the penalty processor charges real cards via
+# stored Airwallex consents, so it is off unless a landscape deliberately opts
+# in. Penalties still accrue while off; enabling drains the backlog.
+Penalty:
+  Enabled: false
+
 # Charity payout worker. Disabled by default; landscapes that point Pledge at a safe
 # environment (e.g. pichu -> api-staging.pledge.to) enable it via their override file.
 Disbursement:

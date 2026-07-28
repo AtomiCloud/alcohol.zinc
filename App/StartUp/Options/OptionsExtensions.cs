@@ -147,6 +147,9 @@ public static class OptionsExtensions
     // Register Disbursement (charity payout) Options
     services.RegisterOption<DisbursementOption>(DisbursementOption.Key);
 
+    // Register Penalty (auto-deduction) Options
+    services.RegisterOption<PenaltyOption>(PenaltyOption.Key);
+
     // Register Subscription (tier catalog + renewal) Options.
     // Note: the free tier deliberately sits below the pre-subscription stub
     // defaults (product decision 2026-07-06: free = 2 habits, no vacation/
