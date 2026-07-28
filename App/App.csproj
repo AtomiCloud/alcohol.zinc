@@ -17,7 +17,7 @@
 
   <ItemGroup>
     <PackageReference Include="Asp.Versioning.Http" Version="8.0.0"/>
-    <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" Version="8.0.0"/>
+    <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" Version="8.1.0"/>
     <PackageReference Include="CSharp-Result" Version="0.2.0"/>
     <PackageReference Include="EFCore.BulkExtensions" Version="8.0.2"/>
     <PackageReference Include="EntityFrameworkCore.Exceptions.PostgreSQL" Version="8.0.0"/>
