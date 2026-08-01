@@ -46,5 +46,14 @@ namespace Domain.Habit
         // Helpers for end-of-day failure marking
         Task<Result<List<string>>> GetDistinctTimezonesForEnabledHabits();
         Task<Result<List<Guid>>> GetEnabledHabitIdsByTimezone(string timezone);
+
+        // Over-cap pausing (tier downgrades). Reconciles the whole user in one
+        // statement: the oldest `cap` habits become unpaused, the rest paused.
+        // Idempotent — safe to call on every tier change in either direction.
+        // Returns the number of habits whose paused flag actually changed.
+        Task<Result<int>> SetPausedOverCap(string userId, int cap);
+        // Paused flag lookups; null = habit not found / not owned by user.
+        Task<Result<bool?>> GetPausedByHabitId(string userId, Guid habitId);
+        Task<Result<bool?>> GetPausedByVersionId(string userId, Guid habitVersionId);
     }
 }

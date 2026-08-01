@@ -9,6 +9,7 @@ namespace Domain.Habit
     {
         public required ushort Version { get; init; }  // Current version pointer
         public required bool Enabled { get; init; }   // User can enable/disable habit
+        public bool PausedByLimit { get; init; }      // System-paused: over the tier's habit cap
     }
 
     public record HabitPrincipal

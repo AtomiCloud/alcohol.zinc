@@ -16,7 +16,7 @@ namespace App.Modules.Habit.Data
             {
                 var tzs = await (from h in db.Habits
                                  join hv in db.HabitVersions on new { h.Id, h.Version } equals new { Id = hv.HabitId, hv.Version }
-                                 where h.Enabled == true && h.DeletedAt == null
+                                 where h.Enabled == true && !h.PausedByLimit && h.DeletedAt == null
                                  select hv.Timezone)
                     .Distinct()
                     .AsNoTracking()
@@ -36,7 +36,7 @@ namespace App.Modules.Habit.Data
             {
                 var ids = await (from h in db.Habits
                                  join hv in db.HabitVersions on new { h.Id, h.Version } equals new { Id = hv.HabitId, hv.Version }
-                                 where h.Enabled == true && h.DeletedAt == null && hv.Timezone == timezone
+                                 where h.Enabled == true && !h.PausedByLimit && h.DeletedAt == null && hv.Timezone == timezone
                                  select h.Id)
                     .Distinct()
                     .ToListAsync();
@@ -52,7 +52,11 @@ namespace App.Modules.Habit.Data
         {
             try
             {
-                var count = await db.Habits.AsNoTracking().Where(x => x.UserId == userId && x.DeletedAt == null).CountAsync();
+                // Paused (over-cap) habits don't occupy a slot: after a downgrade
+                // the user can delete an active habit and create a fresh one in
+                // the freed slot, instead of being locked out until they upgrade.
+                var count = await db.Habits.AsNoTracking()
+                    .Where(x => x.UserId == userId && x.DeletedAt == null && !x.PausedByLimit).CountAsync();
                 return count;
             }
             catch (Exception e)
@@ -95,6 +99,7 @@ namespace App.Modules.Habit.Data
                         WHERE h.""Id"" = ANY({0})
                           AND h.""DeletedAt"" IS NULL
                           AND h.""Enabled"" = true
+                          AND h.""PausedByLimit"" = false
                           AND hv.""DaysOfWeek"" @> ARRAY[{1}]", habitIds, dayOfWeek)
                     .AsNoTracking()
                     .ToListAsync();
@@ -128,6 +133,76 @@ namespace App.Modules.Habit.Data
             catch (Exception e)
             {
                 logger.LogError(e, "CreateExecutionsForVersionsWithStatus failed");
+                throw;
+            }
+        }
+
+        public async Task<Result<int>> SetPausedOverCap(string userId, int cap)
+        {
+            try
+            {
+                // Currently-active habits outrank paused ones so a reconcile with an
+                // unchanged cap is a no-op: without that, the monthly renewal roll
+                // would re-pause a habit the user swapped in after downgrading (they
+                // deleted an old active habit to free the slot). Within each group,
+                // oldest first — that is the "oldest stay active" policy on a
+                // downgrade and "oldest thaw first" on an upgrade.
+                var changed = await db.Database.ExecuteSqlAsync($@"
+                    WITH ranked AS (
+                        SELECT ""Id"",
+                               ROW_NUMBER() OVER (ORDER BY ""PausedByLimit"" ASC, ""CreatedAt"" ASC, ""Id"" ASC) AS rn
+                        FROM ""Habits""
+                        WHERE ""UserId"" = {userId} AND ""DeletedAt"" IS NULL
+                    )
+                    UPDATE ""Habits"" h
+                    SET ""PausedByLimit"" = (r.rn > {cap})
+                    FROM ranked r
+                    WHERE h.""Id"" = r.""Id""
+                      AND h.""PausedByLimit"" <> (r.rn > {cap})
+                ");
+                if (changed > 0)
+                    logger.LogInformation(
+                        "SetPausedOverCap changed {Count} habits for UserId={UserId} (cap {Cap})", changed, userId, cap);
+                return changed;
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "SetPausedOverCap failed for UserId={UserId}, Cap={Cap}", userId, cap);
+                throw;
+            }
+        }
+
+        public async Task<Result<bool?>> GetPausedByHabitId(string userId, Guid habitId)
+        {
+            try
+            {
+                var flags = await db.Habits.AsNoTracking()
+                    .Where(x => x.Id == habitId && x.UserId == userId && x.DeletedAt == null)
+                    .Select(x => (bool?)x.PausedByLimit)
+                    .FirstOrDefaultAsync();
+                return flags;
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "GetPausedByHabitId failed for HabitId={HabitId}", habitId);
+                throw;
+            }
+        }
+
+        public async Task<Result<bool?>> GetPausedByVersionId(string userId, Guid habitVersionId)
+        {
+            try
+            {
+                var flags = await (from hv in db.HabitVersions.AsNoTracking()
+                                   join h in db.Habits on hv.HabitId equals h.Id
+                                   where hv.Id == habitVersionId && h.UserId == userId && h.DeletedAt == null
+                                   select (bool?)h.PausedByLimit)
+                    .FirstOrDefaultAsync();
+                return flags;
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "GetPausedByVersionId failed for HabitVersionId={HabitVersionId}", habitVersionId);
                 throw;
             }
         }
@@ -184,6 +259,7 @@ namespace App.Modules.Habit.Data
                         WHERE h.""UserId"" = {0}
                           AND h.""DeletedAt"" IS NULL
                           AND h.""Enabled"" = true
+                          AND h.""PausedByLimit"" = false
                           AND hv.""DaysOfWeek"" @> ARRAY[{1}]", userId, dayOfWeek)
                     .AsNoTracking()
                     .ToListAsync();
@@ -302,7 +378,9 @@ namespace App.Modules.Habit.Data
                 {
                     UserId = userId,
                     Version = 1,
-                    Enabled = true  // New habits are enabled by default
+                    Enabled = true,  // New habits are enabled by default
+                    PausedByLimit = false,
+                    CreatedAt = DateTime.UtcNow
                 };
                 db.Habits.Add(habitData);
                 
@@ -332,9 +410,12 @@ namespace App.Modules.Habit.Data
             {
                 logger.LogInformation("Updating habit version and enabled status for HabitId: {HabitId}, Enabled: {Enabled}", habitId, enabled);
 
-                // Atomically increment version and update enabled status using EF Core bulk update
+                // Atomically increment version and update enabled status using EF Core bulk update.
+                // PausedByLimit in the predicate closes the race with a concurrent tier
+                // reconcile: the controller's pre-check gives the friendly TierInsufficient,
+                // this guard makes a habit paused mid-flight fall through to not-found.
                 var affectedRows = await db.Habits
-                    .Where(h => h.Id == habitId && h.UserId == userId && h.DeletedAt == null)
+                    .Where(h => h.Id == habitId && h.UserId == userId && h.DeletedAt == null && !h.PausedByLimit)
                     .ExecuteUpdateAsync(h => h
                         .SetProperty(x => x.Version, x => x.Version + 1)
                         .SetProperty(x => x.Enabled, enabled));
@@ -423,6 +504,7 @@ namespace App.Modules.Habit.Data
                     WHERE h.""Id"" = ANY({habitIds})
                       AND h.""DeletedAt"" IS NULL
                       AND h.""Enabled"" = true
+                      AND h.""PausedByLimit"" = false
                       AND hv.""DaysOfWeek"" @> ARRAY[{dayOfWeek}]
                       AND he.""Id"" IS NULL
                 ");
@@ -520,6 +602,7 @@ namespace App.Modules.Habit.Data
                       AND h.""UserId"" = {userId}
                       AND h.""DeletedAt"" IS NULL
                       AND h.""Enabled"" = true
+                      AND h.""PausedByLimit"" = false
                       AND NOT EXISTS (
                           SELECT 1 FROM ""HabitExecutions"" he
                           WHERE he.""HabitVersionId"" = hv.""Id"" AND he.""Date"" = {date}
@@ -569,6 +652,7 @@ namespace App.Modules.Habit.Data
                       AND h.""UserId"" = {userId}
                       AND h.""DeletedAt"" IS NULL
                       AND h.""Enabled"" = true
+                      AND h.""PausedByLimit"" = false
                       AND NOT EXISTS (
                           SELECT 1 FROM ""HabitExecutions"" he
                           WHERE he.""HabitVersionId"" = hv.""Id"" AND he.""Date"" = {date}

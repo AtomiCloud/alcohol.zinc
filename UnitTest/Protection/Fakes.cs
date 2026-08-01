@@ -203,6 +203,12 @@ public sealed class FakeHabitRepository(CallLog? log = null) : IHabitRepository
     => throw new NotImplementedException();
   public Task<Result<int>> CountUserSkipsForMonth(string userId, DateOnly monthStart, DateOnly monthEnd)
     => throw new NotImplementedException();
+  public Task<Result<int>> SetPausedOverCap(string userId, int cap)
+    => throw new NotImplementedException();
+  public Task<Result<bool?>> GetPausedByHabitId(string userId, Guid habitId)
+    => throw new NotImplementedException();
+  public Task<Result<bool?>> GetPausedByVersionId(string userId, Guid habitVersionId)
+    => throw new NotImplementedException();
 }
 
 // Seed data for a Failed row produced by CreateFailedExecutions for a true miss.
@@ -390,6 +396,31 @@ public sealed class FakeEntitlementService : IEntitlementService
   {
     EnsureHabitsAllowedCalls.Add(userId);
     return Task.FromResult(EnsureHabitsAllowedResult);
+  }
+
+  public Result<Unit> EnsureHabitNotPausedResult { get; set; } = new Unit();
+  public Result<int> ReconcileHabitPauseResult { get; set; } = 0;
+
+  public List<(string UserId, Guid HabitId)> EnsureHabitNotPausedCalls { get; } = [];
+  public List<(string UserId, Guid HabitVersionId)> EnsureHabitVersionNotPausedCalls { get; } = [];
+  public List<(string UserId, string Tier)> ReconcileHabitPauseCalls { get; } = [];
+
+  public Task<Result<Unit>> EnsureHabitNotPaused(string userId, Guid habitId)
+  {
+    EnsureHabitNotPausedCalls.Add((userId, habitId));
+    return Task.FromResult(EnsureHabitNotPausedResult);
+  }
+
+  public Task<Result<Unit>> EnsureHabitVersionNotPaused(string userId, Guid habitVersionId)
+  {
+    EnsureHabitVersionNotPausedCalls.Add((userId, habitVersionId));
+    return Task.FromResult(EnsureHabitNotPausedResult);
+  }
+
+  public Task<Result<int>> ReconcileHabitPause(string userId, string tier)
+  {
+    ReconcileHabitPauseCalls.Add((userId, tier));
+    return Task.FromResult(ReconcileHabitPauseResult);
   }
 }
 
