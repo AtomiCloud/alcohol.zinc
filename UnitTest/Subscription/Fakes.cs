@@ -9,6 +9,30 @@ namespace UnitTest.Subscription;
 // matching the UnitTest/Penalty style) so the management/renewal tests can
 // assert the full state-transition matrix.
 
+// Records every appended lifecycle event; configurable failure to assert the
+// best-effort contract (an append failure must never fail the money flow).
+public sealed class FakeSubscriptionEventRepository : ISubscriptionEventRepository
+{
+  public List<SubscriptionEventRecord> Appended { get; } = [];
+  public Exception? FailWith { get; set; }
+
+  public Task<Result<SubscriptionEventPrincipal>> Append(SubscriptionEventRecord record)
+  {
+    if (FailWith is not null) return Task.FromResult<Result<SubscriptionEventPrincipal>>(FailWith);
+    Appended.Add(record);
+    return Task.FromResult<Result<SubscriptionEventPrincipal>>(
+      new SubscriptionEventPrincipal { Id = Guid.NewGuid(), Record = record });
+  }
+
+  public Task<Result<List<SubscriptionEventPrincipal>>> ListByUser(string userId, int limit)
+    => Task.FromResult<Result<List<SubscriptionEventPrincipal>>>(
+      Appended.Where(r => r.UserId == userId)
+        .OrderByDescending(r => r.OccurredAt)
+        .Take(limit)
+        .Select(r => new SubscriptionEventPrincipal { Id = Guid.NewGuid(), Record = r })
+        .ToList());
+}
+
 public sealed class FakeSubscriptionRepository : ISubscriptionRepository
 {
   private readonly Dictionary<string, UserSubscriptionPrincipal> _byUser = [];

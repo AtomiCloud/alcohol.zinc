@@ -53,4 +53,21 @@ public static class SubscriptionMapper
       rec.NextTier
     );
   }
+
+  public static SubscriptionEventRes ToRes(this SubscriptionEventPrincipal p)
+  {
+    var rec = p.Record;
+    return new SubscriptionEventRes(
+      // camelCase over the wire, e.g. DowngradeScheduled -> "downgradeScheduled"
+      char.ToLowerInvariant(rec.EventType.ToString()[0]) + rec.EventType.ToString()[1..],
+      rec.OccurredAt.ToString("O"),
+      rec.Tier,
+      rec.NextTier,
+      rec.AmountCents,
+      rec.Currency,
+      rec.ChargeIntentId,
+      rec.PeriodEnd?.ToString("O"),
+      rec.Detail
+    );
+  }
 }

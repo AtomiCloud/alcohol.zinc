@@ -49,6 +49,8 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
   public DbSet<DisbursementData> Disbursements { get; set; }
   // Subscription (paid tiers)
   public DbSet<UserSubscriptionData> UserSubscriptions { get; set; }
+  // Subscription lifecycle history (append-only)
+  public DbSet<SubscriptionEventData> SubscriptionEvents { get; set; }
   // NFC tags (physical tag → habit mapping)
   public DbSet<NfcTagData> NfcTags { get; set; }
   // public DbSet<CompletionData> Completions { get; set; }
@@ -207,5 +209,13 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
                 .WithMany()
                 .HasForeignKey(x => x.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+    // Subscription lifecycle history: append-only, so only the billing-history
+    // read path (newest first per user) needs an index. Deliberately no FK to
+    // Users: financial history must survive account deletion.
+    // TODO(account-deletion): anonymize-retain UserId here (sentinel, keep the
+    // money fields) alongside the penalty-ledger seam in UserRepository.
+    var subscriptionEvent = modelBuilder.Entity<SubscriptionEventData>();
+    subscriptionEvent.HasIndex(x => new { x.UserId, x.OccurredAt });
   }
 }

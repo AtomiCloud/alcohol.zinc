@@ -34,3 +34,17 @@ public record SubscriptionRes(
   bool CancelAtPeriodEnd,
   string? NextTier
 );
+
+// One row of the append-only billing/lifecycle history, newest first.
+// AmountCents/Currency/ChargeIntentId are set on money events only.
+public record SubscriptionEventRes(
+  string EventType,
+  string OccurredAt,
+  string Tier,
+  string? NextTier,
+  int? AmountCents,
+  string? Currency,
+  string? ChargeIntentId,
+  string? PeriodEnd,
+  string? Detail
+);
