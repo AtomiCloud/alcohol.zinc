@@ -410,9 +410,12 @@ namespace App.Modules.Habit.Data
             {
                 logger.LogInformation("Updating habit version and enabled status for HabitId: {HabitId}, Enabled: {Enabled}", habitId, enabled);
 
-                // Atomically increment version and update enabled status using EF Core bulk update
+                // Atomically increment version and update enabled status using EF Core bulk update.
+                // PausedByLimit in the predicate closes the race with a concurrent tier
+                // reconcile: the controller's pre-check gives the friendly TierInsufficient,
+                // this guard makes a habit paused mid-flight fall through to not-found.
                 var affectedRows = await db.Habits
-                    .Where(h => h.Id == habitId && h.UserId == userId && h.DeletedAt == null)
+                    .Where(h => h.Id == habitId && h.UserId == userId && h.DeletedAt == null && !h.PausedByLimit)
                     .ExecuteUpdateAsync(h => h
                         .SetProperty(x => x.Version, x => x.Version + 1)
                         .SetProperty(x => x.Enabled, enabled));

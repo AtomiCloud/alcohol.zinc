@@ -82,28 +82,28 @@ stateDiagram-v2
 
 ### Built and live
 
-Scenarios 1–10, 17. Enforcement gates (`EntitlementService`) block _new_ over-cap actions. 82+ unit tests green.
+Scenarios 1–10, 16, 17. Enforcement gates (`EntitlementService`) block _new_ over-cap actions; over-cap pausing (scenario 16, built 2026-08-01) reconciles existing habits on every tier landing. Unit-tested.
 
-### Built but switched off 🔴
+### Built, enabled in pichu only 🟡
 
-Scenarios 11–15. The renewal worker (`SubscriptionRenewalHostedService`, daily tick, batch 500, DB lease + idempotency keys) is gated by `Subscription.RenewalEnabled`, which is **`false` in every config** — no landscape overrides it. So today: no renewals are charged, no grace emails, no retries, no lapse writes. Only the read-side backstop protects access. **Enable in pichu first and observe.**
+Scenarios 11–15. The renewal worker (`SubscriptionRenewalHostedService`, daily tick, batch 500, DB lease + idempotency keys) is gated by `Subscription.RenewalEnabled`: **`true` in pichu** (as of 2026-08-01), still `false` in the base config and every other landscape. Observe a full pichu cycle (renew / grace / lapse), then enable pikachu → raichu. Until then the read-side backstop protects access elsewhere.
 
 ### Not built ❌
 
-- ~~#16 over-cap pause~~ — **built 2026-08-01** (see scenario 16). Still missing: exposing `pausedByLimit` in habit API responses so neon/argon can render the paused badge (comes with the UX step).
-- **Append-only billing event table** (decided 2026-08-01) — see below.
+- **`pausedByLimit` in habit API responses** — server enforces pausing, but neon/argon can't render the paused badge yet (comes with the UX step).
+- **Append-only billing event table** (decided 2026-08-01) — see below. Also the durable home for a failed pause reconcile after a lapse (today that path only logs; any later tier event self-heals).
 - **Receipts / billing history** — no ledger exists; `LastChargeIntentId/Key` is transient and cleared.
 - **Grace countdown in UI** — backend computes the deadline; API/portal never expose it. Portal still says "Renews on …" during grace.
-- **Billing preview** — no "you'll pay $X today" endpoint. Portal upgrade copy is **wrong** (claims full price + period restart; backend prorates and keeps the anniversary).
+- **Billing preview endpoint** — the portal estimates the prorated upgrade client-side from `periodStart`/`periodEnd` (fixed 2026-08-01); a zinc-authoritative preview endpoint is still open.
 - **Undo-downgrade button** — backend supports it (#7); portal renders no affordance.
-- **`payment_intent.*` webhooks** — commented out; a 3DS-later-settled charge only recovers via the daily reconcile (currently off).
+- **`payment_intent.*` webhooks** — commented out; a 3DS-later-settled charge only recovers via the daily reconcile (pichu-only today).
 - Annual billing, trials, coupons, refunds — out of scope for now.
 
 ## Planned: append-only billing event table
 
 The live `UserSubscriptions` row stays the single source of _current_ truth. History goes to a new append-only table (never updated, never deleted):
 
-```
+```text
 SubscriptionEvents
 ├─ Id, UserId, OccurredAt (UTC)
 ├─ EventType: subscribed | activated | upgraded | downgrade_scheduled |
@@ -119,7 +119,7 @@ Written in the same transaction/flow as each state change. Powers: receipts + bi
 
 ## Rollout order
 
-1. Fix argon upgrade copy (it currently misstates proration) — small.
-2. Enable `RenewalEnabled` in pichu; monitor the worker.
-3. Implement #16 (pause over-cap habits, oldest-first keep).
-4. Event table → then receipts, grace countdown, billing preview, undo-downgrade button.
+1. ~~Fix argon upgrade copy~~ — done 2026-08-01 (argon PR #102).
+2. ~~Enable `RenewalEnabled` in pichu~~ — done 2026-08-01 (this repo); **monitor a full cycle**, then promote to pikachu → raichu.
+3. ~~Implement #16 (pause over-cap habits, oldest-first keep)~~ — done 2026-08-01.
+4. Event table → then receipts, grace countdown, billing preview, undo-downgrade button, `pausedByLimit` in habit responses.
