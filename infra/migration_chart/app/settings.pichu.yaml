@@ -49,6 +49,12 @@ HttpClient:
 Disbursement:
   Enabled: true
 
+# Subscription renewals: pichu's Airwallex is the demo environment, so the daily renewal
+# worker moves no real money here. First landscape to run it — observe a full cycle
+# (renew / grace / lapse) before enabling in pikachu/raichu.
+Subscription:
+  RenewalEnabled: true
+
 WebPortal:
   Scheme: https
   Host: argon-alcohol-pichu.kirinnee.workers.dev
