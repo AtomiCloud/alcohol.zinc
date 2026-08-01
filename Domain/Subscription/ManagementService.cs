@@ -1,4 +1,5 @@
 using CSharp_Result;
+using Domain.Entitlement;
 using Domain.Exceptions;
 using Domain.Notification;
 using Domain.Payment;
@@ -12,9 +13,29 @@ public class SubscriptionManagementService(
   ISubscriptionPlanProvider plans,
   IPaymentService payment,
   IEmailNotifier notifier,
+  IEntitlementService entitlements,
   ILogger<SubscriptionManagementService> logger
 ) : ISubscriptionManagementService
 {
+  // Re-align over-cap habit pausing after a tier change lands. Best-effort by
+  // design: the money has already moved, so a pause failure must never fail the
+  // subscription flow — the next tier event (or renewal roll) re-reconciles.
+  private async Task ReconcileHabitPauseSafe(string userId, string tier)
+  {
+    try
+    {
+      var r = await entitlements.ReconcileHabitPause(userId, tier);
+      if (!r.IsSuccess())
+        logger.LogWarning(r.FailureOrDefault(),
+          "Habit pause reconcile failed for {UserId} on tier {Tier}; next tier event retries", userId, tier);
+    }
+    catch (Exception ex)
+    {
+      logger.LogWarning(ex,
+        "Habit pause reconcile threw for {UserId} on tier {Tier}; next tier event retries", userId, tier);
+    }
+  }
+
   public async Task<Result<UserSubscriptionPrincipal>> Subscribe(string userId, string tier)
   {
     if (tier == SubscriptionService.FreeTier)
@@ -137,6 +158,7 @@ public class SubscriptionManagementService(
       var flipped = await repo.Activate(rowId, tier, periodStart, periodEnd, now);
       if (!flipped.IsSuccess()) return flipped.FailureOrDefault()!;
       if (!flipped.Get()) return new SubscriptionBusyException(userId);
+      await this.ReconcileHabitPauseSafe(userId, tier);
       return await repo.GetByUserId(userId).Then(s => s!, Errors.MapNone);
     }
 
@@ -182,6 +204,8 @@ public class SubscriptionManagementService(
         rowId, intent.Id);
       return new SubscriptionBusyException(userId);
     }
+
+    await this.ReconcileHabitPauseSafe(userId, tier);
 
     var result = await repo.GetByUserId(userId).Then(s => s!, Errors.MapNone);
     if (result.IsSuccess())
@@ -311,6 +335,7 @@ public class SubscriptionManagementService(
     {
       var cancelled = await repo.MarkCancelled(sub.Id);
       if (!cancelled.IsSuccess()) return cancelled.FailureOrDefault()!;
+      await this.ReconcileHabitPauseSafe(rec.UserId, SubscriptionService.FreeTier);
       return 1;
     }
 
@@ -325,6 +350,7 @@ public class SubscriptionManagementService(
     {
       var lapsed = await repo.MarkCancelled(sub.Id);
       if (!lapsed.IsSuccess()) return lapsed.FailureOrDefault()!;
+      await this.ReconcileHabitPauseSafe(rec.UserId, SubscriptionService.FreeTier);
       await notifier.NotifySubscriptionEnded(rec.UserId, rec.Tier, nowUtc);
       return 1;
     }
@@ -439,6 +465,11 @@ public class SubscriptionManagementService(
         "Renewal roll skipped for subscription {Id}: period changed concurrently", sub.Id);
       return 0;
     }
+
+    // A roll is where a scheduled downgrade (NextTier) actually lands, so the
+    // habit cap may have just shrunk. Same-tier rolls reconcile too — it's a
+    // no-op there and doubles as self-healing for a previously failed pass.
+    await this.ReconcileHabitPauseSafe(sub.Record.UserId, targetTier);
 
     // The rolled guard above is the idempotency point: reconcile and fresh-charge
     // paths both land here, but only the pass that actually rolls emails.

@@ -14,7 +14,8 @@ namespace App.Modules.Habit.Data
                 Record = new HabitRecord
                 {
                     Version = data.Version,
-                    Enabled = data.Enabled
+                    Enabled = data.Enabled,
+                    PausedByLimit = data.PausedByLimit
                 }
             };
         }
@@ -26,7 +27,8 @@ namespace App.Modules.Habit.Data
                 Id = principal.Id,
                 UserId = principal.UserId,
                 Version = principal.Record.Version,
-                Enabled = principal.Record.Enabled
+                Enabled = principal.Record.Enabled,
+                PausedByLimit = principal.Record.PausedByLimit
             };
         }
 

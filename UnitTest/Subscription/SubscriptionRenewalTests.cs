@@ -15,9 +15,11 @@ public class SubscriptionRenewalTests
   private static SubscriptionManagementService Svc(
     FakeSubscriptionRepository repo,
     FakeSubscriptionPaymentService payment,
-    IEmailNotifier? notifier = null)
+    IEmailNotifier? notifier = null,
+    Protection.FakeEntitlementService? entitlements = null)
     => new(repo, FakePlanProvider.Default(), payment,
       notifier ?? new RecordingEmailNotifier(),
+      entitlements ?? new Protection.FakeEntitlementService(),
       NullLogger<SubscriptionManagementService>.Instance);
 
   private static UserSubscriptionPrincipal DueRow(
@@ -361,5 +363,71 @@ public class SubscriptionRenewalTests
 
     res.IsSuccess().Should().BeTrue("email failures are isolated per row and never fail the drain");
     repo.Row("u1")!.Record.PeriodEnd.Should().BeAfter(Now, "the roll itself persisted before the email attempt");
+  }
+
+  // ---------------------------------------------------------------------------
+  // OVER-CAP HABIT PAUSING — the renewal pass is where tier drops land, so each
+  // landing must re-reconcile the user's paused habits against the new cap.
+  // ---------------------------------------------------------------------------
+
+  [Fact]
+  public async Task Renewal_ScheduledDowngradeApplied_ReconcilesHabitPauseToNextTier()
+  {
+    var entitlements = new Protection.FakeEntitlementService();
+    var repo = new FakeSubscriptionRepository(
+      DueRow("u1", "ultimate", SubscriptionStatus.Active, Now.AddDays(-1), nextTier: "pro"));
+
+    var res = await Svc(repo, FakeSubscriptionPaymentService.Succeeds("int_r1"), entitlements: entitlements)
+      .ProcessRenewals(Now, 100);
+
+    res.IsSuccess().Should().BeTrue();
+    entitlements.ReconcileHabitPauseCalls.Should().ContainSingle()
+      .Which.Should().Be(("u1", "pro"), "the downgraded tier's habit cap applies from this roll");
+  }
+
+  [Fact]
+  public async Task Renewal_GraceExpired_ReconcilesHabitPauseToFree()
+  {
+    var entitlements = new Protection.FakeEntitlementService();
+    var repo = new FakeSubscriptionRepository(
+      DueRow("u1", "pro", SubscriptionStatus.Grace, Now.AddDays(-10))); // past 7-day grace
+
+    var res = await Svc(repo, FakeSubscriptionPaymentService.Fails(new Exception("still declined")),
+        entitlements: entitlements)
+      .ProcessRenewals(Now, 100);
+
+    res.IsSuccess().Should().BeTrue();
+    entitlements.ReconcileHabitPauseCalls.Should().ContainSingle()
+      .Which.Should().Be(("u1", "free"), "a lapsed subscription drops to the free habit cap");
+  }
+
+  [Fact]
+  public async Task Renewal_CancelAtPeriodEnd_ReconcilesHabitPauseToFree()
+  {
+    var entitlements = new Protection.FakeEntitlementService();
+    var repo = new FakeSubscriptionRepository(
+      DueRow("u1", "pro", SubscriptionStatus.Active, Now.AddDays(-1), cancelAtPeriodEnd: true));
+
+    var res = await Svc(repo, FakeSubscriptionPaymentService.Succeeds("int_r1"), entitlements: entitlements)
+      .ProcessRenewals(Now, 100);
+
+    res.IsSuccess().Should().BeTrue();
+    entitlements.ReconcileHabitPauseCalls.Should().ContainSingle()
+      .Which.Should().Be(("u1", "free"));
+  }
+
+  [Fact]
+  public async Task Renewal_ChargeFails_DoesNotReconcileHabitPause()
+  {
+    // Entering grace keeps the paid tier's entitlements — nothing may pause yet.
+    var entitlements = new Protection.FakeEntitlementService();
+    var repo = new FakeSubscriptionRepository(
+      DueRow("u1", "pro", SubscriptionStatus.Active, Now.AddDays(-1)));
+
+    await Svc(repo, FakeSubscriptionPaymentService.Fails(new Exception("declined")), entitlements: entitlements)
+      .ProcessRenewals(Now, 100);
+
+    repo.Row("u1")!.Record.Status.Should().Be(SubscriptionStatus.Grace);
+    entitlements.ReconcileHabitPauseCalls.Should().BeEmpty("grace retains paid access");
   }
 }

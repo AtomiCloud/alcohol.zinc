@@ -13,9 +13,11 @@ public class SubscriptionManagementServiceTests
     FakeSubscriptionRepository repo,
     FakeSubscriptionPaymentService payment,
     FakePlanProvider? plans = null,
-    IEmailNotifier? notifier = null)
+    IEmailNotifier? notifier = null,
+    Protection.FakeEntitlementService? entitlements = null)
     => new(repo, plans ?? FakePlanProvider.Default(), payment,
       notifier ?? new RecordingEmailNotifier(),
+      entitlements ?? new Protection.FakeEntitlementService(),
       NullLogger<SubscriptionManagementService>.Instance);
 
   private static UserSubscriptionPrincipal Row(
@@ -429,4 +431,54 @@ public class SubscriptionManagementServiceTests
     repo.Row("u1")!.Record.Status.Should().Be(SubscriptionStatus.Active);
   }
 
+  // ---------------------------------------------------------------------------
+  // OVER-CAP HABIT PAUSING — interactive tier changes reconcile immediately;
+  // failed or rejected changes must not touch the user's habits.
+  // ---------------------------------------------------------------------------
+
+  [Fact]
+  public async Task Subscribe_Success_ReconcilesHabitPauseToNewTier()
+  {
+    var entitlements = new Protection.FakeEntitlementService();
+    var repo = new FakeSubscriptionRepository();
+
+    var res = await Svc(repo, FakeSubscriptionPaymentService.Succeeds("int_1"), entitlements: entitlements)
+      .Subscribe("u1", "pro");
+
+    res.IsSuccess().Should().BeTrue();
+    entitlements.ReconcileHabitPauseCalls.Should().ContainSingle()
+      .Which.Should().Be(("u1", "pro"), "an upgrade may thaw previously paused habits");
+  }
+
+  [Fact]
+  public async Task Subscribe_ChargeFails_DoesNotReconcileHabitPause()
+  {
+    var entitlements = new Protection.FakeEntitlementService();
+    var repo = new FakeSubscriptionRepository();
+
+    var res = await Svc(repo, FakeSubscriptionPaymentService.WithStatus("int_1", "REQUIRES_PAYMENT_METHOD"),
+        entitlements: entitlements)
+      .Subscribe("u1", "pro");
+
+    res.IsFailure().Should().BeTrue();
+    entitlements.ReconcileHabitPauseCalls.Should().BeEmpty("no tier changed, so no habit may move");
+  }
+
+  [Fact]
+  public async Task ReconcileFailure_DoesNotFailTheSubscribe()
+  {
+    // Pausing is best-effort by contract: the charge has settled, so a pause
+    // hiccup must never surface as a failed subscribe.
+    var entitlements = new Protection.FakeEntitlementService
+    {
+      ReconcileHabitPauseResult = new Exception("transient db error"),
+    };
+    var repo = new FakeSubscriptionRepository();
+
+    var res = await Svc(repo, FakeSubscriptionPaymentService.Succeeds("int_1"), entitlements: entitlements)
+      .Subscribe("u1", "pro");
+
+    res.IsSuccess().Should().BeTrue();
+    repo.Row("u1")!.Record.Status.Should().Be(SubscriptionStatus.Active);
+  }
 }

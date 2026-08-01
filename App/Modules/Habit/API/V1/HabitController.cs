@@ -75,6 +75,8 @@ public class HabitController(
           if (!req.Enabled) return Task.FromResult((Result<UpdateHabitReq>)validReq);
           return entitlementService.EnsureHabitsAllowed(userId).Then(_ => validReq, Errors.MapNone);
         })
+        // Over-cap paused habits are read-only until the user upgrades or frees a slot.
+        .ThenAwait(validReq => entitlementService.EnsureHabitNotPaused(userId, id).Then(_ => validReq, Errors.MapNone))
         .ThenAwait(validReq => service.Update(userId, id, validReq.ToVersionRecord(), req.Enabled))
         .Then(h => h?.ToRes(), Errors.MapNone);
 
@@ -96,6 +98,8 @@ public class HabitController(
   public async Task<ActionResult<HabitExecutionRes>> CompleteHabit(string userId, Guid habitVersionId, [FromBody] CompleteHabitReq req)
   {
     var result = await this.GuardAsync(userId)
+      // Paused (over-cap) habits reject check-ins with a tier error, not a 404.
+      .ThenAwait(_ => entitlementService.EnsureHabitVersionNotPaused(userId, habitVersionId))
       .ThenAwait(_ => service.CompleteHabit(userId, habitVersionId, req.Notes))
       .Then(execution => execution.ToRes(), Errors.MapNone);
 
@@ -106,6 +110,8 @@ public class HabitController(
   public async Task<ActionResult<HabitExecutionRes>> SkipHabit(string userId, Guid habitVersionId, [FromBody] SkipHabitReq req)
   {
     var result = await this.GuardAsync(userId)
+      // Paused (over-cap) habits reject skips with a tier error, not a 404.
+      .ThenAwait(_ => entitlementService.EnsureHabitVersionNotPaused(userId, habitVersionId))
       // User-local month window via allowance service
       .ThenAwait(_ => allowanceService.GetUserMonthWindow(userId))
       .ThenAwait(w => entitlementService.EnsureSkipsAllowed(userId, w.MonthStart, w.MonthEnd))

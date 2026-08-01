@@ -72,6 +72,37 @@ public class EntitlementService(
     return baseCapRes.Then(baseCap => freezePolicy.ComputeFreezeMax(baseCap, userMaxStreak), Errors.MapNone);
   }
 
+  public Task<Result<Unit>> EnsureHabitNotPaused(string userId, Guid habitId)
+    => this.EnsureNotPaused(userId, habitRepository.GetPausedByHabitId(userId, habitId));
+
+  public Task<Result<Unit>> EnsureHabitVersionNotPaused(string userId, Guid habitVersionId)
+    => this.EnsureNotPaused(userId, habitRepository.GetPausedByVersionId(userId, habitVersionId));
+
+  // A missing habit (null) passes here: the downstream repository write resolves
+  // it to its usual not-found error, which stays the single source of that truth.
+  private async Task<Result<Unit>> EnsureNotPaused(string userId, Task<Result<bool?>> pausedLookup)
+  {
+    var pausedRes = await pausedLookup;
+    if (!pausedRes.IsSuccess()) return pausedRes.FailureOrDefault()!;
+    if (pausedRes.Get() is not true) return new Unit();
+
+    var tierLimitRes = await subscription.GetUserTier(userId)
+      .ThenAwait(tier => subscription.GetLimitForTier(tier, EntitlementKeys.HabitsMax)
+        .Then(limit => (tier, limit), Errors.MapNone));
+
+    return tierLimitRes.Then<Unit>(x =>
+    {
+      var (tier, limit) = x;
+      return new TierInsufficient(tier, EntitlementKeys.HabitsMax, limit).ToException();
+    });
+  }
+
+  public async Task<Result<int>> ReconcileHabitPause(string userId, string tier)
+  {
+    return await subscription.GetLimitForTier(tier, EntitlementKeys.HabitsMax)
+      .ThenAwait(cap => habitRepository.SetPausedOverCap(userId, cap));
+  }
+
   public async Task<Result<Unit>> EnsureHabitsAllowed(string userId)
   {
     var tierLimitRes = await subscription.GetUserTier(userId)
