@@ -91,29 +91,30 @@ Scenarios 11–15. The renewal worker (`SubscriptionRenewalHostedService`, daily
 ### Not built ❌
 
 - **`pausedByLimit` in habit API responses** — server enforces pausing, but neon/argon can't render the paused badge yet (comes with the UX step).
-- **Append-only billing event table** (decided 2026-08-01) — see below. Also the durable home for a failed pause reconcile after a lapse (today that path only logs; any later tier event self-heals).
-- **Receipts / billing history** — no ledger exists; `LastChargeIntentId/Key` is transient and cleared.
+- **Receipts / billing history UI** — the data now exists (`SubscriptionEvents` + `GET /subscription/{userId}/events`, built 2026-08-02); the argon page on top is still open.
+- **Reconcile-retry sweeper** — a failed pause reconcile after a lapse now has a durable `lapsed` event row to retry from, but nothing sweeps it yet.
 - **Grace countdown in UI** — backend computes the deadline; API/portal never expose it. Portal still says "Renews on …" during grace.
 - **Billing preview endpoint** — the portal estimates the prorated upgrade client-side from `periodStart`/`periodEnd` (fixed 2026-08-01); a zinc-authoritative preview endpoint is still open.
 - **Undo-downgrade button** — backend supports it (#7); portal renders no affordance.
 - **`payment_intent.*` webhooks** — commented out; a 3DS-later-settled charge only recovers via the daily reconcile (pichu-only today).
 - Annual billing, trials, coupons, refunds — out of scope for now.
 
-## Planned: append-only billing event table
+## Append-only billing event table (built 2026-08-02)
 
-The live `UserSubscriptions` row stays the single source of _current_ truth. History goes to a new append-only table (never updated, never deleted):
+The live `UserSubscriptions` row stays the single source of _current_ truth. History goes to `SubscriptionEvents` — append-only (never updated, never deleted), written best-effort after each state/money change in `SubscriptionManagementService`, served newest-first by `GET /api/v1/subscription/{userId}/events`:
 
 ```text
 SubscriptionEvents
 ├─ Id, UserId, OccurredAt (UTC)
-├─ EventType: subscribed | activated | upgraded | downgrade_scheduled |
-│             downgrade_undone | downgrade_applied | cancelled | resumed |
-│             renewed | charge_failed | grace_entered | grace_recovered |
-│             lapsed | charge_succeeded
-├─ Tier / NextTier snapshot
+├─ EventType: activated | upgraded | downgradeScheduled | downgradeUndone |
+│             cancelScheduled | resumed | renewed | chargeFailed |
+│             graceEntered | lapsed | cancelled
+├─ Tier / NextTier snapshot, PeriodEnd
 ├─ AmountCents, Currency, ChargeIntentId (money events)
-└─ Metadata (json)
+└─ Detail (short human-readable context, e.g. gateway status)
 ```
+
+A `renewed` event whose Tier differs from the previous one is a scheduled downgrade landing. Appends are best-effort: the state/money write has already committed, so a failed append only costs a history row and is logged loudly. No FK to Users — financial history must survive account deletion (anonymize-retain, same seam as the penalty ledger).
 
 Written in the same transaction/flow as each state change. Powers: receipts + billing history page, audit ("did we ever schedule this downgrade?"), dunning/ops debugging, and future invoices.
 

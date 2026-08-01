@@ -128,6 +128,9 @@ public static class DomainServices
     s.AddScoped<ISubscriptionRepository, SubscriptionRepository>()
       .AutoTrace<ISubscriptionRepository>();
 
+    s.AddScoped<ISubscriptionEventRepository, SubscriptionEventRepository>()
+      .AutoTrace<ISubscriptionEventRepository>();
+
     s.AddScoped<ISubscriptionPlanProvider, SubscriptionPlanProvider>()
       .AutoTrace<ISubscriptionPlanProvider>();
 

@@ -14,9 +14,31 @@ public class SubscriptionManagementService(
   IPaymentService payment,
   IEmailNotifier notifier,
   IEntitlementService entitlements,
+  ISubscriptionEventRepository events,
   ILogger<SubscriptionManagementService> logger
 ) : ISubscriptionManagementService
 {
+  // Append a lifecycle event to the immutable history. Best-effort by contract:
+  // the state/money write it describes has already committed, so a failed
+  // append must never fail the flow — it only costs a history row.
+  private async Task LogEventSafe(SubscriptionEventRecord record)
+  {
+    try
+    {
+      var appended = await events.Append(record);
+      if (!appended.IsSuccess())
+        logger.LogWarning(appended.FailureOrDefault(),
+          "Subscription event append failed for {UserId} ({EventType})", record.UserId, record.EventType);
+    }
+    catch (Exception ex)
+    {
+      logger.LogWarning(ex,
+        "Subscription event append threw for {UserId} ({EventType})", record.UserId, record.EventType);
+    }
+  }
+
+  private static int ToCents(NodaMoney.Money money) => (int)Math.Round(money.Amount * 100m);
+
   // Re-align over-cap habit pausing after a tier change lands. Best-effort by
   // design: the money has already moved, so a pause failure must never fail the
   // subscription flow — the next tier event (or renewal roll) re-reconciles.
@@ -54,9 +76,21 @@ public class SubscriptionManagementService(
     {
       // Re-subscribing the same tier after a pending cancel = un-cancel, free of charge.
       if (existing.Record.CancelAtPeriodEnd)
-        return await repo.SetCancelAtPeriodEnd(existing.Id, false)
+      {
+        var resumed = await repo.SetCancelAtPeriodEnd(existing.Id, false)
           .ThenAwait(_ => repo.GetByUserId(userId))
           .Then(s => s!, Errors.MapNone);
+        if (resumed.IsSuccess())
+          await this.LogEventSafe(new SubscriptionEventRecord
+          {
+            UserId = userId,
+            EventType = SubscriptionEventType.Resumed,
+            OccurredAt = DateTime.UtcNow,
+            Tier = tier,
+            PeriodEnd = existing.Record.PeriodEnd
+          });
+        return resumed;
+      }
 
       return new AlreadySubscribedException(existing.Record.Tier, tier);
     }
@@ -159,6 +193,17 @@ public class SubscriptionManagementService(
       if (!flipped.IsSuccess()) return flipped.FailureOrDefault()!;
       if (!flipped.Get()) return new SubscriptionBusyException(userId);
       await this.ReconcileHabitPauseSafe(userId, tier);
+      await this.LogEventSafe(new SubscriptionEventRecord
+      {
+        UserId = userId,
+        EventType = SubscriptionEventType.Upgraded,
+        OccurredAt = DateTime.UtcNow,
+        Tier = tier,
+        AmountCents = 0,
+        Currency = chargeAmount.Currency.Code,
+        PeriodEnd = periodEnd,
+        Detail = "prorated to zero at the renewal boundary"
+      });
       return await repo.GetByUserId(userId).Then(s => s!, Errors.MapNone);
     }
 
@@ -189,7 +234,20 @@ public class SubscriptionManagementService(
 
     var intent = chargeRes.Get();
     if (intent.Status != "SUCCEEDED")
+    {
+      await this.LogEventSafe(new SubscriptionEventRecord
+      {
+        UserId = userId,
+        EventType = SubscriptionEventType.ChargeFailed,
+        OccurredAt = DateTime.UtcNow,
+        Tier = tier,
+        AmountCents = ToCents(chargeAmount),
+        Currency = chargeAmount.Currency.Code,
+        ChargeIntentId = intent.Id,
+        Detail = intent.Status
+      });
       return new SubscriptionChargeFailedException(intent.Status);
+    }
 
     var activated = await repo.Activate(rowId, tier, periodStart, periodEnd, DateTime.UtcNow);
     if (!activated.IsSuccess()) return activated.FailureOrDefault()!;
@@ -206,6 +264,17 @@ public class SubscriptionManagementService(
     }
 
     await this.ReconcileHabitPauseSafe(userId, tier);
+    await this.LogEventSafe(new SubscriptionEventRecord
+    {
+      UserId = userId,
+      EventType = isTierSwitch ? SubscriptionEventType.Upgraded : SubscriptionEventType.Activated,
+      OccurredAt = DateTime.UtcNow,
+      Tier = tier,
+      AmountCents = ToCents(chargeAmount),
+      Currency = chargeAmount.Currency.Code,
+      ChargeIntentId = intent.Id,
+      PeriodEnd = periodEnd
+    });
 
     var result = await repo.GetByUserId(userId).Then(s => s!, Errors.MapNone);
     if (result.IsSuccess())
@@ -226,8 +295,18 @@ public class SubscriptionManagementService(
       .ThenAwait(_ => repo.GetByUserId(userId))
       .Then(s => s!, Errors.MapNone);
     if (cancelled.IsSuccess())
+    {
+      await this.LogEventSafe(new SubscriptionEventRecord
+      {
+        UserId = userId,
+        EventType = SubscriptionEventType.CancelScheduled,
+        OccurredAt = DateTime.UtcNow,
+        Tier = existing.Record.Tier,
+        PeriodEnd = existing.Record.PeriodEnd
+      });
       await notifier.NotifySubscriptionChanged(
         userId, existing.Record.Tier, SubscriptionService.FreeTier, existing.Record.PeriodEnd);
+    }
     return cancelled;
   }
 
@@ -251,6 +330,20 @@ public class SubscriptionManagementService(
         var uncancel = await repo.SetCancelAtPeriodEnd(existing.Id, false);
         if (!uncancel.IsSuccess()) return uncancel.FailureOrDefault()!;
       }
+
+      // CancelAtPeriodEnd and NextTier are mutually exclusive (downgrades
+      // supersede cancels), so exactly one of these describes the undo.
+      await this.LogEventSafe(new SubscriptionEventRecord
+      {
+        UserId = userId,
+        EventType = existing.Record.CancelAtPeriodEnd
+          ? SubscriptionEventType.Resumed
+          : SubscriptionEventType.DowngradeUndone,
+        OccurredAt = DateTime.UtcNow,
+        Tier = tier,
+        NextTier = existing.Record.NextTier,
+        PeriodEnd = existing.Record.PeriodEnd
+      });
 
       return await repo.GetByUserId(userId).Then(s => s!, Errors.MapNone);
     }
@@ -276,7 +369,18 @@ public class SubscriptionManagementService(
 
     var scheduled = await repo.GetByUserId(userId).Then(s => s!, Errors.MapNone);
     if (scheduled.IsSuccess())
+    {
+      await this.LogEventSafe(new SubscriptionEventRecord
+      {
+        UserId = userId,
+        EventType = SubscriptionEventType.DowngradeScheduled,
+        OccurredAt = DateTime.UtcNow,
+        Tier = existing.Record.Tier,
+        NextTier = tier,
+        PeriodEnd = existing.Record.PeriodEnd
+      });
       await notifier.NotifySubscriptionChanged(userId, existing.Record.Tier, tier, existing.Record.PeriodEnd);
+    }
     return scheduled;
   }
 
@@ -336,6 +440,14 @@ public class SubscriptionManagementService(
       var cancelled = await repo.MarkCancelled(sub.Id);
       if (!cancelled.IsSuccess()) return cancelled.FailureOrDefault()!;
       await this.ReconcileHabitPauseSafe(rec.UserId, SubscriptionService.FreeTier);
+      await this.LogEventSafe(new SubscriptionEventRecord
+      {
+        UserId = rec.UserId,
+        EventType = SubscriptionEventType.Cancelled,
+        OccurredAt = nowUtc,
+        Tier = rec.Tier,
+        PeriodEnd = rec.PeriodEnd
+      });
       return 1;
     }
 
@@ -351,6 +463,14 @@ public class SubscriptionManagementService(
       var lapsed = await repo.MarkCancelled(sub.Id);
       if (!lapsed.IsSuccess()) return lapsed.FailureOrDefault()!;
       await this.ReconcileHabitPauseSafe(rec.UserId, SubscriptionService.FreeTier);
+      await this.LogEventSafe(new SubscriptionEventRecord
+      {
+        UserId = rec.UserId,
+        EventType = SubscriptionEventType.Lapsed,
+        OccurredAt = nowUtc,
+        Tier = rec.Tier,
+        PeriodEnd = rec.PeriodEnd
+      });
       await notifier.NotifySubscriptionEnded(rec.UserId, rec.Tier, nowUtc);
       return 1;
     }
@@ -386,7 +506,7 @@ public class SubscriptionManagementService(
           purpose: ConsentPurpose.Subscription);
 
         if (reconcile.IsSuccess() && reconcile.Get().Status == "SUCCEEDED")
-          return await this.RollRenewedPeriod(sub, targetTier);
+          return await this.RollRenewedPeriod(sub, targetTier, plan.Price);
 
         // Only a DEFINITIVE decline (REQUIRES_PAYMENT_METHOD after a confirm
         // attempt) may fall through to a fresh attempt. A transient error
@@ -426,7 +546,19 @@ public class SubscriptionManagementService(
         purpose: ConsentPurpose.Subscription);
 
       if (chargeRes.IsSuccess() && chargeRes.Get().Status == "SUCCEEDED")
-        return await this.RollRenewedPeriod(sub, targetTier);
+        return await this.RollRenewedPeriod(sub, targetTier, plan.Price);
+
+      await this.LogEventSafe(new SubscriptionEventRecord
+      {
+        UserId = rec.UserId,
+        EventType = SubscriptionEventType.ChargeFailed,
+        OccurredAt = nowUtc,
+        Tier = targetTier,
+        AmountCents = ToCents(plan.Price),
+        Currency = plan.Price.Currency.Code,
+        PeriodEnd = rec.PeriodEnd,
+        Detail = chargeRes.IsSuccess() ? chargeRes.Get().Status : chargeRes.FailureOrDefault()?.Message
+      });
 
       // Not settled (declined, requires action, no consent, transient error):
       // enter/stay in Grace and let tomorrow's pass retry until the window lapses.
@@ -436,6 +568,15 @@ public class SubscriptionManagementService(
       {
         var graced = await repo.MarkGrace(sub.Id);
         if (!graced.IsSuccess()) return graced.FailureOrDefault()!;
+        await this.LogEventSafe(new SubscriptionEventRecord
+        {
+          UserId = rec.UserId,
+          EventType = SubscriptionEventType.GraceEntered,
+          OccurredAt = nowUtc,
+          Tier = rec.Tier,
+          PeriodEnd = rec.PeriodEnd,
+          Detail = $"grace until {rec.PeriodEnd.AddDays(plan.GracePeriodDays):yyyy-MM-dd}"
+        });
         await notifier.NotifySubscriptionPaymentFailed(
           rec.UserId, rec.Tier, rec.PeriodEnd.AddDays(plan.GracePeriodDays));
       }
@@ -451,7 +592,7 @@ public class SubscriptionManagementService(
     }
   }
 
-  private async Task<Result<int>> RollRenewedPeriod(UserSubscriptionPrincipal sub, string targetTier)
+  private async Task<Result<int>> RollRenewedPeriod(UserSubscriptionPrincipal sub, string targetTier, Money price)
   {
     // The new period starts where the old one ended (grace days were consumed as
     // service). The repo guard (PeriodEnd must still equal the old value) makes a
@@ -470,6 +611,16 @@ public class SubscriptionManagementService(
     // habit cap may have just shrunk. Same-tier rolls reconcile too — it's a
     // no-op there and doubles as self-healing for a previously failed pass.
     await this.ReconcileHabitPauseSafe(sub.Record.UserId, targetTier);
+    await this.LogEventSafe(new SubscriptionEventRecord
+    {
+      UserId = sub.Record.UserId,
+      EventType = SubscriptionEventType.Renewed,
+      OccurredAt = DateTime.UtcNow,
+      Tier = targetTier,
+      AmountCents = ToCents(price),
+      Currency = price.Currency.Code,
+      PeriodEnd = sub.Record.PeriodEnd.AddMonths(1)
+    });
 
     // The rolled guard above is the idempotency point: reconcile and fresh-charge
     // paths both land here, but only the pass that actually rolls emails.

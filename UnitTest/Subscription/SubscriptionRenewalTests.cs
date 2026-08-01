@@ -16,10 +16,12 @@ public class SubscriptionRenewalTests
     FakeSubscriptionRepository repo,
     FakeSubscriptionPaymentService payment,
     IEmailNotifier? notifier = null,
-    Protection.FakeEntitlementService? entitlements = null)
+    Protection.FakeEntitlementService? entitlements = null,
+    FakeSubscriptionEventRepository? events = null)
     => new(repo, FakePlanProvider.Default(), payment,
       notifier ?? new RecordingEmailNotifier(),
       entitlements ?? new Protection.FakeEntitlementService(),
+      events ?? new FakeSubscriptionEventRepository(),
       NullLogger<SubscriptionManagementService>.Instance);
 
   private static UserSubscriptionPrincipal DueRow(

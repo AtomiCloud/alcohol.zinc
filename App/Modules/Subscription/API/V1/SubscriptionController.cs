@@ -19,6 +19,7 @@ namespace App.Modules.Subscription.API.V1;
 [Route("api/v{version:apiVersion}/[controller]")]
 public class SubscriptionController(
   ISubscriptionRepository subscriptionRepository,
+  ISubscriptionEventRepository eventRepository,
   ISubscriptionManagementService managementService,
   IWebHandoffService webHandoffService,
   IAuthHelper authHelper,
@@ -61,6 +62,19 @@ public class SubscriptionController(
     var result = await this.GuardAsync(userId)
       .ThenAwait(_ => subscriptionRepository.GetByUserId(userId))
       .Then(sub => sub?.ToRes() ?? SubscriptionMapper.ToFreeRes(userId), Errors.MapNone);
+
+    return this.ReturnResult(result);
+  }
+
+  // Billing/lifecycle history, newest first — the data behind receipts and the
+  // billing-history page. Append-only server-side, read-only here.
+  [Authorize, HttpGet("{userId}/events")]
+  public async Task<ActionResult<List<SubscriptionEventRes>>> Events(string userId, [FromQuery] int limit = 50)
+  {
+    var clamped = Math.Clamp(limit, 1, 200);
+    var result = await this.GuardAsync(userId)
+      .ThenAwait(_ => eventRepository.ListByUser(userId, clamped))
+      .Then(list => list.Select(e => e.ToRes()).ToList(), Errors.MapNone);
 
     return this.ReturnResult(result);
   }
