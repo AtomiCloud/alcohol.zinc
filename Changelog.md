@@ -1,3 +1,10 @@
+## [1.33.2](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.33.1...v1.33.2) (2026-11-09)
+
+
+### 🐛 Bug Fixes 🐛
+
+* preserve daily habit protections and ownership ([122856c](https://github.com/AtomiCloud/alcohol.zinc/commit/122856c5e81aef9c49d1a7959a5e7d21bd09982c)), closes [#78](https://github.com/AtomiCloud/alcohol.zinc/issues/78)
+
 ## [1.33.1](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.33.0...v1.33.1) (2026-07-12)
 
 ## [1.33.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.32.0...v1.33.0) (2026-07-12)
