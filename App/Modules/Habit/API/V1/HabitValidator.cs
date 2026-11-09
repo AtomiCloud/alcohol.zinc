@@ -35,6 +35,10 @@ public class CreateHabitReqValidator : AbstractValidator<CreateHabitReq>
         RuleFor(x => x.Timezone)
             .NotEmpty()
             .TimezoneValid();
+
+        RuleFor(x => x.DeadlineTime!)
+            .TimeValid()
+            .When(x => x.DeadlineTime != null);
     }
 
     private static bool BeValidDaysOfWeek(string[] days)
@@ -53,20 +57,6 @@ public class CreateHabitReqValidator : AbstractValidator<CreateHabitReq>
     }
 
 
-}
-
-public class MarkDailyFailuresReqValidator : AbstractValidator<MarkDailyFailuresReq>
-{
-    public MarkDailyFailuresReqValidator()
-    {
-        RuleFor(x => x.Date)
-            .NotEmpty()
-            .DateValid();
-
-        RuleFor(x => x.HabitIds)
-            .NotEmpty()
-            .WithMessage("HabitIds list cannot be empty.");
-    }
 }
 
 public class UpdateHabitReqValidator : AbstractValidator<UpdateHabitReq>
@@ -100,6 +90,10 @@ public class UpdateHabitReqValidator : AbstractValidator<UpdateHabitReq>
         RuleFor(x => x.Timezone)
             .NotEmpty()
             .TimezoneValid();
+
+        RuleFor(x => x.DeadlineTime!)
+            .TimeValid()
+            .When(x => x.DeadlineTime != null);
     }
 
     private static bool BeValidDaysOfWeek(string[] days)

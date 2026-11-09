@@ -66,8 +66,7 @@ public class ProtectionAwardService(
         foreach (var v in versions)
         {
           var daysOfWeek = v.Record.DaysOfWeek ?? [];
-          var habitTz = v.Record.Timezone ?? userTzId;
-          var statusRes = await streakService.GetStatusForHabit(userId, v.HabitId, userTzId, habitTz, daysOfWeek, pivotUtc);
+          var statusRes = await streakService.GetStatusForHabit(userId, v.HabitId, userTzId, daysOfWeek, v.Record.DeadlineTime, pivotUtc);
           if (!statusRes.IsSuccess())
           {
             logger.LogWarning(statusRes.FailureOrDefault(), "AwardWeekly: GetStatusForHabit failed for HabitId={HabitId}", v.HabitId);

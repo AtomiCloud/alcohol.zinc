@@ -13,6 +13,7 @@ using Domain.Exceptions;
 using Domain.Habit;
 using Domain.Payment;
 using Domain.Penalty;
+using IntTest.Check;
 using IntTest.Notification;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -53,7 +54,7 @@ public class PenaltyIntegrationTests : IAsyncLifetime
     await _db.DisposeAsync();
   }
 
-  private static MainDbContext NewContext(string conn)
+  internal static MainDbContext NewContext(string conn)
   {
     var parts = conn.Split(';', StringSplitOptions.RemoveEmptyEntries)
       .Select(p => p.Split('=', 2))
@@ -148,9 +149,9 @@ public class PenaltyIntegrationTests : IAsyncLifetime
     var ownVersionId = await _db.HabitExecutions.Where(x => x.Id == ownExecution)
       .Select(x => x.HabitVersionId).SingleAsync();
     var service = new HabitService(new HabitRepository(_db, NullLogger<HabitRepository>.Instance),
-      null!, null!, null!, null!, NullLogger<HabitService>.Instance);
+      null!, null!, NullLogger<HabitService>.Instance);
     var controller = new App.Modules.Habit.API.V1.HabitController(service, null!, null!, null!,
-      null!, null!, new(), new(), new(), new(), new())
+      null!, null!, new(), new(), new(), new())
     {
       ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext
       {
@@ -197,16 +198,16 @@ public class PenaltyIntegrationTests : IAsyncLifetime
       original.ToRecord() with { Task = "Renamed", NotificationTime = new TimeOnly(13, 15) }, true)).Get()!;
     updated.Version.Should().Be(2);
 
-    (await repo.HasMissingExecutionsForVersions([updated.Id], date)).Get().Should().BeFalse();
-    (await repo.CompleteHabit(userId, updated.Id, date, null)).IsFailure().Should().BeTrue();
-    (await repo.SkipHabit(userId, updated.Id, date, null)).IsFailure().Should().BeTrue();
-    (await repo.CreateExecutionsForVersionsWithStatus([updated.Id], date, ExecutionStatus.Vacation))
-      .Get().Should().Be(0);
-    var service = new HabitService(repo,
-      new VacationRepository(_db, NullLogger<VacationRepository>.Instance),
-      new ProtectionRepository(_db, NullLogger<ProtectionRepository>.Instance), null!,
-      Repo(_db), NullLogger<HabitService>.Instance);
-    (await service.MarkDailyFailures([original.HabitId], date)).Get().Should().Be(0);
+    // The day was settled before checks existed (or by an older pod): its check only adopts it.
+    var checks = Checks.Service(_db);
+    var monday = new DateTime(2026, 1, 5, 2, 0, 0, DateTimeKind.Utc); // 10:00 Monday in Singapore
+    (await checks.OpenUpcoming(monday)).IsSuccess().Should().BeTrue();
+    (await checks.Report(userId, original.HabitId, Checks.Manual(monday), monday)).Get().Should().BeNull();
+    (await checks.Skip(userId, original.HabitId, null, monday)).Get().Should().BeNull();
+    (await checks.CloseDue(monday.AddDays(2))).Get().Should().Be(0);
+    (await _db.HabitChecks.AsNoTracking().SingleAsync(x => x.HabitId == original.HabitId))
+      .SettledBy.Should().Be("adopted");
+    (await checks.DispatchEvents(monday.AddDays(2))).IsSuccess().Should().BeTrue();
 
     await using var verify = NewContext(_conn!);
     var executions = await verify.HabitExecutions.Where(x => x.HabitVersion.HabitId == original.HabitId)
@@ -218,9 +219,7 @@ public class PenaltyIntegrationTests : IAsyncLifetime
     (await verify.UserProtections.SingleAsync(x => x.UserId == userId)).FreezeCurrent.Should().Be(freezeBalance);
 
     // A different date is a new obligation, despite the older version's history.
-    (await repo.HasMissingExecutionsForVersions([updated.Id], date.AddDays(7))).Get().Should().BeTrue();
-    (await repo.CreateExecutionsForVersionsWithStatus([updated.Id], date.AddDays(7), ExecutionStatus.Vacation))
-      .Get().Should().Be(1);
+    (await checks.OpenUpcoming(monday.AddDays(7))).Get().Should().Be(1);
   }
 
   [SkippableFact]
@@ -255,7 +254,7 @@ public class PenaltyIntegrationTests : IAsyncLifetime
   [InlineData(HabitExecutionStatusData.Skipped, "skip")]
   [InlineData(HabitExecutionStatusData.Frozen, "frozen")]
   [InlineData(HabitExecutionStatusData.Vacation, "vacation")]
-  public async Task OverviewToday_UsesHabitDate_WithoutChangingUserWeek(
+  public async Task OverviewToday_UsesUserTimezone_AndEachDaysOwnDate(
     HabitExecutionStatusData executionStatus, string expectedStatus)
   {
     Skip.If(_conn == null, SkipReason);
@@ -263,39 +262,52 @@ public class PenaltyIntegrationTests : IAsyncLifetime
     var executionId = await SeedExecution(userId, charityId);
     var execution = await _db.HabitExecutions.SingleAsync(x => x.Id == executionId);
     var version = await _db.HabitVersions.SingleAsync(x => x.Id == execution.HabitVersionId);
-    var now = new DateTime(2026, 1, 4, 16, 30, 0, DateTimeKind.Utc);
-    execution.Date = new DateOnly(2026, 1, 5); // Monday in Singapore, Sunday in LA.
+    var now = new DateTime(2026, 1, 4, 16, 30, 0, DateTimeKind.Utc); // Sunday 08:30 in LA, Monday in Singapore
+    execution.Date = new DateOnly(2026, 1, 4);
     execution.Status = executionStatus;
     execution.CompletedAt = executionStatus == HabitExecutionStatusData.Completed ? now : null;
     await _db.SaveChangesAsync();
     var service = new StreakService(new StreakRepository(_db, NullLogger<StreakRepository>.Instance));
 
+    // The habit version still says Asia/Singapore; the user's timezone (LA) decides today.
     var status = (await service.GetStatusForHabit(userId, version.HabitId,
-      "America/Los_Angeles", "Asia/Singapore", ["Monday"], now)).Get();
+      "America/Los_Angeles", ["Sunday"], new TimeOnly(23, 59), now)).Get();
     var response = App.Modules.Habit.API.V1.HabitOverviewMapper.ToRes(new HabitOverviewSummary(
-      [new HabitOverviewItem(version.HabitId, "Read", "22:00", "Asia/Singapore", ["Monday"],
+      [new HabitOverviewItem(version.HabitId, "Read", "22:00", "America/Los_Angeles", ["Sunday"],
         3m, "USD", true, new Domain.Charity.CharityPrincipal
         {
           Id = charityId, Record = new Domain.Charity.CharityRecord { Name = "Charity" }
         }, status, status.TimeLeftToEodMinutes, new HabitVersionMeta(version.Id, 1, true), 0m)],
       0m, 0, 3));
 
-    response.Habits.Single().Status.Today.Should().Be("05-01-2026");
+    response.Habits.Single().Status.Today.Should().Be("04-01-2026");
     response.Habits.Single().Status.TodayStatus.Should().Be(expectedStatus);
     status.IsCompleteToday.Should().Be(executionStatus == HabitExecutionStatusData.Completed);
-    status.WeekStart.Should().Be(new DateOnly(2026, 1, 4), "weekly history remains account-local");
+    status.WeekStart.Should().Be(new DateOnly(2026, 1, 4));
+    status.WeekStatuses[DayOfWeek.Sunday].Should().Be(MapDay(executionStatus));
+    status.TimeLeftToEodMinutes.Should().Be(15 * 60 + 30); // until Monday 00:00 LA
 
-    // A previous habit-day completion can share the account's current calendar
-    // day; it must not mark the new habit day complete.
+    // Yesterday's completion that happened during the user's current calendar day
+    // (CompletedAt is today in LA) still belongs to yesterday: its own date decides.
     execution.Date = execution.Date.AddDays(-1);
     execution.Status = HabitExecutionStatusData.Completed;
     execution.CompletedAt = now.AddHours(-1);
     await _db.SaveChangesAsync();
     var nextDay = (await service.GetStatusForHabit(userId, version.HabitId,
-      "America/Los_Angeles", "Asia/Singapore", ["Monday"], now)).Get();
+      "America/Los_Angeles", ["Sunday"], new TimeOnly(23, 59), now)).Get();
     nextDay.IsCompleteToday.Should().BeFalse();
     nextDay.TodayStatus.Should().Be(HabitDayStatus.NotApplicable);
+    nextDay.WeekStatuses[DayOfWeek.Sunday].Should().Be(HabitDayStatus.NotApplicable);
   }
+
+  private static HabitDayStatus MapDay(HabitExecutionStatusData s) => s switch
+  {
+    HabitExecutionStatusData.Completed => HabitDayStatus.Succeeded,
+    HabitExecutionStatusData.Skipped => HabitDayStatus.Skip,
+    HabitExecutionStatusData.Frozen => HabitDayStatus.Frozen,
+    HabitExecutionStatusData.Vacation => HabitDayStatus.Vacation,
+    _ => HabitDayStatus.Failed
+  };
 
   [SkippableFact]
   public async Task MixedDay_FreezesOnlyRemainingMisses_WithoutPenaltiesOrExtraConsumption()
@@ -340,15 +352,13 @@ public class PenaltyIntegrationTests : IAsyncLifetime
       });
     await _db.SaveChangesAsync();
 
-    var service = new HabitService(
-      new HabitRepository(_db, NullLogger<HabitRepository>.Instance),
-      new VacationRepository(_db, NullLogger<VacationRepository>.Instance),
-      new ProtectionRepository(_db, NullLogger<ProtectionRepository>.Instance),
-      null!, // Entitlements are not consulted by daily settlement.
-      Repo(_db), NullLogger<HabitService>.Instance);
-
-    (await service.MarkDailyFailures(habits, date)).Get().Should().Be(2);
-    (await service.MarkDailyFailures(habits, date)).Get().Should().Be(0);
+    var checks = Checks.Service(_db);
+    var monday = new DateTime(2026, 1, 5, 9, 0, 0, DateTimeKind.Utc);
+    (await checks.OpenUpcoming(monday)).IsSuccess().Should().BeTrue();
+    var afterGrace = new DateTime(2026, 1, 6, 1, 0, 0, DateTimeKind.Utc);
+    (await checks.CloseDue(afterGrace)).Get().Should().Be(2);
+    (await checks.CloseDue(afterGrace)).Get().Should().Be(0);
+    (await checks.DispatchEvents(afterGrace)).IsSuccess().Should().BeTrue();
 
     await using var verify = NewContext(_conn!);
     var executions = await verify.HabitExecutions.AsNoTracking()

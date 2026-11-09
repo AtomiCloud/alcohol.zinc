@@ -1,13 +1,15 @@
 using App.Error.V1;
 using App.Utility;
 using CSharp_Result;
+using Domain.Allowance;
 using Domain.Exceptions;
 using Domain.Vacation;
 
 namespace App.Modules.Vacation;
 
 public class VacationService(
-  IVacationRepository repo
+  IVacationRepository repo,
+  IAllowanceService allowanceService
 ) : IVacationService
 {
   public Task<Result<VacationPrincipal>> Create(string userId, VacationRecord record)
@@ -36,8 +38,10 @@ public class VacationService(
         if (v == null)
           return (Result<Unit?>)new NotFoundException("Vacation Not Found", typeof(VacationPrincipal), vacationId.ToString());
 
-        var tz = TimeZoneInfo.FindSystemTimeZoneById(v.Record.Timezone);
-        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz));
+        // Vacation dates are user-local days, in the user's current timezone like every check.
+        var userToday = await allowanceService.GetUserToday(userId);
+        if (userToday.IsFailure()) return (Result<Unit?>)userToday.FailureOrDefault();
+        var today = userToday.Get().Today;
         if (today >= v.Record.StartDate)
           return (Result<Unit?>)new ValidationError(
             "Invalid DeleteVacation",
@@ -56,8 +60,9 @@ public class VacationService(
         if (v == null)
           return (Result<VacationPrincipal?>)new NotFoundException("Vacation Not Found", typeof(VacationPrincipal), vacationId.ToString());
 
-        var tz = TimeZoneInfo.FindSystemTimeZoneById(v.Record.Timezone);
-        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz));
+        var userToday = await allowanceService.GetUserToday(userId);
+        if (userToday.IsFailure()) return (Result<VacationPrincipal?>)userToday.FailureOrDefault();
+        var today = userToday.Get().Today;
         if (today < v.Record.StartDate)
           return (Result<VacationPrincipal?>)new ValidationError(
             "Invalid EndVacation",

@@ -17,6 +17,7 @@ namespace App.Modules.HabitVersion.Data
         public required string Task { get; set; }
         public required string[] DaysOfWeek { get; set; }
         public TimeOnly NotificationTime { get; set; }
+        public TimeOnly DeadlineTime { get; set; } = new(23, 59);  // check deadline, separate from the reminder
         public int StakeCents { get; set; }              // Stake stored as cents
         public string StakeCurrency { get; set; } = "SGD";
         public int RatioBasisPoints { get; set; }        // Ratio stored as basis points

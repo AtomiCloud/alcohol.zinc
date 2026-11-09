@@ -1,5 +1,6 @@
 using App.Modules.Causes.Data;
 using App.Modules.Charities.Data;
+using App.Modules.Check.Data;
 using App.Modules.Configurations.Data;
 using App.Modules.Disbursement.Data;
 using App.Modules.Habit.Data;
@@ -9,6 +10,7 @@ using App.Modules.NfcTag.Data;
 using App.Modules.Payment.Data;
 using App.Modules.Penalty.Data;
 using App.Modules.Protection.Data;
+using App.Modules.Routine.Data;
 using App.Modules.Subscription.Data;
 using App.Modules.Users.Data;
 using App.Modules.Vacation.Data;
@@ -32,9 +34,15 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
   public DbSet<CauseData> Causes { get; set; }
   public DbSet<CharityCauseData> CharityCauses { get; set; }
   public DbSet<ExternalIdData> ExternalIds { get; set; }
+  public DbSet<RoutineData> Routines { get; set; }
   public DbSet<HabitData> Habits { get; set; }
   public DbSet<HabitVersionData> HabitVersions { get; set; }
   public DbSet<HabitExecutionData> HabitExecutions { get; set; }
+  // Daily checks, the evidence that settled them, and the settled-check outbox
+  public DbSet<HabitCheckData> HabitChecks { get; set; }
+  public DbSet<HabitEvidenceData> HabitEvidence { get; set; }
+  public DbSet<CheckEventData> CheckEvents { get; set; }
+  public DbSet<CheckEventDeliveryData> CheckEventDeliveries { get; set; }
   public DbSet<PaymentCustomerData> PaymentCustomers { get; set; }
   public DbSet<PaymentConsentData> PaymentConsents { get; set; }
   // Protections & Vacation
@@ -79,6 +87,17 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
          .WithOne(hv => hv.Habit)
          .HasForeignKey(hv => hv.HabitId);
 
+    // Routine configuration: every habit belongs to a routine. Habits.RoutineId stays
+    // nullable (expand/contract: pods on the previous release insert habits without it).
+    // Deletes are soft, so never cascade.
+    var routine = modelBuilder.Entity<RoutineData>();
+    routine.HasIndex(r => r.UserId);
+    routine.HasMany(r => r.Habits)
+           .WithOne(h => h.Routine)
+           .HasForeignKey(h => h.RoutineId)
+           .IsRequired(false)
+           .OnDelete(DeleteBehavior.Restrict);
+
     // HabitVersion configuration (versioned details)
     var habitVersion = modelBuilder.Entity<HabitVersionData>();
     habitVersion.HasIndex(x => new { x.HabitId, x.Version }).IsUnique();  // Unique version per habit
@@ -92,6 +111,42 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
     // HabitExecution configuration
     var habitExecution = modelBuilder.Entity<HabitExecutionData>();
     habitExecution.HasIndex(x => new { x.HabitVersionId, x.Date }).IsUnique();  // One execution per version per day
+
+    // Checks: exactly one per habit per local date; settled once (guarded in CheckRepository.Settle).
+    // Cascades only fire on hard deletes (account purge); habit deletion is a soft delete.
+    var habitCheck = modelBuilder.Entity<HabitCheckData>();
+    habitCheck.HasIndex(x => new { x.HabitId, x.LocalDate }).IsUnique();
+    habitCheck.HasIndex(x => new { x.Status, x.DeadlineUtc }); // CloseDue scan
+    habitCheck.HasIndex(x => x.ExecutionId).IsUnique();
+    habitCheck.HasOne(x => x.Habit)
+              .WithMany()
+              .HasForeignKey(x => x.HabitId)
+              .OnDelete(DeleteBehavior.Cascade);
+    habitCheck.HasOne(x => x.Execution)
+              .WithMany()
+              .HasForeignKey(x => x.ExecutionId)
+              .OnDelete(DeleteBehavior.Cascade);
+
+    var evidence = modelBuilder.Entity<HabitEvidenceData>();
+    evidence.HasIndex(x => new { x.HabitId, x.ProofKey, x.ExternalId }).IsUnique(); // Report idempotency
+    evidence.HasOne<HabitCheckData>()
+            .WithMany()
+            .HasForeignKey(x => x.CheckId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+    var checkEvent = modelBuilder.Entity<CheckEventData>();
+    checkEvent.HasIndex(x => new { x.DispatchedAtUtc, x.NextAttemptAtUtc }); // dispatcher claim scan
+    checkEvent.HasOne<HabitCheckData>()
+              .WithMany()
+              .HasForeignKey(x => x.CheckId)
+              .OnDelete(DeleteBehavior.Cascade);
+
+    var delivery = modelBuilder.Entity<CheckEventDeliveryData>();
+    delivery.HasIndex(x => new { x.EventId, x.BindingId }).IsUnique(); // a stake fires at most once per event
+    delivery.HasOne<CheckEventData>()
+            .WithMany()
+            .HasForeignKey(x => x.EventId)
+            .OnDelete(DeleteBehavior.Cascade);
 
     // Charity configuration
     var charity = modelBuilder.Entity<CharityData>();

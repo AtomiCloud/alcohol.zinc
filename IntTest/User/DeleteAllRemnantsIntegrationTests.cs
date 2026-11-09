@@ -5,6 +5,7 @@ using App.Modules.HabitExecution.Data;
 using App.Modules.HabitVersion.Data;
 using App.Modules.Payment.Data;
 using App.Modules.Protection.Data;
+using App.Modules.Routine.Data;
 using App.Modules.System;
 using App.Modules.Users.Data;
 using App.Modules.Vacation.Data;
@@ -90,6 +91,8 @@ public class DeleteAllRemnantsIntegrationTests : IAsyncLifetime
     (await _db.Configurations.CountAsync(x => x.UserId == "user-B")).Should().Be(1);
     (await _db.Habits.CountAsync()).Should().Be(1);
     (await _db.Habits.CountAsync(x => x.UserId == "user-B")).Should().Be(1);
+    (await _db.Routines.CountAsync()).Should().Be(1);
+    (await _db.Routines.CountAsync(x => x.UserId == "user-B")).Should().Be(1);
     (await _db.HabitVersions.CountAsync()).Should().Be(1);     // orphan version check
     (await _db.HabitExecutions.CountAsync()).Should().Be(1);   // orphan execution check
     (await _db.FreezeAwards.CountAsync()).Should().Be(1);      // orphan award check (keyed by HabitId)
@@ -102,6 +105,7 @@ public class DeleteAllRemnantsIntegrationTests : IAsyncLifetime
     (await _db.Users.CountAsync(x => x.Id == "user-A")).Should().Be(0);
     (await _db.Configurations.CountAsync(x => x.UserId == "user-A")).Should().Be(0);
     (await _db.Habits.CountAsync(x => x.UserId == "user-A")).Should().Be(0);
+    (await _db.Routines.CountAsync(x => x.UserId == "user-A")).Should().Be(0);
     (await _db.VacationPeriods.CountAsync(x => x.UserId == "user-A")).Should().Be(0);
     (await _db.UserProtections.CountAsync(x => x.UserId == "user-A")).Should().Be(0);
     (await _db.FreezeConsumptions.CountAsync(x => x.UserId == "user-A")).Should().Be(0);
@@ -171,7 +175,9 @@ public class DeleteAllRemnantsIntegrationTests : IAsyncLifetime
       EndOfDay = new TimeOnly(0, 0),
       DefaultCharityId = charityId,
     });
-    _db.Habits.Add(new HabitData { Id = habitId, UserId = id, Version = 1, Enabled = true });
+    var routineId = Guid.NewGuid();
+    _db.Routines.Add(new RoutineData { Id = routineId, UserId = id, Name = "run" });
+    _db.Habits.Add(new HabitData { Id = habitId, UserId = id, Version = 1, Enabled = true, RoutineId = routineId });
     _db.HabitVersions.Add(new HabitVersionData
     {
       Id = versionId,

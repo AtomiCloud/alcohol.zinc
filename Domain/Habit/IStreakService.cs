@@ -27,5 +27,5 @@ public record HabitStreakStatus
 
 public interface IStreakService
 {
-  Task<Result<HabitStreakStatus>> GetStatusForHabit(string userId, Guid habitId, string userTimezone, string habitTimezone, string[] daysOfWeek, DateTime? nowUtc = null);
+  Task<Result<HabitStreakStatus>> GetStatusForHabit(string userId, Guid habitId, string timezone, string[] daysOfWeek, TimeOnly deadlineTime, DateTime? nowUtc = null);
 }

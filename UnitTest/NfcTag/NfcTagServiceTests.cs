@@ -15,6 +15,8 @@ public class NfcTagServiceTests
 {
   private const string Owner = "user-1";
   private const string Stranger = "user-2";
+  // Differs from the habit version's Asia/Singapore: resolve must use the user's timezone.
+  private const string UserTimezone = "America/Los_Angeles";
   private const string TagId = "3f9c2b7e-1a2b-4c3d-8e9f-0a1b2c3d4e5f";
 
   private static readonly Guid HabitA = Guid.NewGuid();
@@ -41,7 +43,7 @@ public class NfcTagServiceTests
   {
     var repo = new FakeNfcTagRepository();
     var habits = new FakeHabitService();
-    return (new NfcTagService(repo, habits), repo, habits);
+    return (new NfcTagService(repo, habits, new FakeAllowanceService(UserTimezone)), repo, habits);
   }
 
   [Fact]
@@ -106,7 +108,7 @@ public class NfcTagServiceTests
     habits.Versions[(Owner, HabitA)] = version;
     await svc.Link(Owner, TagId, HabitA);
 
-    var tz = TimeZoneInfo.FindSystemTimeZoneById("Asia/Singapore");
+    var tz = TimeZoneInfo.FindSystemTimeZoneById(UserTimezone);
     var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz));
     var execution = new HabitExecutionPrincipal
     {

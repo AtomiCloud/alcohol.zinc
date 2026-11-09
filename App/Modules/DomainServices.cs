@@ -12,6 +12,8 @@ using App.Modules.Payment.Airwallex;
 using App.Modules.Payment.Data;
 using App.Modules.Penalty.Data;
 using App.Modules.Protection.Data;
+using App.Modules.Routine;
+using App.Modules.Routine.Data;
 using App.Modules.Subscription;
 using App.Modules.Subscription.Data;
 using App.Modules.System;
@@ -23,6 +25,7 @@ using Domain;
 using Domain.Allowance;
 using Domain.Cause;
 using Domain.Charity;
+using Domain.Check;
 using Domain.Configuration;
 using Domain.Disbursement;
 using Domain.Entitlement;
@@ -32,6 +35,7 @@ using Domain.Notification;
 using Domain.Payment;
 using Domain.Penalty;
 using Domain.Protection;
+using Domain.Routine;
 using Domain.Subscription;
 using Domain.User;
 using Domain.Vacation;
@@ -76,6 +80,20 @@ public static class DomainServices
 
     s.AddScoped<IHabitRepository, HabitRepository>()
       .AutoTrace<IHabitRepository>();
+
+    // CHECKS (daily checks, Report, outbox + stake bindings)
+    s.AddScoped<ICheckService, CheckService>()
+      .AutoTrace<ICheckService>();
+    s.AddScoped<ICheckRepository, App.Modules.Check.Data.CheckRepository>()
+      .AutoTrace<ICheckRepository>();
+    s.AddScoped<IStakeBinding, PenaltyStakeBinding>();
+
+    // ROUTINE
+    s.AddScoped<IRoutineService, RoutineService>()
+      .AutoTrace<IRoutineService>();
+
+    s.AddScoped<IRoutineRepository, RoutineRepository>()
+      .AutoTrace<IRoutineRepository>();
 
     // HABIT: Overview
     s.AddScoped<IHabitOverviewService, HabitOverviewService>()
