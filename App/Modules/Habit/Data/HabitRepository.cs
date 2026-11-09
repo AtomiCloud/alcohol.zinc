@@ -69,7 +69,7 @@ namespace App.Modules.Habit.Data
                 var cnt = await (from he in db.HabitExecutions
                                  join hv in db.HabitVersions on he.HabitVersionId equals hv.Id
                                  join h in db.Habits on hv.HabitId equals h.Id
-                                 where h.UserId == userId && h.DeletedAt == null
+                                 where h.UserId == userId
                                        && he.Date >= monthStart && he.Date <= monthEnd
                                        && he.Status == App.Modules.HabitExecution.Data.HabitExecutionStatusData.Skipped
                                  select he.Id)
@@ -118,9 +118,12 @@ namespace App.Modules.Habit.Data
                     INSERT INTO ""HabitExecutions"" (""Id"", ""HabitVersionId"", ""Date"", ""Status"", ""PaymentProcessed"")
                     SELECT gen_random_uuid(), hv.""Id"", {date}, {(int)statusData}, false
                     FROM ""HabitVersions"" hv
-                    LEFT JOIN ""HabitExecutions"" he ON he.""HabitVersionId"" = hv.""Id"" AND he.""Date"" = {date}
                     WHERE hv.""Id"" = ANY({habitVersionIds})
-                      AND he.""Id"" IS NULL
+                      AND NOT EXISTS (
+                          SELECT 1 FROM ""HabitExecutions"" he
+                          JOIN ""HabitVersions"" settled ON settled.""Id"" = he.""HabitVersionId""
+                          WHERE settled.""HabitId"" = hv.""HabitId"" AND he.""Date"" = {date}
+                      )
                 ");
 
                 return affectedRows;
@@ -145,23 +148,23 @@ namespace App.Modules.Habit.Data
                 throw;
             }
         }
-        public async Task<Result<bool>> HasAnyCompletedOrSkippedForVersions(List<Guid> habitVersionIds, DateOnly date)
+        public async Task<Result<bool>> HasMissingExecutionsForVersions(List<Guid> habitVersionIds, DateOnly date)
         {
           try
           {
             if (habitVersionIds.Count == 0) return false;
 
-            var any = await db.HabitExecutions.AsNoTracking()
-              .Where(he => habitVersionIds.Contains(he.HabitVersionId)
-                           && he.Date == date
-                           && (he.Status == HabitExecutionStatusData.Completed ||
-                               he.Status == HabitExecutionStatusData.Skipped))
-              .AnyAsync();
+            var any = await db.HabitVersions.AsNoTracking()
+              .AnyAsync(hv => habitVersionIds.Contains(hv.Id)
+                              && !(from he in db.HabitExecutions
+                                   join settled in db.HabitVersions on he.HabitVersionId equals settled.Id
+                                   where settled.HabitId == hv.HabitId && he.Date == date
+                                   select he.Id).Any());
             return any;
           }
           catch (Exception e)
           {
-            logger.LogError(e, "HasAnyCompletedOrSkippedForVersions failed");
+            logger.LogError(e, "HasMissingExecutionsForVersions failed");
             throw;
           }
         }
@@ -412,19 +415,22 @@ namespace App.Modules.Habit.Data
                 var dayOfWeek = date.DayOfWeek.ToString();
                 logger.LogInformation("Creating failures for habits scheduled on: {DayOfWeek}", dayOfWeek);
 
-                // Single atomic INSERT ... SELECT with LEFT JOIN to prevent race conditions
-                // Using PostgreSQL array contains operator (@>) for DaysOfWeek array
+                // A settled habit/date stays settled when its blueprint is edited.
+                // Keep the original execution/version for financial audit.
                 await db.Database.ExecuteSqlAsync($@"
                     INSERT INTO ""HabitExecutions"" (""Id"", ""HabitVersionId"", ""Date"", ""Status"", ""PaymentProcessed"")
                     SELECT gen_random_uuid(), hv.""Id"", {date}, {(int)App.Modules.HabitExecution.Data.HabitExecutionStatusData.Failed}, false
                     FROM ""Habits"" h
                     JOIN ""HabitVersions"" hv ON h.""Id"" = hv.""HabitId"" AND h.""Version"" = hv.""Version""
-                    LEFT JOIN ""HabitExecutions"" he ON he.""HabitVersionId"" = hv.""Id"" AND he.""Date"" = {date}
                     WHERE h.""Id"" = ANY({habitIds})
                       AND h.""DeletedAt"" IS NULL
                       AND h.""Enabled"" = true
                       AND hv.""DaysOfWeek"" @> ARRAY[{dayOfWeek}]
-                      AND he.""Id"" IS NULL
+                      AND NOT EXISTS (
+                          SELECT 1 FROM ""HabitExecutions"" he
+                          JOIN ""HabitVersions"" settled ON settled.""Id"" = he.""HabitVersionId""
+                          WHERE settled.""HabitId"" = hv.""HabitId"" AND he.""Date"" = {date}
+                      )
                 ");
 
                 // Re-project the failed-this-date executions so the service can enqueue penalties.
@@ -522,7 +528,8 @@ namespace App.Modules.Habit.Data
                       AND h.""Enabled"" = true
                       AND NOT EXISTS (
                           SELECT 1 FROM ""HabitExecutions"" he
-                          WHERE he.""HabitVersionId"" = hv.""Id"" AND he.""Date"" = {date}
+                          JOIN ""HabitVersions"" settled ON settled.""Id"" = he.""HabitVersionId""
+                          WHERE settled.""HabitId"" = hv.""HabitId"" AND he.""Date"" = {date}
                       )
                 ");
 
@@ -571,7 +578,8 @@ namespace App.Modules.Habit.Data
                       AND h.""Enabled"" = true
                       AND NOT EXISTS (
                           SELECT 1 FROM ""HabitExecutions"" he
-                          WHERE he.""HabitVersionId"" = hv.""Id"" AND he.""Date"" = {date}
+                          JOIN ""HabitVersions"" settled ON settled.""Id"" = he.""HabitVersionId""
+                          WHERE settled.""HabitId"" = hv.""HabitId"" AND he.""Date"" = {date}
                       )
                 ");
 

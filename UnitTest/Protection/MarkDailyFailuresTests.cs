@@ -97,8 +97,7 @@ public class MarkDailyFailuresTests
     var (habitId, hvId) = SeedScheduled(h);
     var date = new DateOnly(2026, 1, 1);
 
-    // model a completed/skipped row: short-circuit freeze AND occupy the slot.
-    h.Repo.CompletedOrSkipped.Add((hvId, date));
+    // A completed/skipped row occupies the only scheduled slot: nothing to freeze.
     h.Repo.ExistingExecutions.Add((hvId, date));
     // A seed exists, but the anti-join must exclude it.
     h.Repo.FailedRowSeeds[hvId] = new FailedRowSeed { UserId = UserId };
@@ -108,9 +107,40 @@ public class MarkDailyFailuresTests
     ((int)res).Should().Be(0);
     h.Repo.CreateFailedExecutionsCalls[0].Returned.Should().BeEmpty();
     h.Penalty.EnqueuedRecords.Should().BeEmpty();
-    // anyDone short-circuits before the freeze branch.
     h.Prot.TryConsumeFreezeCalls.Should().BeEmpty();
     h.Prot.BalanceFor(UserId).Should().Be(5); // untouched
+  }
+
+  [Theory]
+  [InlineData(0, 2)]
+  [InlineData(1, 0)]
+  [InlineData(3, 0)]
+  public async Task MixedDay_RemainingMissesShareOneFreeze_WhenAvailable(int balance, int expectedPenalties)
+  {
+    var h = Build(freezeBalance: balance);
+    var (doneHabit, doneVersion) = SeedScheduled(h);
+    var (missedHabit, missedVersion) = SeedScheduled(h);
+    var (otherMissedHabit, otherMissedVersion) = SeedScheduled(h);
+    var date = new DateOnly(2026, 1, 1);
+    h.Repo.ExistingExecutions.Add((doneVersion, date));
+    h.Repo.FailedRowSeeds[missedVersion] = new FailedRowSeed { UserId = UserId };
+    h.Repo.FailedRowSeeds[otherMissedVersion] = new FailedRowSeed { UserId = UserId };
+
+    var result = await h.Svc.MarkDailyFailures([doneHabit, missedHabit, otherMissedHabit], date);
+
+    result.IsSuccess().Should().BeTrue();
+    ((int)result).Should().Be(2, "only the two missing executions are settled");
+    h.Prot.BalanceFor(UserId).Should().Be(Math.Max(0, balance - 1));
+    h.Penalty.EnqueuedRecords.Should().HaveCount(expectedPenalties);
+    h.Repo.ExistingExecutions.Should().BeEquivalentTo(new[]
+    {
+      (doneVersion, date), (missedVersion, date), (otherMissedVersion, date)
+    });
+
+    await h.Svc.MarkDailyFailures([doneHabit, missedHabit, otherMissedHabit], date);
+
+    h.Prot.BalanceFor(UserId).Should().Be(Math.Max(0, balance - 1), "reruns must not spend another freeze");
+    h.Penalty.EnqueuedRecords.Should().HaveCount(expectedPenalties);
   }
 
   // ---------------------------------------------------------------------------

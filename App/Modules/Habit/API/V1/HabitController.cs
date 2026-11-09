@@ -36,7 +36,7 @@ public class HabitController(
   {
     var result = await this.GuardAsync(userId)
       .ThenAwait(_ => searchHabitQueryValidator.ValidateAsyncResult(query, "Invalid Search Habit Query"))
-      .ThenAwait(_ => service.SearchHabits(query.ToDomain()))
+      .ThenAwait(_ => service.SearchHabits(query.ToDomain(userId)))
       .Then(habits => habits.Select(h => h.ToRes()).ToList(), Errors.MapNone);
 
     return this.ReturnResult(result);
@@ -70,11 +70,6 @@ public class HabitController(
   {
     var result = await this.GuardAsync(userId)
         .ThenAwait(_ => updateHabitReqValidator.ValidateAsyncResult(req, "Invalid UpdateHabitReq"))
-        .ThenAwait(validReq =>
-        {
-          if (!req.Enabled) return Task.FromResult((Result<UpdateHabitReq>)validReq);
-          return entitlementService.EnsureHabitsAllowed(userId).Then(_ => validReq, Errors.MapNone);
-        })
         .ThenAwait(validReq => service.Update(userId, id, validReq.ToVersionRecord(), req.Enabled))
         .Then(h => h?.ToRes(), Errors.MapNone);
 

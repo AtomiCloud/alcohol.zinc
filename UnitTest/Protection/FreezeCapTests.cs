@@ -10,8 +10,8 @@ namespace UnitTest.Protection;
 // Domain layer with the shared hand-rolled fakes:
 //
 //   * CONSUME  -> HabitService.MarkDailyFailures step 4: a user with a freeze
-//                 day available and nothing completed/skipped today gets all
-//                 their scheduled versions marked Frozen, the user-level pool
+//                 day available gets remaining missed versions marked Frozen,
+//                 even if other habits were completed/skipped. The user-level pool
 //                 is decremented by exactly one, and those versions are then
 //                 excluded from the Fail step (no penalty).
 //   * CAP      -> IProtectionRepository increment-then-clamp mechanics
@@ -117,7 +117,6 @@ public class FreezeCapTests
     await svc.MarkDailyFailures([habitId], Date);
 
     prot.BalanceFor(UserId).Should().Be(0, "a date already frozen must not consume a second freeze day");
-    prot.TryConsumeFreezeCalls.Should().HaveCount(2);
     penalty.EnqueuedRecords.Should().BeEmpty();
   }
 
@@ -159,9 +158,7 @@ public class FreezeCapTests
   {
     var log = new CallLog();
     var (repo, habitId, hvId) = SeedScheduledMiss(log);
-    // Model a completed/skipped day: short-circuits the freeze branch AND
-    // occupies the slot so the fail step skips it.
-    repo.CompletedOrSkipped.Add((hvId, Date));
+    // Model a completed/skipped day: no scheduled slot remains to freeze or fail.
     repo.ExistingExecutions.Add((hvId, Date));
     var vac = new FakeVacationRepository();
     var prot = new FakeProtectionRepository(freezeBalance: 5);

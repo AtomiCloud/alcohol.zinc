@@ -72,7 +72,6 @@ public sealed class FakeStreakRepository : IStreakRepository
   public Task<Result<int>> GetMaxStreak(Guid habitId) => throw new NotImplementedException();
   public Task<Result<bool>> IsCompleteOn(Guid habitId, DateOnly date) => throw new NotImplementedException();
   public Task<Result<HashSet<DateOnly>>> GetCompletedInRange(Guid habitId, DateOnly start, DateOnly end) => throw new NotImplementedException();
-  public Task<Result<bool>> HasCompletionBetweenUtc(Guid habitId, DateTime startUtc, DateTime endUtc) => throw new NotImplementedException();
   public Task<Result<List<DateTime>>> GetCompletionsBetweenUtc(Guid habitId, DateTime startUtc, DateTime endUtc) => throw new NotImplementedException();
   public Task<Result<List<HabitExecutionRecord>>> GetExecutionsInHabitDateRange(Guid habitId, DateOnly start, DateOnly end) => throw new NotImplementedException();
   public Task<Result<List<HabitDebtItem>>> GetOpenDebtsForHabit(Guid habitId) => throw new NotImplementedException();

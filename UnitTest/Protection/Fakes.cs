@@ -29,10 +29,6 @@ public sealed class CallLog
 // Seedable state:
 //   ActiveVersions          -> returned by GetActiveHabitVersionsByIds
 //   Habits                  -> returned by GetHabitsByIds (and GetHabit)
-//   CompletedOrSkipped      -> set of (habitVersionId, date) considered "done"
-//                              (drives HasAnyCompletedOrSkippedForVersions);
-//                              date-scoped so a completion on one day does not
-//                              leak into other days.
 //   ExistingExecutions      -> set of (habitVersionId, date) that already have
 //                              an execution row of ANY status. Seed this to
 //                              model Completed/Skipped/Vacation/Freeze/Failed
@@ -49,7 +45,6 @@ public sealed class CallLog
 // Inspectable state (recorded calls, each tagged with a sequence number):
 //   CreateExecutionsForVersionsWithStatusCalls
 //   CreateFailedExecutionsCalls
-//   HasAnyCompletedOrSkippedCalls
 //   SkipHabitCalls / CompleteHabitCalls
 public sealed class FakeHabitRepository(CallLog? log = null) : IHabitRepository
 {
@@ -58,7 +53,6 @@ public sealed class FakeHabitRepository(CallLog? log = null) : IHabitRepository
   // ----- seedable inputs -----
   public List<HabitVersionPrincipal> ActiveVersions { get; } = [];
   public List<HabitPrincipal> Habits { get; } = [];
-  public HashSet<(Guid HabitVersionId, DateOnly Date)> CompletedOrSkipped { get; } = [];
   public HashSet<(Guid HabitVersionId, DateOnly Date)> ExistingExecutions { get; } = [];
 
   // For each scheduled habitVersionId that truly misses, what FailedExecutionRow
@@ -72,7 +66,6 @@ public sealed class FakeHabitRepository(CallLog? log = null) : IHabitRepository
   // ----- recorded calls (inspectable) -----
   public List<(int Seq, List<Guid> HvIds, DateOnly Date, ExecutionStatus Status)> CreateExecutionsForVersionsWithStatusCalls { get; } = [];
   public List<(int Seq, List<Guid> HabitIds, DateOnly Date, List<FailedExecutionRow> Returned)> CreateFailedExecutionsCalls { get; } = [];
-  public List<(int Seq, List<Guid> HvIds, DateOnly Date)> HasAnyCompletedOrSkippedCalls { get; } = [];
   public List<(string UserId, Guid HabitVersionId, DateOnly Date, string? Notes)> SkipHabitCalls { get; } = [];
   public List<(string UserId, Guid HabitVersionId, DateOnly Date, string? Notes)> CompleteHabitCalls { get; } = [];
 
@@ -92,10 +85,9 @@ public sealed class FakeHabitRepository(CallLog? log = null) : IHabitRepository
     return Task.FromResult<Result<List<HabitPrincipal>>>(result);
   }
 
-  public Task<Result<bool>> HasAnyCompletedOrSkippedForVersions(List<Guid> habitVersionIds, DateOnly date)
+  public Task<Result<bool>> HasMissingExecutionsForVersions(List<Guid> habitVersionIds, DateOnly date)
   {
-    HasAnyCompletedOrSkippedCalls.Add((_log.Next(), habitVersionIds, date));
-    var any = habitVersionIds.Any(hvId => CompletedOrSkipped.Contains((hvId, date)));
+    var any = habitVersionIds.Any(hvId => !ExistingExecutions.Contains((hvId, date)));
     return Task.FromResult<Result<bool>>(any);
   }
 
@@ -192,7 +184,17 @@ public sealed class FakeHabitRepository(CallLog? log = null) : IHabitRepository
   public Task<Result<HabitVersionPrincipal>> Create(string userId, HabitVersionRecord versionRecord)
     => throw new NotImplementedException();
   public Task<Result<HabitVersionPrincipal?>> Update(Guid habitId, string userId, HabitVersionRecord versionRecord, bool enabled)
-    => throw new NotImplementedException();
+  {
+    var index = Habits.FindIndex(h => h.Id == habitId && h.UserId == userId);
+    if (index < 0) return Task.FromResult<Result<HabitVersionPrincipal?>>((HabitVersionPrincipal?)null);
+    var habit = Habits[index];
+    var version = (ushort)(habit.Record.Version + 1);
+    Habits[index] = habit with { Record = habit.Record with { Version = version, Enabled = enabled } };
+    return Task.FromResult<Result<HabitVersionPrincipal?>>(new HabitVersionPrincipal
+    {
+      Id = Guid.NewGuid(), HabitId = habitId, Version = version, Record = versionRecord
+    });
+  }
   public Task<Result<Unit?>> Delete(Guid habitId, string userId)
     => throw new NotImplementedException();
   public Task<Result<List<HabitExecutionPrincipal>>> SearchHabitExecutions(string userId, HabitExecutionSearch habitExecutionSearch)

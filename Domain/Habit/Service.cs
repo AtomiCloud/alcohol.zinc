@@ -42,6 +42,12 @@ public class HabitService(
       return (HabitVersionPrincipal?)null;
     }
 
+    if (enabled && !habit.Record.Enabled)
+    {
+      var allowed = await entitlementService.EnsureHabitsAllowed(userId);
+      if (allowed.IsFailure()) return allowed.FailureOrDefault();
+    }
+
     return await repo.Update(habitId, userId, versionRecord, enabled);
   }
 
@@ -91,8 +97,8 @@ public class HabitService(
       }
     }
 
-    // 4) Freeze consumption: If user has freeze available and no completion/skip for any scheduled habit today,
-    //    consume one user-level freeze day and mark all scheduled versions as Frozen.
+    // 4) Spend one user-level freeze day only when scheduled executions are missing.
+    //    Cover remaining misses without changing completed/skipped executions.
     var totalFrozen = 0;
     foreach (var kv in hvByUser)
     {
@@ -105,8 +111,8 @@ public class HabitService(
       // Skip the freeze branch entirely for vacationing users.
       if (usersOnVacation.Contains(userId)) continue;
 
-      var anyDone = await repo.HasAnyCompletedOrSkippedForVersions(hvIds, date);
-      if (anyDone)
+      var hasMissing = await repo.HasMissingExecutionsForVersions(hvIds, date);
+      if (!(bool)hasMissing)
         continue;
 
       var consumed = await protectionRepo.TryConsumeFreeze(userId, date);

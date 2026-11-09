@@ -62,7 +62,9 @@ public static class HabitOverviewMapper
         MapDay(s.WeekStatuses[DayOfWeek.Saturday]),
         s.WeekStart.ToString("yyyy-MM-dd"),
         s.WeekEnd.ToString("yyyy-MM-dd")
-      )
+      ),
+      s.Today.ToString("dd-MM-yyyy"),
+      MapDay(s.TodayStatus)
     );
   }
 
