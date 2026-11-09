@@ -1,3 +1,10 @@
+## [1.34.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.33.2...v1.34.0) (2026-11-09)
+
+
+### ✨ Features ✨
+
+* daily checks, report, stake outbox, routines and user timezone ([6d5a769](https://github.com/AtomiCloud/alcohol.zinc/commit/6d5a76968f3d2bfd17d017c7d90c85bdfe83552b))
+
 ## [1.33.2](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.33.1...v1.33.2) (2026-11-09)
 
 
