@@ -33,7 +33,7 @@ Status Summary (2025-10-12)
 
 - Phase 3 — Freeze Days (User-Level): COMPLETED
 
-  - Daily failure flow consumes one user-level freeze day (if available) and inserts Frozen executions for all scheduled habits when no completion/skip exists (Domain/Habit/Service.cs:84–107, App/Modules/Habit/Data/HabitRepository.cs:483–516, 340–460).
+  - Daily failure flow consumes one user-level freeze day (if available) for remaining scheduled habits without executions, even on partially completed/skipped days. Existing executions stay unchanged; fully settled days spend no freeze (Domain/Habit/Service.cs, App/Modules/Habit/Data/HabitRepository.cs).
   - GET protections endpoint returns balance and cap; cap now computed using tier base + user max streak (App/Modules/Protection/API/V1/ProtectionController.cs:1–200, App/Modules/Entitlement/EntitlementService.cs:1–120, App/Modules/Habit/Data/StreakRepository.cs:300–380).
   - Protection repository supports idempotent consumption and award ledgers (App/Modules/Protection/Data/ProtectionRepository.cs:1–200).
 

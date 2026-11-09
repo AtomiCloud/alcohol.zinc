@@ -74,14 +74,15 @@ Inputs: date (UTC-independent DateOnly), system batch scope. Execution windows r
 
 2. For each user U on date D (user-local):
    - Vacation check: if D is within any active VacationPeriod for U, insert Vacation executions for ALL U’s scheduled habits for D (idempotent), skip remaining steps.
-   - Completion/skip presence: if any scheduled habit has Completed or Skipped on D, do NOT consume freeze day; fail only the remaining scheduled, non-executed habits.
-   - Freeze consumption: if no Completed and no Skipped exist and at least one scheduled habit lacks an execution:
+   - Existing executions: preserve Completed, Skipped, and all other settled executions. If no scheduled habit lacks an execution on D, do NOT consume a freeze day.
+   - Freeze consumption: if at least one scheduled habit lacks an execution, regardless of other completions/skips:
      - If FreezeConsumptionData(UserId=U, Date=D) exists, treat as already consumed; ensure Frozen executions exist for all scheduled, non-executed habits.
      - Else if UserProtectionData.FreezeCurrent > 0, atomically decrement by 1 and record FreezeConsumptionData(U,D), then insert Frozen executions for all scheduled, non-executed habits.
      - Else insert Failed for all remaining scheduled, non-executed habits.
    - Notes:
      - Insertions must be idempotent via unique (HabitVersionId, Date) on HabitExecutions.
-     - “Forgot day” semantics: freeze day is consumed only if user had no completions/skips for that date.
+     - A daily obligation belongs to the logical habit and date across all versions. Editing a habit must preserve its settled execution and must not create another completion, skip, protection, or failure for that date.
+     - One user-level freeze day covers all remaining misses for that date, including partially completed/skipped days.
 
 Weekly Freeze Award (background job)
 
@@ -92,7 +93,7 @@ Weekly Freeze Award (background job)
 Upgrade/Downgrade Behavior
 
 - Habits per tier: block new creations beyond ent.habits.max; existing habits remain unchanged.
-- Skips per month: apply new allowance forward; no retroactive changes.
+- Skips per month: apply new allowance forward; no retroactive changes. Deleting a habit does not refund skips already used in the user-wide monthly bucket.
 - Vacation windows: existing windows remain; new windows must respect current annual allowance.
 - Freeze cap changes: on downgrade, immediately truncate the user-level freeze balance to the new cap (ClampFreezeToCap); continue to clamp on award/consumption.
 
@@ -143,7 +144,7 @@ Vertical Rollout Plan
 
 Edge Cases
 
-- Partially completed day: if any habit Completed/Skipped on date, no freeze day is consumed; remaining unsatisfied scheduled habits may Fail or be manually Skipped.
+- Partially completed day: preserve Completed/Skipped executions and use one available freeze day to cover all remaining unsatisfied scheduled habits; without a freeze, those misses Fail.
 - Disabled habits: excluded from scheduling.
 - Timezones: user-local for skip windows, monthly buckets, weekly awards, and vacation evaluation; habit-local for scheduling and EOD boundaries.
 
