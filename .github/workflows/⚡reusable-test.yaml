@@ -1,0 +1,72 @@
+name: Test
+
+on:
+  workflow_call:
+    inputs:
+      atomi_platform:
+        required: true
+        type: string
+      atomi_service:
+        required: true
+        type: string
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-22.04
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      # Setup
+      - uses: AtomiCloud/actions.setup-nix@v2
+        with:
+          namespacelabs: 'false'
+
+      # Unit + DB-backed integration tests
+      - name: Run tests
+        env:
+          TEST_DB_HOST: 127.0.0.1
+          TEST_DB_PORT: '5432'
+          TEST_DB_USER: postgres
+          TEST_DB_PASS: postgres
+        # Inline, not scripts/ci/*.sh: commits to main must be signed via the API,
+        # which cannot set a new file's executable bit.
+        shell: nix develop .#ci -c bash -eo pipefail {0}
+        run: |
+          conn() { echo "Host=$TEST_DB_HOST;Port=$TEST_DB_PORT;Database=$1;Username=$TEST_DB_USER;Password=$TEST_DB_PASS"; }
+          PENALTY_TEST_DB="$(conn penalty_test)"
+          NFC_TAG_TEST_DB="$(conn nfc_test)"
+          ROUTINE_TEST_DB="$(conn routine_test)"
+          export PENALTY_TEST_DB NFC_TAG_TEST_DB ROUTINE_TEST_DB
+          export ZINC_DELETE_TEST_DB="$TEST_DB_HOST"
+          export ZINC_DELETE_TEST_PORT="$TEST_DB_PORT"
+          export ZINC_DELETE_TEST_USER="$TEST_DB_USER"
+          export ZINC_DELETE_TEST_PASS="$TEST_DB_PASS"
+          export ZINC_DELETE_TEST_DBNAME="delete_test"
+
+          # Email templates are rendered from the exported HTML at test time.
+          (cd App/Templates/Email && bun install --frozen-lockfile && bun run email export -p --outDir templates)
+
+          dotnet restore
+          dotnet test UnitTest/UnitTest.csproj --no-restore --logger 'console;verbosity=minimal'
+
+          # The Airwallex sandbox test needs real Airwallex credentials and is excluded. Every other
+          # DB-backed test must run here, so a skip (e.g. a missing env var) fails the job.
+          log="$(mktemp)"
+          dotnet test IntTest/IntTest.csproj --no-restore --logger 'console;verbosity=minimal' \
+            --filter 'FullyQualifiedName!~DeleteAccountAirwallexE2ETests' | tee "$log"
+          if ! grep -Eq 'Skipped: +0,' "$log"; then
+            echo "Integration tests were skipped; every DB-backed test must run in CI." >&2
+            exit 1
+          fi
