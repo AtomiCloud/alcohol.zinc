@@ -1,9 +1,11 @@
 using CSharp_Result;
+using Domain.Check;
 
 namespace Domain.Configuration;
 
 public class ConfigurationService(
   IConfigurationRepository repo,
+  ICheckService checkService,
   ITransactionManager tm) : IConfigurationService
 {
   public Task<Result<Configuration?>> GetById(Guid id)
@@ -29,8 +31,20 @@ public class ConfigurationService(
     );
   }
 
-  public Task<Result<ConfigurationPrincipal?>> Update(Guid id, string userId, ConfigurationRecord record)
+  public async Task<Result<ConfigurationPrincipal?>> Update(Guid id, string userId, ConfigurationRecord record)
   {
-    return repo.Update(id, userId, record);
+    var before = await repo.Get(id, userId);
+    if (before.IsFailure()) return before.FailureOrDefault();
+    var updated = await repo.Update(id, userId, record);
+    if (updated.IsFailure() || updated.Get() == null) return updated;
+
+    // The user's timezone follows the phone: move their pending checks to it. Settled
+    // checks never change, and an open check never gets shorter.
+    if (before.Get()?.Principal.Record.Timezone != record.Timezone)
+    {
+      var retimed = await checkService.RetimePending(userId, null);
+      if (retimed.IsFailure()) return retimed.FailureOrDefault();
+    }
+    return updated;
   }
 }

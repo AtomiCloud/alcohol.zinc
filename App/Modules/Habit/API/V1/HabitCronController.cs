@@ -4,7 +4,7 @@ using App.StartUp.Registry;
 using App.StartUp.Services.Auth;
 using Asp.Versioning;
 using CSharp_Result;
-using Domain.Habit;
+using Domain.Check;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -14,14 +14,14 @@ namespace App.Modules.Habit.API.V1;
 [ApiController]
 [Consumes(MediaTypeNames.Application.Json)]
 [Route("api/v{version:apiVersion}/habit-cron")]
-public class HabitCronController(IHabitService service, IAuthHelper authHelper) : AtomiControllerBase(authHelper)
+public class HabitCronController(ICheckService service, IAuthHelper authHelper) : AtomiControllerBase(authHelper)
 {
-  // Admin-only endpoint for scheduled invocation (e.g., every 15 minutes).
-  // It scans timezones near local 23:59 and marks failures accordingly.
+  // Admin-only manual trigger for one scheduler tick: opens upcoming checks, settles
+  // checks past their deadline (vacation, freeze, then missed) and dispatches stakes.
   [Authorize(Policy = AuthPolicies.OnlyAdmin), HttpPost("mark-daily-failures")] 
   public async Task<ActionResult<MarkDailyFailuresCronRes>> MarkDailyFailuresCron()
   {
-    var result = await service.MarkDailyFailuresForTimezonesNearMidnight()
+    var result = await service.Tick(DateTime.UtcNow)
       .Then(total => new MarkDailyFailuresCronRes(total), Errors.MapNone);
     return this.ReturnResult(result);
   }

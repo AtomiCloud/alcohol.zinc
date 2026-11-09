@@ -1,6 +1,7 @@
 using App.Error.V1;
 using App.Utility;
 using CSharp_Result;
+using Domain.Allowance;
 using Domain.Habit;
 using Domain.NfcTag;
 
@@ -72,19 +73,13 @@ public sealed class FakeHabitService : IHabitService
   public Task<Result<List<HabitVersionPrincipal>>> SearchHabits(HabitSearch habitSearch) =>
     throw new NotImplementedException();
 
-  public Task<Result<HabitVersionPrincipal>> Create(string userId, HabitVersionRecord versionRecord) =>
+  public Task<Result<HabitVersionPrincipal>> Create(string userId, HabitVersionRecord versionRecord, Guid? routineId) =>
     throw new NotImplementedException();
 
   public Task<Result<HabitVersionPrincipal?>> Update(string userId, Guid habitId, HabitVersionRecord versionRecord, bool enabled) =>
     throw new NotImplementedException();
 
   public Task<Result<Unit?>> Delete(Guid habitId, string userId) => throw new NotImplementedException();
-
-  public Task<Result<int>> MarkDailyFailures(List<Guid> habitIds, DateOnly date) =>
-    throw new NotImplementedException();
-
-  public Task<Result<int>> MarkDailyFailuresForTimezonesNearMidnight(DateTime? nowUtc = null) =>
-    throw new NotImplementedException();
 
   public Task<Result<HabitExecutionPrincipal>> CompleteHabit(string userId, Guid habitId, string? notes) =>
     throw new NotImplementedException();
@@ -94,4 +89,17 @@ public sealed class FakeHabitService : IHabitService
 
   public Task<Result<List<HabitExecutionPrincipal>>> SearchHabitExecutions(string userId, HabitExecutionSearch habitExecutionSearch) =>
     throw new NotImplementedException();
+}
+
+public sealed class FakeAllowanceService(string timezone) : IAllowanceService
+{
+  public Task<Result<UserMonthWindow>> GetUserMonthWindow(string userId, DateTime? utcNow = null) =>
+    throw new NotImplementedException();
+
+  public Task<Result<(string Timezone, DateOnly Today)>> GetUserToday(string userId, DateTime? utcNow = null)
+  {
+    var tz = TimeZoneInfo.FindSystemTimeZoneById(timezone);
+    var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(utcNow ?? DateTime.UtcNow, tz));
+    return Task.FromResult<Result<(string, DateOnly)>>((timezone, today));
+  }
 }

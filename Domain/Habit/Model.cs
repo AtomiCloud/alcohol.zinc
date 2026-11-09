@@ -9,6 +9,7 @@ namespace Domain.Habit
     {
         public required ushort Version { get; init; }  // Current version pointer
         public required bool Enabled { get; init; }   // User can enable/disable habit
+        public Guid? RoutineId { get; init; }          // Owning routine (null only for rows written before routines existed)
     }
 
     public record HabitPrincipal
@@ -30,7 +31,8 @@ namespace Domain.Habit
         public required Guid CharityId { get; init; }
         public required string Task { get; init; }
         public required string[] DaysOfWeek { get; init; }
-        public required TimeOnly NotificationTime { get; init; }
+        public required TimeOnly NotificationTime { get; init; }   // phone reminder only
+        public TimeOnly DeadlineTime { get; init; } = Check.CheckWindow.DefaultDeadline;
         public required Money Stake { get; init; }
         public required decimal Ratio { get; init; }
         public required string Timezone { get; init; }

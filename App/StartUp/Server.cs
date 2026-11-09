@@ -152,7 +152,7 @@ public class Server(
     services.AddDomainServices();
 
     // Background jobs
-    services.AddHostedService<HabitDailyFailureHostedService>();
+    services.AddHostedService<App.Modules.Check.CheckSchedulerHostedService>();
     services.AddHostedService<PenaltyProcessorHostedService>();
     services.AddHostedService<App.Modules.Disbursement.DisbursementHostedService>();
     services.AddHostedService<App.Modules.Subscription.SubscriptionRenewalHostedService>();

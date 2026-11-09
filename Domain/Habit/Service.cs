@@ -1,19 +1,15 @@
 using CSharp_Result;
+using Domain.Check;
 using Domain.Entitlement;
-using Domain.Penalty;
-using Domain.Protection;
-using Domain.Vacation;
+using Domain.Exceptions;
 using Microsoft.Extensions.Logging;
-using NodaMoney;
 
 namespace Domain.Habit;
 
 public class HabitService(
   IHabitRepository repo,
-  IVacationRepository vacationRepo,
-  IProtectionRepository protectionRepo,
   IEntitlementService entitlementService,
-  IPenaltyRepository penaltyRepo,
+  ICheckService checkService,
   ILogger<HabitService> logger
 ) : IHabitService
 {
@@ -25,9 +21,9 @@ public class HabitService(
   public Task<Result<HabitVersionPrincipal?>> GetCurrentHabitVersion(string userId, Guid habitId)
     => repo.GetCurrentVersion(userId, habitId);
 
-  public Task<Result<HabitVersionPrincipal>> Create(string userId, HabitVersionRecord versionRecord)
+  public Task<Result<HabitVersionPrincipal>> Create(string userId, HabitVersionRecord versionRecord, Guid? routineId)
   {
-    return repo.Create(userId, versionRecord);
+    return repo.Create(userId, versionRecord, routineId);
   }
 
   public async Task<Result<HabitVersionPrincipal?>> Update(string userId, Guid habitId,
@@ -48,7 +44,14 @@ public class HabitService(
       if (allowed.IsFailure()) return allowed.FailureOrDefault();
     }
 
-    return await repo.Update(habitId, userId, versionRecord, enabled);
+    var updated = await repo.Update(habitId, userId, versionRecord, enabled);
+    if (updated.IsSuccess() && updated.Get() != null)
+    {
+      // Days, deadline or enabled may have changed: move this habit's pending checks.
+      var retimed = await checkService.RetimePending(userId, [habitId]);
+      if (retimed.IsFailure()) logger.LogError(retimed.FailureOrDefault(), "Retiming checks failed for HabitId={HabitId}", habitId);
+    }
+    return updated;
   }
 
   public Task<Result<Unit?>> Delete(Guid habitId, string userId)
@@ -56,167 +59,46 @@ public class HabitService(
     return repo.Delete(habitId, userId);
   }
 
-  public async Task<Result<int>> MarkDailyFailures(List<Guid> habitIds, DateOnly date)
+  public async Task<Result<HabitExecutionPrincipal>> CompleteHabit(string userId, Guid habitVersionId, string? notes)
   {
-    // Phase 1: apply Vacation protections before failures
-    // 1) Resolve scheduled habit versions for provided habitIds on the given date
-    var activeVersionsResult = await repo.GetActiveHabitVersionsByIds(habitIds, date);
-    var activeVersions = (List<HabitVersionPrincipal>)activeVersionsResult;
+    var hv = (HabitVersionPrincipal?)await repo.GetVersion(habitVersionId);
+    if (hv == null) return NotCompletable(habitVersionId);
 
-    // 2) Group by user (owners)
-    var habitsResult = await repo.GetHabitsByIds(habitIds);
-    var habits = (List<HabitPrincipal>)habitsResult;
-    var ownerByHabit = habits.ToDictionary(h => h.Id, h => h.UserId);
-
-    // Build user -> list of hvIds that are active today
-    var hvByUser = new Dictionary<string, List<Guid>>();
-    foreach (var hv in activeVersions)
+    // The app, widget and NFC tap complete through Report as manual evidence.
+    var reported = await checkService.Report(userId, hv.HabitId, new Evidence
     {
-      if (!ownerByHabit.TryGetValue(hv.HabitId, out var uid)) continue;
-      hvByUser.TryAdd(uid, []);
-      hvByUser[uid].Add(hv.Id);
-    }
-
-    // 3) For users on vacation today, insert Vacation executions for their active versions
-    var totalProtected = 0;
-    var usersOnVacation = new HashSet<string>();
-    foreach (var kv in hvByUser)
-    {
-      var userId = kv.Key;
-      var hvIds = kv.Value;
-      var vacations = await vacationRepo.ListActiveForUserOnDate(userId, date);
-      var vs = (List<VacationPrincipal>)vacations;
-      if (vs.Count > 0)
-      {
-        usersOnVacation.Add(userId);
-        if (hvIds.Count > 0)
-        {
-          var inserted = await repo.CreateExecutionsForVersionsWithStatus(hvIds, date, ExecutionStatus.Vacation);
-          totalProtected += (int)inserted;
-        }
-      }
-    }
-
-    // 4) Spend one user-level freeze day only when scheduled executions are missing.
-    //    Cover remaining misses without changing completed/skipped executions.
-    var totalFrozen = 0;
-    foreach (var kv in hvByUser)
-    {
-      var userId = kv.Key;
-      var hvIds = kv.Value;
-      if (hvIds.Count == 0) continue;
-
-      // Vacation already protects every scheduled habit for this user today, so a
-      // freeze would only no-op on the anti-join while still burning a credit.
-      // Skip the freeze branch entirely for vacationing users.
-      if (usersOnVacation.Contains(userId)) continue;
-
-      var hasMissing = await repo.HasMissingExecutionsForVersions(hvIds, date);
-      if (!(bool)hasMissing)
-        continue;
-
-      var consumed = await protectionRepo.TryConsumeFreeze(userId, date);
-      if ((bool)consumed)
-      {
-        var inserted = await repo.CreateExecutionsForVersionsWithStatus(hvIds, date, ExecutionStatus.Freeze);
-        totalFrozen += (int)inserted;
-      }
-    }
-
-    // 5) Fail remaining scheduled executions (LEFT JOIN prevents double-insert)
-    var failedResult = await repo.CreateFailedExecutions(habitIds, date);
-    var failedRows = (List<FailedExecutionRow>)failedResult;
-
-    // 6) Enqueue a Pending penalty per failed row (idempotent via unique HabitExecutionId)
-    foreach (var row in failedRows)
-    {
-      // Exact cents math (mirror StreakRepository): cents * bps / 10000
-      var amountCents = (long)row.StakeCents * row.RatioBasisPoints / 10_000L;
-      if (amountCents <= 0) continue; // skip zero/negative penalties
-
-      var amount = new Money(amountCents / 100m, Currency.FromCode(row.StakeCurrency));
-      var record = new PenaltyRecord
-      {
-        HabitExecutionId = row.ExecutionId,
-        UserId = row.UserId,
-        CharityId = row.CharityId,
-        Amount = amount,
-        Status = PenaltyStatus.Pending,
-        PaymentIntentId = null,
-        Attempts = 0,
-        LastError = null
-      };
-      await penaltyRepo.EnqueuePending(record); // idempotent; no-op if execution already enqueued
-    }
-
-    return failedRows.Count + totalProtected + totalFrozen;
+      ProofKey = CheckService.ManualProof,
+      ExternalId = Guid.NewGuid().ToString(),
+      Verdict = EvidenceVerdict.Passed,
+      OccurredAtUtc = DateTime.UtcNow,
+      Notes = notes
+    });
+    if (reported.IsFailure()) return reported.FailureOrDefault();
+    var execution = reported.Get();
+    if (execution == null) return NotCompletable(habitVersionId);
+    return execution;
   }
 
-  public Task<Result<HabitExecutionPrincipal>> CompleteHabit(string userId, Guid habitVersionId, string? notes)
+  public async Task<Result<HabitExecutionPrincipal>> SkipHabit(string userId, Guid habitVersionId, string? notes)
   {
-    return repo
-      .GetUserCurrentDate(userId, habitVersionId)
-      .ThenAwait(date => repo.CompleteHabit(userId, habitVersionId, date, notes));
+    var hv = (HabitVersionPrincipal?)await repo.GetVersion(habitVersionId);
+    if (hv == null) return NotCompletable(habitVersionId);
+
+    var skipped = await checkService.Skip(userId, hv.HabitId, notes);
+    if (skipped.IsFailure()) return skipped.FailureOrDefault();
+    var execution = skipped.Get();
+    if (execution == null) return NotCompletable(habitVersionId);
+    return execution;
   }
 
-  public Task<Result<HabitExecutionPrincipal>> SkipHabit(string userId, Guid habitVersionId, string? notes)
-  {
-    return repo
-      .GetUserCurrentDate(userId, habitVersionId)
-      .ThenAwait(date => repo.SkipHabit(userId, habitVersionId, date, notes));
-  }
+  // Same failure the endpoints returned before checks existed (404).
+  private static NotFoundException NotCompletable(Guid habitVersionId) =>
+    new("Habit not found, not enabled, not scheduled for this day, or already has execution",
+      typeof(HabitExecutionPrincipal), habitVersionId.ToString());
 
   public Task<Result<List<HabitExecutionPrincipal>>> SearchHabitExecutions(string userId,
     HabitExecutionSearch habitExecutionSearch)
   {
     return repo.SearchHabitExecutions(userId, habitExecutionSearch);
-  }
-
-  public async Task<Result<int>> MarkDailyFailuresForTimezonesNearMidnight(DateTime? nowUtc = null)
-  {
-    var now = nowUtc ?? DateTime.UtcNow;
-    return await repo.GetDistinctTimezonesForEnabledHabits()
-      .ThenAwait(async tzList =>
-      {
-        List<Result<int>> results = [];
-        foreach (var tz in tzList)
-        {
-          logger.LogInformation("Processing Timezone: {tz}", tz);
-          var r = await this.ProcessTimezoneForFailures(tz, now);
-          results.Add(r);
-        }
-
-        var aggregated = results
-          .ToResultOfSeq()
-          .Then(xs => xs.Sum(), Errors.MapAll);
-        return aggregated;
-      });
-  }
-
-  private async Task<Result<int>> ProcessTimezoneForFailures(string tzId, DateTime nowUtc)
-  {
-    TimeZoneInfo tz;
-    try { tz = TimeZoneInfo.FindSystemTimeZoneById(tzId); }
-    catch { return 0; }
-
-    var localNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(nowUtc, DateTimeKind.Utc), tz);
-    // After-midnight window: [00:00, 00:50). Deliberately wider than the 15-min
-    // timer interval so a tick is guaranteed to land in-window even if one is
-    // delayed/skipped. Overlapping passes within the window are safe: the daily
-    // job's only side effect is EnqueuePending, which is idempotent (no-op on the
-    // unique HabitExecutionId), so re-projecting already-Failed rows cannot
-    // double-enqueue or abort the batch.
-    var inWindow = localNow.TimeOfDay >= TimeSpan.Zero && localNow.TimeOfDay < TimeSpan.FromMinutes(50);
-    logger.LogInformation("Timezone: {tz}, in window: {inWindow}", tz, inWindow);
-    if (!inWindow) return 0;
-
-    var dateToMark = DateOnly.FromDateTime(localNow.AddDays(-1));
-
-    return await repo.GetEnabledHabitIdsByTimezone(tzId)
-      .ThenAwait<List<Guid>, int>(async habitIds =>
-      {
-        if (habitIds.Count == 0) return 0;
-        return await this.MarkDailyFailures(habitIds, dateToMark);
-      });
   }
 }

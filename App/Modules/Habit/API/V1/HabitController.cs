@@ -26,7 +26,6 @@ public class HabitController(
     IAuthHelper authHelper,
     CreateHabitReqValidator createHabitReqValidator,
     UpdateHabitReqValidator updateHabitReqValidator,
-    MarkDailyFailuresReqValidator markDailyFailuresReqValidator,
     SearchHabitQueryValidator searchHabitQueryValidator,
     SearchOverviewQueryValidator searchOverviewQueryValidator
 ) : AtomiControllerBase(authHelper)
@@ -59,7 +58,7 @@ public class HabitController(
     var result = await this.GuardAsync(userId)
       .ThenAwait(_ => createHabitReqValidator.ValidateAsyncResult(req, "Invalid CreateHabitReq"))
       .ThenAwait(_ => entitlementService.EnsureHabitsAllowed(userId))
-      .ThenAwait(x => service.Create(userId, req.ToVersionRecord()))
+      .ThenAwait(x => service.Create(userId, req.ToVersionRecord(), req.RoutineId))
       .Then(h => h.ToRes(), Errors.MapNone);
 
     return this.ReturnResult(result);
@@ -132,15 +131,4 @@ public class HabitController(
 
     return this.ReturnResult(result);
   }
-
-  [Authorize(Policy = AuthPolicies.OnlyAdmin), HttpPost("executions/mark-daily-failures")]
-  public async Task<ActionResult<int>> MarkDailyFailures([FromBody] MarkDailyFailuresReq req)
-  { 
-    var result = await markDailyFailuresReqValidator
-        .ValidateAsyncResult(req, "Invalid MarkDailyFailuresReq")
-        .ThenAwait(x => service.MarkDailyFailures(x.HabitIds, x.Date.ToDate()));
-
-    return this.ReturnResult(result);
-  }
-
 }

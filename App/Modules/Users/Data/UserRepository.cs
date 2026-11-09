@@ -227,6 +227,17 @@ public class UserRepository(MainDbContext db, ILogger<UserRepository> logger) : 
         db.Habits.RemoveRange(userHabits);
       }
 
+      // Delete routines (after habits: Habits.RoutineId references Routines; EF orders the
+      // tracked deletes so dependents go first within the single SaveChangesAsync below)
+      var routines = await db.Routines
+        .Where(r => r.UserId == id)
+        .ToListAsync();
+      if (routines.Any())
+      {
+        logger.LogInformation("Deleting {Count} routines for User '{Id}'", routines.Count, id);
+        db.Routines.RemoveRange(routines);
+      }
+
       // Delete vacation periods
       var vacationPeriods = await db.VacationPeriods
         .Where(v => v.UserId == id)

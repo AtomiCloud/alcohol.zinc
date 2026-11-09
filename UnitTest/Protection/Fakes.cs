@@ -1,4 +1,5 @@
 using CSharp_Result;
+using Domain.Check;
 using Domain.Entitlement;
 using Domain.Habit;
 using Domain.Protection;
@@ -6,183 +7,20 @@ using Domain.Vacation;
 
 namespace UnitTest.Protection;
 
-// Shared hand-rolled fakes (no Moq) for unit-testing the Domain HabitService
-// skip / freeze / vacation / daily-failure-cron paths. Every method on the
-// faked interfaces is implemented; members not exercised by SkipHabit,
-// CompleteHabit or MarkDailyFailures(...) throw NotImplementedException, while
-// the ones that ARE exercised are backed by simple, seedable, inspectable
-// in-memory state.
-//
-// A single shared monotonically-increasing "call sequence" lets ordering tests
-// assert that Vacation inserts precede Freeze inserts precede the Fail step.
-
-public sealed class CallLog
-{
-  private int _seq;
-  public int Next() => ++_seq;
-}
+// Shared hand-rolled fakes (no Moq) for unit-testing the Domain services that
+// don't need a database. Daily settlement (checks, freeze, vacation, penalties)
+// is DB-backed and covered in IntTest/Check/CheckScenarioTests.cs.
 
 // ---------------------------------------------------------------------------
-// IHabitRepository
+// IHabitRepository: only GetHabit / Update are backed (HabitService.Update).
 // ---------------------------------------------------------------------------
-//
-// Seedable state:
-//   ActiveVersions          -> returned by GetActiveHabitVersionsByIds
-//   Habits                  -> returned by GetHabitsByIds (and GetHabit)
-//   ExistingExecutions      -> set of (habitVersionId, date) that already have
-//                              an execution row of ANY status. Seed this to
-//                              model Completed/Skipped/Vacation/Freeze/Failed
-//                              rows so the in-memory CreateFailedExecutions and
-//                              CreateExecutionsForVersionsWithStatus anti-joins
-//                              skip them, exactly like the real SQL LEFT JOIN.
-//   FailedRowTemplates      -> map habitVersionId -> FailedExecutionRow factory
-//                              data used to build the rows CreateFailedExecutions
-//                              returns for versions that are scheduled today and
-//                              have NO existing execution.
-//   CurrentDate             -> returned by GetUserCurrentDate (skip/complete)
-//   Timezones / HabitIdsByTimezone -> drive the cron entrypoint
-//
-// Inspectable state (recorded calls, each tagged with a sequence number):
-//   CreateExecutionsForVersionsWithStatusCalls
-//   CreateFailedExecutionsCalls
-//   SkipHabitCalls / CompleteHabitCalls
-public sealed class FakeHabitRepository(CallLog? log = null) : IHabitRepository
+public sealed class FakeHabitRepository : IHabitRepository
 {
-  private readonly CallLog _log = log ?? new CallLog();
-
-  // ----- seedable inputs -----
-  public List<HabitVersionPrincipal> ActiveVersions { get; } = [];
   public List<HabitPrincipal> Habits { get; } = [];
-  public HashSet<(Guid HabitVersionId, DateOnly Date)> ExistingExecutions { get; } = [];
-
-  // For each scheduled habitVersionId that truly misses, what FailedExecutionRow
-  // should CreateFailedExecutions produce. ExecutionId/UserId/CharityId/stake/etc.
-  public Dictionary<Guid, FailedRowSeed> FailedRowSeeds { get; } = [];
-
-  public DateOnly CurrentDate { get; set; } = new(2026, 1, 1);
-  public List<string> Timezones { get; } = [];
-  public Dictionary<string, List<Guid>> HabitIdsByTimezone { get; } = [];
-
-  // ----- recorded calls (inspectable) -----
-  public List<(int Seq, List<Guid> HvIds, DateOnly Date, ExecutionStatus Status)> CreateExecutionsForVersionsWithStatusCalls { get; } = [];
-  public List<(int Seq, List<Guid> HabitIds, DateOnly Date, List<FailedExecutionRow> Returned)> CreateFailedExecutionsCalls { get; } = [];
-  public List<(string UserId, Guid HabitVersionId, DateOnly Date, string? Notes)> SkipHabitCalls { get; } = [];
-  public List<(string UserId, Guid HabitVersionId, DateOnly Date, string? Notes)> CompleteHabitCalls { get; } = [];
-
-  // ---- methods exercised by MarkDailyFailures / Skip / Complete ----
-
-  public Task<Result<List<HabitVersionPrincipal>>> GetActiveHabitVersionsByIds(List<Guid> habitIds, DateOnly date)
-  {
-    var hs = habitIds.ToHashSet();
-    var result = ActiveVersions.Where(v => hs.Contains(v.HabitId)).ToList();
-    return Task.FromResult<Result<List<HabitVersionPrincipal>>>(result);
-  }
-
-  public Task<Result<List<HabitPrincipal>>> GetHabitsByIds(List<Guid> habitIds)
-  {
-    var hs = habitIds.ToHashSet();
-    var result = Habits.Where(h => hs.Contains(h.Id)).ToList();
-    return Task.FromResult<Result<List<HabitPrincipal>>>(result);
-  }
-
-  public Task<Result<bool>> HasMissingExecutionsForVersions(List<Guid> habitVersionIds, DateOnly date)
-  {
-    var any = habitVersionIds.Any(hvId => !ExistingExecutions.Contains((hvId, date)));
-    return Task.FromResult<Result<bool>>(any);
-  }
-
-  public Task<Result<int>> CreateExecutionsForVersionsWithStatus(List<Guid> habitVersionIds, DateOnly date, ExecutionStatus status)
-  {
-    CreateExecutionsForVersionsWithStatusCalls.Add((_log.Next(), [.. habitVersionIds], date, status));
-    // Mimic the real anti-join: only insert where no execution exists yet for
-    // (version, date). Record the freshly inserted rows so subsequent inserts /
-    // the fail step see them as existing.
-    var inserted = 0;
-    foreach (var hv in habitVersionIds)
-    {
-      if (ExistingExecutions.Add((hv, date))) inserted++;
-    }
-    return Task.FromResult<Result<int>>(inserted);
-  }
-
-  public Task<Result<List<FailedExecutionRow>>> CreateFailedExecutions(List<Guid> habitIds, DateOnly date)
-  {
-    var seq = _log.Next();
-    var hs = habitIds.ToHashSet();
-    var rows = new List<FailedExecutionRow>();
-
-    // Anti-join semantics: only fail a scheduled version that has NO existing
-    // execution row for that date (so completed / skipped / vacation / frozen
-    // rows — modelled via ExistingExecutions — are excluded).
-    foreach (var v in ActiveVersions)
-    {
-      if (!hs.Contains(v.HabitId)) continue;
-      if (ExistingExecutions.Contains((v.Id, date))) continue;
-      if (!FailedRowSeeds.TryGetValue(v.Id, out var seed)) continue;
-
-      ExistingExecutions.Add((v.Id, date)); // a Failed row now occupies the slot
-      rows.Add(seed.ToRow());
-    }
-
-    CreateFailedExecutionsCalls.Add((seq, [.. habitIds], date, rows));
-    return Task.FromResult<Result<List<FailedExecutionRow>>>(rows);
-  }
-
-  public Task<Result<string?>> GetTaskNameByExecutionId(Guid executionId)
-    => Task.FromResult<Result<string?>>((string?)null);
-
-  public Task<Result<DateOnly>> GetUserCurrentDate(string userId, Guid habitVersionId)
-    => Task.FromResult<Result<DateOnly>>(CurrentDate);
-
-  public Task<Result<HabitExecutionPrincipal>> SkipHabit(string userId, Guid habitVersionId, DateOnly date, string? notes)
-  {
-    SkipHabitCalls.Add((userId, habitVersionId, date, notes));
-    return Task.FromResult<Result<HabitExecutionPrincipal>>(
-      MakeExecution(habitVersionId, date, ExecutionStatus.Skipped, notes));
-  }
-
-  public Task<Result<HabitExecutionPrincipal>> CompleteHabit(string userId, Guid habitVersionId, DateOnly date, string? notes)
-  {
-    CompleteHabitCalls.Add((userId, habitVersionId, date, notes));
-    return Task.FromResult<Result<HabitExecutionPrincipal>>(
-      MakeExecution(habitVersionId, date, ExecutionStatus.Completed, notes));
-  }
-
-  public Task<Result<List<string>>> GetDistinctTimezonesForEnabledHabits()
-    => Task.FromResult<Result<List<string>>>(Timezones.ToList());
-
-  public Task<Result<List<Guid>>> GetEnabledHabitIdsByTimezone(string timezone)
-  {
-    var ids = HabitIdsByTimezone.TryGetValue(timezone, out var x) ? x.ToList() : [];
-    return Task.FromResult<Result<List<Guid>>>(ids);
-  }
 
   public Task<Result<HabitPrincipal?>> GetHabit(Guid habitId)
     => Task.FromResult<Result<HabitPrincipal?>>(Habits.FirstOrDefault(h => h.Id == habitId));
 
-  private static HabitExecutionPrincipal MakeExecution(Guid hvId, DateOnly date, ExecutionStatus status, string? notes)
-    => new()
-    {
-      Id = Guid.NewGuid(),
-      HabitVersionId = hvId,
-      Record = new HabitExecutionRecord
-      {
-        Date = date,
-        Status = status,
-        CompletedAt = status == ExecutionStatus.Completed ? DateTime.UtcNow : null,
-        Notes = notes
-      }
-    };
-
-  // ---- members not exercised by the paths under test ----
-  public Task<Result<List<HabitVersionPrincipal>>> GetActiveHabitVersions(string userId, DateOnly date)
-    => throw new NotImplementedException();
-  public Task<Result<List<HabitVersionPrincipal>>> SearchHabits(HabitSearch habitSearch)
-    => throw new NotImplementedException();
-  public Task<Result<HabitVersionPrincipal?>> GetCurrentVersion(string userId, Guid habitId)
-    => throw new NotImplementedException();
-  public Task<Result<HabitVersionPrincipal>> Create(string userId, HabitVersionRecord versionRecord)
-    => throw new NotImplementedException();
   public Task<Result<HabitVersionPrincipal?>> Update(Guid habitId, string userId, HabitVersionRecord versionRecord, bool enabled)
   {
     var index = Habits.FindIndex(h => h.Id == habitId && h.UserId == userId);
@@ -195,11 +33,24 @@ public sealed class FakeHabitRepository(CallLog? log = null) : IHabitRepository
       Id = Guid.NewGuid(), HabitId = habitId, Version = version, Record = versionRecord
     });
   }
+
+  public Task<Result<List<HabitVersionPrincipal>>> GetActiveHabitVersions(string userId, DateOnly date)
+    => throw new NotImplementedException();
+  public Task<Result<List<HabitVersionPrincipal>>> SearchHabits(HabitSearch habitSearch)
+    => throw new NotImplementedException();
+  public Task<Result<HabitVersionPrincipal?>> GetCurrentVersion(string userId, Guid habitId)
+    => throw new NotImplementedException();
+  public Task<Result<HabitVersionPrincipal>> Create(string userId, HabitVersionRecord versionRecord, Guid? routineId)
+    => throw new NotImplementedException();
   public Task<Result<Unit?>> Delete(Guid habitId, string userId)
+    => throw new NotImplementedException();
+  public Task<Result<string?>> GetTaskNameByExecutionId(Guid executionId)
     => throw new NotImplementedException();
   public Task<Result<List<HabitExecutionPrincipal>>> SearchHabitExecutions(string userId, HabitExecutionSearch habitExecutionSearch)
     => throw new NotImplementedException();
   public Task<Result<List<HabitVersionPrincipal>>> GetVersions(string userId, Guid habitId)
+    => throw new NotImplementedException();
+  public Task<Result<HabitVersionPrincipal?>> GetVersion(Guid habitVersionId)
     => throw new NotImplementedException();
   public Task<Result<int>> CountHabitsForUser(string userId)
     => throw new NotImplementedException();
@@ -207,19 +58,27 @@ public sealed class FakeHabitRepository(CallLog? log = null) : IHabitRepository
     => throw new NotImplementedException();
 }
 
-// Seed data for a Failed row produced by CreateFailedExecutions for a true miss.
-// amountCents in the service = StakeCents * RatioBasisPoints / 10000.
-public sealed record FailedRowSeed
+// ---------------------------------------------------------------------------
+// ICheckService: records RetimePending calls; nothing else is exercised.
+// ---------------------------------------------------------------------------
+public sealed class FakeCheckService : ICheckService
 {
-  public Guid ExecutionId { get; init; } = Guid.NewGuid();
-  public required string UserId { get; init; }
-  public Guid CharityId { get; init; } = Guid.NewGuid();
-  public int StakeCents { get; init; } = 1000;        // $10.00
-  public string StakeCurrency { get; init; } = "USD";
-  public int RatioBasisPoints { get; init; } = 5000;  // 50%
+  public List<(string? UserId, List<Guid>? HabitIds)> RetimeCalls { get; } = [];
 
-  public FailedExecutionRow ToRow()
-    => new(ExecutionId, UserId, CharityId, StakeCents, StakeCurrency, RatioBasisPoints);
+  public Task<Result<int>> RetimePending(string? userId, List<Guid>? habitIds, DateTime? nowUtc = null)
+  {
+    RetimeCalls.Add((userId, habitIds));
+    return Task.FromResult<Result<int>>(0);
+  }
+
+  public Task<Result<int>> OpenUpcoming(DateTime nowUtc) => throw new NotImplementedException();
+  public Task<Result<int>> CloseDue(DateTime nowUtc) => throw new NotImplementedException();
+  public Task<Result<int>> DispatchEvents(DateTime nowUtc) => throw new NotImplementedException();
+  public Task<Result<int>> Tick(DateTime nowUtc) => throw new NotImplementedException();
+  public Task<Result<HabitExecutionPrincipal?>> Report(string userId, Guid habitId, Evidence evidence, DateTime? nowUtc = null)
+    => throw new NotImplementedException();
+  public Task<Result<HabitExecutionPrincipal?>> Skip(string userId, Guid habitId, string? notes, DateTime? nowUtc = null)
+    => throw new NotImplementedException();
 }
 
 // ---------------------------------------------------------------------------

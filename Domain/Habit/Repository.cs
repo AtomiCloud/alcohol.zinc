@@ -2,7 +2,7 @@ using CSharp_Result;
 
 namespace Domain.Habit
 {
-    // Row returned by CreateFailedExecutions so the service can enqueue penalties.
+    // Stake of a failed execution, so the penalty stake binding can enqueue its penalty.
     // Carries persisted int cents + basis points so the amount is computed exactly
     // as StreakRepository does (cents * bps / 10000).
     public record FailedExecutionRow(Guid ExecutionId, string UserId, Guid CharityId, int StakeCents, string StakeCurrency, int RatioBasisPoints);
@@ -14,37 +14,25 @@ namespace Domain.Habit
         Task<Result<List<HabitVersionPrincipal>>> SearchHabits(HabitSearch habitSearch);
         Task<Result<HabitPrincipal?>> GetHabit(Guid habitId);
         Task<Result<HabitVersionPrincipal?>> GetCurrentVersion(string userId, Guid habitId);
-        // Creates habit + first version
-        Task<Result<HabitVersionPrincipal>> Create(string userId, HabitVersionRecord versionRecord);
+        // Creates habit + first version. routineId null => a new one-habit routine is created;
+        // otherwise it must be the user's own non-deleted routine (NotFoundException failure).
+        Task<Result<HabitVersionPrincipal>> Create(string userId, HabitVersionRecord versionRecord, Guid? routineId);
         // Creates new version + updates enabled status
         Task<Result<HabitVersionPrincipal?>> Update(Guid habitId, string userId, HabitVersionRecord versionRecord, bool enabled);
         Task<Result<Unit?>> Delete(Guid habitId, string userId);                              // Soft delete habit
-        Task<Result<List<FailedExecutionRow>>> CreateFailedExecutions(List<Guid> habitIds, DateOnly date);        // Batch create failed executions; returns the rows just failed
-        Task<Result<int>> CreateExecutionsForVersionsWithStatus(List<Guid> habitVersionIds, DateOnly date, ExecutionStatus status);
 
         // Habit Execution Methods
         // Habit task name for an execution (penalty emails); null when the execution is gone.
         Task<Result<string?>> GetTaskNameByExecutionId(Guid executionId);
-        Task<Result<DateOnly>> GetUserCurrentDate(string userId, Guid habitVersionId);                    // Get current date in user's timezone
-        Task<Result<HabitExecutionPrincipal>> CompleteHabit(string userId, Guid habitVersionId, DateOnly date, string? notes);
-        Task<Result<HabitExecutionPrincipal>> SkipHabit(string userId, Guid habitVersionId, DateOnly date, string? notes);
         Task<Result<List<HabitExecutionPrincipal>>> SearchHabitExecutions(string userId, 
           HabitExecutionSearch habitExecutionSearch);
 
         // Additional helpers for overview
         Task<Result<List<HabitVersionPrincipal>>> GetVersions(string userId, Guid habitId);
+        Task<Result<HabitVersionPrincipal?>> GetVersion(Guid habitVersionId);
 
         // Auxiliary for entitlements & protections
         Task<Result<int>> CountHabitsForUser(string userId);
         Task<Result<int>> CountUserSkipsForMonth(string userId, DateOnly monthStart, DateOnly monthEnd);
-        Task<Result<List<HabitVersionPrincipal>>> GetActiveHabitVersionsByIds(List<Guid> habitIds, DateOnly date);
-        Task<Result<List<HabitPrincipal>>> GetHabitsByIds(List<Guid> habitIds);
-
-        // Helpers for protections
-        Task<Result<bool>> HasMissingExecutionsForVersions(List<Guid> habitVersionIds, DateOnly date);
-
-        // Helpers for end-of-day failure marking
-        Task<Result<List<string>>> GetDistinctTimezonesForEnabledHabits();
-        Task<Result<List<Guid>>> GetEnabledHabitIdsByTimezone(string timezone);
     }
 }

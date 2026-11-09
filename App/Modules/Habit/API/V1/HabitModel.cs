@@ -4,7 +4,9 @@ public record CreateHabitReq(
     string NotificationTime, // string (e.g. "HH:mm")
     string Stake,            // string decimal (e.g. "10.50")
     Guid CharityId,
-    string Timezone          // string (e.g. "Asia/Singapore", "America/New_York")
+    string Timezone,         // string (e.g. "Asia/Singapore", "America/New_York")
+    string? DeadlineTime = null, // "HH:mm", the day's check deadline; defaults to 23:59
+    Guid? RoutineId = null   // Optional: existing routine of the user; omitted => new one-habit routine
 );
 
 public record UpdateHabitReq(
@@ -14,14 +16,16 @@ public record UpdateHabitReq(
     string Stake,
     Guid CharityId,
     bool Enabled,
-    string Timezone          // string (e.g. "Asia/Singapore", "America/New_York")
+    string Timezone,         // string (e.g. "Asia/Singapore", "America/New_York")
+    string? DeadlineTime = null  // "HH:mm", the day's check deadline; defaults to 23:59
 );
 
 public record HabitRes(
     Guid Id,                 // Habit ID (main entity)
     ushort Version,          // Current version number
     string UserId,
-    bool Enabled             // Whether habit is enabled
+    bool Enabled,            // Whether habit is enabled
+    Guid? RoutineId          // Owning routine (null for habits created before routines existed)
 );
 
 public record HabitVersionRes(
@@ -34,12 +38,8 @@ public record HabitVersionRes(
     string Stake,
     string Ratio,
     Guid CharityId,
-    string Timezone          // string (e.g. "Asia/Singapore", "America/New_York")
-);
-
-public record MarkDailyFailuresReq(
-    string Date,             // string (e.g. "31-08-2025")
-    List<Guid> HabitIds     // List of habit IDs to process
+    string Timezone,         // string (e.g. "Asia/Singapore", "America/New_York")
+    string DeadlineTime      // "HH:mm"
 );
 
 public record MarkDailyFailuresCronRes(

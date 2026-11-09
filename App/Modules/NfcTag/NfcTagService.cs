@@ -1,6 +1,7 @@
 using App.Error.V1;
 using App.Utility;
 using CSharp_Result;
+using Domain.Allowance;
 using Domain.Exceptions;
 using Domain.Habit;
 using Domain.NfcTag;
@@ -9,7 +10,8 @@ namespace App.Modules.NfcTag;
 
 public class NfcTagService(
   INfcTagRepository repo,
-  IHabitService habitService
+  IHabitService habitService,
+  IAllowanceService allowanceService
 ) : INfcTagService
 {
   public Task<Result<NfcTagPrincipal>> Link(string userId, string tagId, Guid habitId)
@@ -47,17 +49,16 @@ public class NfcTagService(
           {
             if (hv == null) return (NfcTagResolution?)null;
 
-            var tz = TimeZoneInfo.FindSystemTimeZoneById(hv.Record.Timezone);
-            var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz));
-
-            return await repo.GetExecutionForDate(tag.Record.HabitId, today)
-              .Then(exec => (NfcTagResolution?)new NfcTagResolution
-              {
-                Principal = tag,
-                HabitVersion = hv,
-                Today = today,
-                TodayExecution = exec
-              }, Errors.MapNone);
+            // "Today" is the user's day (their timezone follows the phone), not the habit's.
+            return await allowanceService.GetUserToday(userId)
+              .ThenAwait(t => repo.GetExecutionForDate(tag.Record.HabitId, t.Today)
+                .Then(exec => (NfcTagResolution?)new NfcTagResolution
+                {
+                  Principal = tag,
+                  HabitVersion = hv,
+                  Today = t.Today,
+                  TodayExecution = exec
+                }, Errors.MapNone));
           });
       });
   }

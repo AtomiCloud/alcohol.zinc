@@ -1,5 +1,6 @@
 using System.Globalization;
 using App.Utility;
+using Domain.Check;
 using Domain.Habit;
 using NodaMoney;
 
@@ -12,7 +13,8 @@ public static class HabitMapper
             h.Id,
             h.Record.Version,
             h.UserId,
-            h.Record.Enabled
+            h.Record.Enabled,
+            h.Record.RoutineId
         );
 
     public static HabitVersionRes ToRes(this HabitVersionPrincipal hv) =>
@@ -26,7 +28,8 @@ public static class HabitMapper
             hv.Record.Stake.Amount.ToString("F2", CultureInfo.InvariantCulture),
             (hv.Record.Ratio * 100m).ToString("F1", CultureInfo.InvariantCulture),
             hv.Record.CharityId,
-            hv.Record.Timezone
+            hv.Record.Timezone,
+            hv.Record.DeadlineTime.ToStandardTimeFormat()
         );
 
     public static HabitVersionRecord ToVersionRecord(this CreateHabitReq req) =>
@@ -38,7 +41,8 @@ public static class HabitMapper
             NotificationTime = req.NotificationTime.ToTime(),
             Stake = new Money(decimal.Parse(req.Stake, CultureInfo.InvariantCulture), Currency.FromCode("USD")),
             Ratio = 1.0m,  // Fixed at 100% - all stake goes to charity
-            Timezone = req.Timezone
+            Timezone = req.Timezone,
+            DeadlineTime = req.DeadlineTime?.ToTime() ?? CheckWindow.DefaultDeadline
         };
 
     public static HabitVersionRecord ToVersionRecord(this UpdateHabitReq req) =>
@@ -50,7 +54,8 @@ public static class HabitMapper
             NotificationTime = req.NotificationTime.ToTime(),
             Stake = new Money(decimal.Parse(req.Stake, CultureInfo.InvariantCulture), Currency.FromCode("USD")),
             Ratio = 1.0m,  // Fixed at 100% - all stake goes to charity
-            Timezone = req.Timezone
+            Timezone = req.Timezone,
+            DeadlineTime = req.DeadlineTime?.ToTime() ?? CheckWindow.DefaultDeadline
         };
 
     public static HabitExecutionRes ToRes(this HabitExecutionPrincipal he) =>

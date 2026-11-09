@@ -23,8 +23,8 @@ public class HabitUpdateTests
     {
       EnsureHabitsAllowedResult = new InvalidOperationException("Habit cap reached")
     };
-    var service = new HabitService(repo, new FakeVacationRepository(), new FakeProtectionRepository(),
-      entitlements, new FakePenaltyRepository(), NullLogger<HabitService>.Instance);
+    var checks = new FakeCheckService();
+    var service = new HabitService(repo, entitlements, checks, NullLogger<HabitService>.Instance);
 
     var result = await service.Update(userId, habitId, record, enabled);
 
@@ -33,6 +33,8 @@ public class HabitUpdateTests
     habit.Record.Version.Should().Be(allowed ? (ushort)2 : (ushort)1);
     habit.Record.Enabled.Should().Be(allowed ? enabled : wasEnabled);
     if (allowed) result.Get()!.Record.Task.Should().Be("Renamed");
+    // An accepted edit re-times the habit's pending checks; a rejected one doesn't.
+    checks.RetimeCalls.Should().HaveCount(allowed ? 1 : 0);
 
     // Ownership is checked before any quota decision or update.
     (await service.Update("stranger", habitId, record, enabled)).Get().Should().BeNull();

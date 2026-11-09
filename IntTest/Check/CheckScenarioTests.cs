@@ -1,0 +1,424 @@
+using App.Modules.Charities.Data;
+using App.Modules.Check.Data;
+using App.Modules.Configurations.Data;
+using App.Modules.Habit.Data;
+using App.Modules.HabitExecution.Data;
+using App.Modules.HabitVersion.Data;
+using App.Modules.Protection.Data;
+using App.Modules.Users.Data;
+using App.Modules.Vacation.Data;
+using App.StartUp.Database;
+using CSharp_Result;
+using Domain.Check;
+using IntTest.Penalty;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
+
+namespace IntTest.Check;
+
+// End-to-end scenarios for the core: daily checks, the user's timezone that follows the
+// phone, protections, Report and the stake outbox. A fake clock (explicit nowUtc) drives
+// the real CheckService against a real Postgres (PENALTY_TEST_DB), as the scheduler would.
+[Collection(DbIntegrationCollection.Name)]
+public class CheckScenarioTests : IAsyncLifetime
+{
+  private const string SkipReason = "PENALTY_TEST_DB not set; skipping DB-backed check scenarios.";
+  private const string Singapore = "Asia/Singapore";
+  private const string LosAngeles = "America/Los_Angeles";
+  private readonly string? _conn = Environment.GetEnvironmentVariable("PENALTY_TEST_DB");
+  private MainDbContext _db = null!;
+
+  public async Task InitializeAsync()
+  {
+    if (_conn == null) return;
+    _db = PenaltyIntegrationTests.NewContext(_conn);
+    await _db.Database.EnsureCreatedAsync();
+  }
+
+  public async Task DisposeAsync()
+  {
+    if (_conn == null) return;
+    await _db.Database.EnsureDeletedAsync();
+    await _db.DisposeAsync();
+  }
+
+  private static DateTime U(int y, int m, int d, int h, int min = 0) => new(y, m, d, h, min, 0, DateTimeKind.Utc);
+
+  private async Task<(string UserId, Guid CharityId)> SeedUser(string timezone, int freezes = 0)
+  {
+    var userId = $"user-{Guid.NewGuid():N}";
+    var charityId = Guid.NewGuid();
+    _db.Users.Add(new UserData { Id = userId, Username = userId, Email = $"{userId}@test.local" });
+    _db.Charities.Add(new CharityData { Id = charityId, Name = $"Charity {charityId:N}" });
+    _db.Configurations.Add(new ConfigurationData { UserId = userId, Timezone = timezone, DefaultCharityId = charityId });
+    if (freezes > 0) _db.UserProtections.Add(new UserProtectionData { UserId = userId, FreezeCurrent = freezes });
+    await _db.SaveChangesAsync();
+    return (userId, charityId);
+  }
+
+  private async Task<Guid> SeedHabit(string userId, Guid charityId, string[] days, string versionTimezone)
+  {
+    var habitId = Guid.NewGuid();
+    _db.Habits.Add(new HabitData { Id = habitId, UserId = userId, Version = 1, Enabled = true });
+    _db.HabitVersions.Add(new HabitVersionData
+    {
+      HabitId = habitId, CharityId = charityId, Version = 1, Task = "Run 5 km", DaysOfWeek = days,
+      NotificationTime = new TimeOnly(19, 0), Timezone = versionTimezone,
+      StakeCents = 1000, StakeCurrency = "USD", RatioBasisPoints = 10000
+    });
+    await _db.SaveChangesAsync();
+    return habitId;
+  }
+
+  private async Task MoveUserTo(string userId, string timezone)
+  {
+    await _db.Configurations.Where(c => c.UserId == userId)
+      .ExecuteUpdateAsync(s => s.SetProperty(c => c.Timezone, timezone));
+  }
+
+  private Task<List<HabitCheckData>> ChecksOf(Guid habitId)
+    => _db.HabitChecks.AsNoTracking().Where(c => c.HabitId == habitId).OrderBy(c => c.LocalDate).ToListAsync();
+
+  private Task<List<HabitExecutionData>> ExecutionsOf(Guid habitId)
+    => _db.HabitExecutions.AsNoTracking().Where(e => e.HabitVersion!.HabitId == habitId).ToListAsync();
+
+  private Task<int> PenaltiesOf(string userId) => _db.Penalties.CountAsync(p => p.UserId == userId);
+
+  // Created in Singapore, then the user is in San Francisco: Monday is Monday in SF.
+  // Before checks, Singapore's Monday ended at Mon 08:00 SF and a 19:05 SF tap was rejected.
+  [SkippableFact]
+  public async Task SingaporeToSanFrancisco_MondayTapAt1905SF_IsDone()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (userId, charityId) = await SeedUser(Singapore);
+    var habitId = await SeedHabit(userId, charityId, ["Monday"], Singapore);
+    var svc = Checks.Service(_db);
+
+    (await svc.OpenUpcoming(U(2026, 1, 4, 17))).Get().Should().Be(1); // Mon 01:00 in Singapore
+    await MoveUserTo(userId, LosAngeles);
+    (await svc.RetimePending(userId, null, U(2026, 1, 5, 2))).Get().Should().Be(1); // Sun 18:00 SF
+
+    var monday = (await ChecksOf(habitId)).Single();
+    monday.Timezone.Should().Be(LosAngeles);
+    monday.OpensAtUtc.Should().Be(U(2026, 1, 5, 8));
+    monday.DeadlineUtc.Should().Be(U(2026, 1, 6, 8));
+
+    (await svc.CloseDue(U(2026, 1, 5, 16, 45))).Get().Should().Be(0, "Mon 08:45 SF is not the end of Monday");
+    var done = (await svc.Report(userId, habitId, Checks.Manual(U(2026, 1, 6, 3, 5)), U(2026, 1, 6, 3, 5))).Get();
+    done.Should().NotBeNull();
+    done!.Record.Date.Should().Be(new DateOnly(2026, 1, 5));
+    done.Record.Status.Should().Be(Domain.Habit.ExecutionStatus.Completed);
+
+    (await svc.CloseDue(U(2026, 1, 7, 12))).Get().Should().Be(0);
+    (await svc.DispatchEvents(U(2026, 1, 7, 12))).IsSuccess().Should().BeTrue();
+    (await PenaltiesOf(userId)).Should().Be(0);
+  }
+
+  // Done Mon 16:00 in Singapore, then land Mon 16:00 in SF: Monday stays done, once.
+  [SkippableFact]
+  public async Task DoneInSingapore_LandMondayInSF_NoSecondMondayAndTuesdayOnSFTime()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (userId, charityId) = await SeedUser(Singapore);
+    var habitId = await SeedHabit(userId, charityId, ["Monday", "Tuesday"], Singapore);
+    var svc = Checks.Service(_db);
+
+    (await svc.OpenUpcoming(U(2026, 1, 5, 8))).Get().Should().Be(2);
+    (await svc.Report(userId, habitId, Checks.Manual(U(2026, 1, 5, 8)), U(2026, 1, 5, 8))).Get()
+      .Should().NotBeNull();
+
+    await MoveUserTo(userId, LosAngeles);
+    await svc.RetimePending(userId, null, U(2026, 1, 5, 9));
+    var landed = U(2026, 1, 6, 0); // Mon 16:00 SF
+    (await svc.OpenUpcoming(landed)).Get().Should().Be(0, "Monday already has its check");
+    (await svc.Report(userId, habitId, Checks.Manual(landed), landed)).Get().Should().BeNull();
+
+    var checks = await ChecksOf(habitId);
+    checks.Should().HaveCount(2);
+    checks[0].Status.Should().Be(HabitCheckStatusData.Done);
+    checks[0].Timezone.Should().Be(Singapore, "a settled check never changes");
+    checks[1].Timezone.Should().Be(LosAngeles);
+    checks[1].DeadlineUtc.Should().Be(U(2026, 1, 7, 8));
+    (await ExecutionsOf(habitId)).Should().ContainSingle();
+  }
+
+  // SF -> Singapore: Tuesday would have ended before landing; it keeps its SF deadline.
+  [SkippableFact]
+  public async Task SanFranciscoToSingapore_OpenCheckNeverGetsShorter()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (userId, charityId) = await SeedUser(LosAngeles);
+    var habitId = await SeedHabit(userId, charityId, ["Tuesday"], LosAngeles);
+    var svc = Checks.Service(_db);
+
+    await svc.OpenUpcoming(U(2026, 1, 6, 10)); // Tue 02:00 SF
+    await MoveUserTo(userId, Singapore);
+    await svc.RetimePending(userId, null, U(2026, 1, 7, 4)); // Wed 12:00 Singapore
+
+    var tuesday = (await ChecksOf(habitId)).Single();
+    tuesday.Timezone.Should().Be(Singapore);
+    tuesday.DeadlineUtc.Should().Be(U(2026, 1, 7, 8), "Tuesday in Singapore ended earlier; the old deadline stays");
+
+    (await svc.CloseDue(U(2026, 1, 7, 5))).Get().Should().Be(0);
+    var done = (await svc.Report(userId, habitId, Checks.Manual(U(2026, 1, 7, 6)), U(2026, 1, 7, 6))).Get();
+    done!.Record.Date.Should().Be(new DateOnly(2026, 1, 6));
+  }
+
+  // DST change days in Los Angeles: one check of 25 h / 23 h that settles exactly once.
+  [SkippableTheory]
+  [InlineData(2026, 11, 1, 7, 2026, 11, 2, 8)]
+  [InlineData(2026, 3, 8, 8, 2026, 3, 9, 7)]
+  public async Task DstDay_OneCheck_SettlesOnce_OnePenalty(int y, int m, int d, int openHour,
+    int dy, int dm, int dd, int deadlineHour)
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (userId, charityId) = await SeedUser(LosAngeles);
+    var habitId = await SeedHabit(userId, charityId, ["Sunday"], LosAngeles);
+    var svc = Checks.Service(_db);
+    var opens = U(y, m, d, openHour);
+    var deadline = U(dy, dm, dd, deadlineHour);
+
+    await svc.OpenUpcoming(opens.AddHours(1));
+    var check = (await ChecksOf(habitId)).Single();
+    check.LocalDate.Should().Be(new DateOnly(y, m, d));
+    check.OpensAtUtc.Should().Be(opens);
+    check.DeadlineUtc.Should().Be(deadline);
+
+    (await svc.CloseDue(deadline.AddMinutes(29))).Get().Should().Be(0, "still inside the grace period");
+    (await svc.CloseDue(deadline.AddMinutes(31))).Get().Should().Be(1);
+    (await svc.CloseDue(deadline.AddMinutes(46))).Get().Should().Be(0);
+    await svc.DispatchEvents(deadline.AddHours(1));
+    await svc.DispatchEvents(deadline.AddHours(2));
+
+    var execution = (await ExecutionsOf(habitId)).Single();
+    execution.Status.Should().Be(HabitExecutionStatusData.Failed);
+    (await PenaltiesOf(userId)).Should().Be(1);
+  }
+
+  // Habits saved in two timezones now share the user's day: one freeze covers what's missing.
+  [SkippableFact]
+  public async Task HabitsFromTwoTimezones_OneDone_FreezeCoversTheOther_Once()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (userId, charityId) = await SeedUser(Singapore, freezes: 1);
+    var done = await SeedHabit(userId, charityId, ["Monday"], Singapore);
+    var missed = await SeedHabit(userId, charityId, ["Monday"], "America/New_York");
+    var svc = Checks.Service(_db);
+
+    await svc.OpenUpcoming(U(2026, 1, 5, 1));
+    (await ChecksOf(missed)).Single().LocalDate.Should().Be(new DateOnly(2026, 1, 5));
+    (await svc.Report(userId, done, Checks.Manual(U(2026, 1, 5, 2)), U(2026, 1, 5, 2))).Get().Should().NotBeNull();
+
+    (await svc.CloseDue(U(2026, 1, 5, 17))).Get().Should().Be(1);
+    (await svc.CloseDue(U(2026, 1, 6, 17))).Get().Should().Be(0);
+    await svc.DispatchEvents(U(2026, 1, 6, 17));
+
+    (await ExecutionsOf(done)).Single().Status.Should().Be(HabitExecutionStatusData.Completed);
+    (await ExecutionsOf(missed)).Single().Status.Should().Be(HabitExecutionStatusData.Frozen);
+    (await _db.UserProtections.AsNoTracking().SingleAsync(x => x.UserId == userId)).FreezeCurrent.Should().Be(0);
+    (await _db.FreezeConsumptions.CountAsync(x => x.UserId == userId)).Should().Be(1);
+    (await PenaltiesOf(userId)).Should().Be(0);
+  }
+
+  // A fully recorded day (e.g. written by a pod on the previous release) never spends a freeze.
+  [SkippableFact]
+  public async Task DayAlreadyRecordedElsewhere_IsAdopted_WithoutFreezeOrPenalty()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (userId, charityId) = await SeedUser("UTC", freezes: 2);
+    var habitId = await SeedHabit(userId, charityId, ["Monday"], "UTC");
+    var svc = Checks.Service(_db);
+    await svc.OpenUpcoming(U(2026, 1, 5, 1));
+    var versionId = await _db.HabitVersions.Where(v => v.HabitId == habitId).Select(v => v.Id).SingleAsync();
+    _db.HabitExecutions.Add(new HabitExecutionData
+    {
+      HabitVersionId = versionId, Date = new DateOnly(2026, 1, 5), Status = HabitExecutionStatusData.Skipped
+    });
+    await _db.SaveChangesAsync();
+
+    (await svc.CloseDue(U(2026, 1, 6, 1))).Get().Should().Be(0);
+    await svc.DispatchEvents(U(2026, 1, 6, 1));
+
+    var check = (await ChecksOf(habitId)).Single();
+    check.Status.Should().Be(HabitCheckStatusData.Skipped);
+    check.SettledBy.Should().Be("adopted");
+    (await ExecutionsOf(habitId)).Should().ContainSingle();
+    (await _db.UserProtections.AsNoTracking().SingleAsync(x => x.UserId == userId)).FreezeCurrent.Should().Be(2);
+    (await PenaltiesOf(userId)).Should().Be(0);
+  }
+
+  // Vacation protects every scheduled habit of the day before any freeze is considered.
+  [SkippableFact]
+  public async Task Vacation_ProtectsAllHabits_KeepsFreezes_NoPenalty()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (userId, charityId) = await SeedUser(Singapore, freezes: 2);
+    var a = await SeedHabit(userId, charityId, ["Monday"], Singapore);
+    var b = await SeedHabit(userId, charityId, ["Monday"], LosAngeles);
+    _db.VacationPeriods.Add(new VacationPeriodData
+    {
+      UserId = userId, StartDate = new DateOnly(2026, 1, 5), EndDate = new DateOnly(2026, 1, 5), Timezone = Singapore
+    });
+    await _db.SaveChangesAsync();
+    var svc = Checks.Service(_db);
+
+    await svc.OpenUpcoming(U(2026, 1, 5, 1));
+    (await svc.CloseDue(U(2026, 1, 5, 17))).Get().Should().Be(2);
+    await svc.DispatchEvents(U(2026, 1, 5, 17));
+
+    (await ExecutionsOf(a)).Single().Status.Should().Be(HabitExecutionStatusData.Vacation);
+    (await ExecutionsOf(b)).Single().Status.Should().Be(HabitExecutionStatusData.Vacation);
+    (await _db.UserProtections.AsNoTracking().SingleAsync(x => x.UserId == userId)).FreezeCurrent.Should().Be(2);
+    (await PenaltiesOf(userId)).Should().Be(0);
+  }
+
+  // Evidence that happened before the deadline lands if it arrives within the grace period.
+  [SkippableTheory]
+  [InlineData(20, true)]
+  [InlineData(40, false)]
+  public async Task LateEvidence_InsideGraceIsDone_OutsideIsMissed(int minutesAfterDeadline, bool expectDone)
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (userId, charityId) = await SeedUser("UTC");
+    var habitId = await SeedHabit(userId, charityId, ["Monday"], "UTC");
+    var svc = Checks.Service(_db);
+    var deadline = U(2026, 1, 6, 0);
+    await svc.OpenUpcoming(U(2026, 1, 5, 1));
+
+    var occurred = deadline.AddMinutes(-5);
+    var arrived = deadline.AddMinutes(minutesAfterDeadline);
+    var result = (await svc.Report(userId, habitId, Checks.Manual(occurred), arrived)).Get();
+    (result != null).Should().Be(expectDone);
+    if (expectDone) result!.Record.CompletedAt.Should().Be(occurred);
+
+    (await svc.CloseDue(deadline.AddMinutes(45))).Get().Should().Be(expectDone ? 0 : 1);
+    await svc.DispatchEvents(deadline.AddMinutes(45));
+    (await PenaltiesOf(userId)).Should().Be(expectDone ? 0 : 1);
+  }
+
+  [SkippableFact]
+  public async Task ReplayedEvidence_ChangesNothing()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (userId, charityId) = await SeedUser("UTC");
+    var habitId = await SeedHabit(userId, charityId, ["Monday", "Tuesday"], "UTC");
+    var svc = Checks.Service(_db);
+    var tap = new Evidence
+    {
+      ProofKey = "nfc", ExternalId = "tap-1", Verdict = EvidenceVerdict.Passed, OccurredAtUtc = U(2026, 1, 5, 10)
+    };
+
+    (await svc.Report(userId, habitId, tap, U(2026, 1, 5, 10))).Get().Should().NotBeNull();
+    (await svc.Report(userId, habitId, tap, U(2026, 1, 5, 10, 1))).Get().Should().BeNull();
+    // The same tap id replayed on Tuesday still changes nothing.
+    (await svc.Report(userId, habitId, tap with { OccurredAtUtc = U(2026, 1, 6, 10) }, U(2026, 1, 6, 10)))
+      .Get().Should().BeNull();
+
+    (await _db.HabitEvidence.CountAsync(x => x.HabitId == habitId)).Should().Be(1);
+    (await ExecutionsOf(habitId)).Should().ContainSingle();
+  }
+
+  // Failed evidence (e.g. a screen-time limit broken) settles the day as missed right away.
+  [SkippableFact]
+  public async Task FailedEvidence_MissesImmediately_StakeFiresOnce()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (userId, charityId) = await SeedUser("UTC");
+    var habitId = await SeedHabit(userId, charityId, ["Monday"], "UTC");
+    var svc = Checks.Service(_db);
+    var broken = new Evidence
+    {
+      ProofKey = "screen-time", ExternalId = "2026-01-05", Verdict = EvidenceVerdict.Failed,
+      OccurredAtUtc = U(2026, 1, 5, 14)
+    };
+
+    var missed = (await svc.Report(userId, habitId, broken, U(2026, 1, 5, 14))).Get();
+    missed!.Record.Status.Should().Be(Domain.Habit.ExecutionStatus.Failed);
+    (await ChecksOf(habitId)).Single().Status.Should().Be(HabitCheckStatusData.Missed);
+    (await svc.Report(userId, habitId, Checks.Manual(U(2026, 1, 5, 15)), U(2026, 1, 5, 15))).Get().Should().BeNull();
+
+    await svc.DispatchEvents(U(2026, 1, 5, 15));
+    (await svc.CloseDue(U(2026, 1, 6, 1))).Get().Should().Be(0);
+    await svc.DispatchEvents(U(2026, 1, 6, 1));
+    (await PenaltiesOf(userId)).Should().Be(1);
+  }
+
+  // Skips use the user's day, so they count in the month the user saw.
+  [SkippableFact]
+  public async Task SkipOnLastAndFirstDayOfMonth_CountsInEachMonth_WithoutStake()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (userId, charityId) = await SeedUser("UTC");
+    var habitId = await SeedHabit(userId, charityId,
+      ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"], "UTC");
+    var svc = Checks.Service(_db);
+
+    // No scheduler tick ran: Skip opens the day's check on demand.
+    (await svc.Skip(userId, habitId, "sick", U(2026, 1, 31, 23))).Get()!.Record.Date.Should().Be(new DateOnly(2026, 1, 31));
+    (await svc.Skip(userId, habitId, null, U(2026, 2, 1, 1))).Get()!.Record.Date.Should().Be(new DateOnly(2026, 2, 1));
+    (await svc.Skip(userId, habitId, null, U(2026, 2, 1, 2))).Get().Should().BeNull("the day is already skipped");
+    await svc.DispatchEvents(U(2026, 2, 1, 3));
+
+    var habits = new HabitRepository(_db, NullLogger<HabitRepository>.Instance);
+    (await habits.CountUserSkipsForMonth(userId, new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31))).Get().Should().Be(1);
+    (await habits.CountUserSkipsForMonth(userId, new DateOnly(2026, 2, 1), new DateOnly(2026, 2, 28))).Get().Should().Be(1);
+    (await PenaltiesOf(userId)).Should().Be(0);
+  }
+
+  // A habit disabled after its check opened owes nothing for that day.
+  [SkippableFact]
+  public async Task HabitDisabledAfterOpening_IsNotMissed()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (userId, charityId) = await SeedUser("UTC");
+    var habitId = await SeedHabit(userId, charityId, ["Monday"], "UTC");
+    var svc = Checks.Service(_db);
+    await svc.OpenUpcoming(U(2026, 1, 5, 1));
+    await _db.Habits.Where(h => h.Id == habitId).ExecuteUpdateAsync(s => s.SetProperty(h => h.Enabled, false));
+
+    (await svc.CloseDue(U(2026, 1, 6, 1))).Get().Should().Be(0);
+    (await ChecksOf(habitId)).Should().BeEmpty();
+    (await ExecutionsOf(habitId)).Should().BeEmpty();
+  }
+
+  private sealed class FlakyBinding : IStakeBinding
+  {
+    public int Calls;
+    public string BindingId => "flaky";
+    public bool AppliesTo(CheckEventPrincipal e) => true;
+
+    public Task<Result<Unit>> Deliver(CheckEventPrincipal e)
+    {
+      Calls++;
+      return Task.FromResult(Calls == 1 ? (Result<Unit>)new Exception("stake plugin down") : (Result<Unit>)new Unit());
+    }
+  }
+
+  // The outbox survives a crash between settle and dispatch, retries with backoff, and
+  // delivers to each binding at most once.
+  [SkippableFact]
+  public async Task Outbox_SurvivesRestart_RetriesFailedBinding_DeliversEachOnce()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (userId, charityId) = await SeedUser("UTC");
+    var habitId = await SeedHabit(userId, charityId, ["Monday"], "UTC");
+    await Checks.Service(_db).OpenUpcoming(U(2026, 1, 5, 1));
+    (await Checks.Service(_db).CloseDue(U(2026, 1, 6, 1))).Get().Should().Be(1);
+
+    // "Restart": a fresh context and service pick up the undelivered event.
+    await using var db2 = PenaltyIntegrationTests.NewContext(_conn!);
+    var flaky = new FlakyBinding();
+    var svc = Checks.Service(db2, flaky);
+    var t = U(2026, 1, 6, 2);
+    (await svc.DispatchEvents(t)).Get().Should().Be(0);
+    (await svc.DispatchEvents(t.AddMinutes(1))).Get().Should().Be(0, "backing off");
+    (await svc.DispatchEvents(t.AddMinutes(5))).Get().Should().Be(1);
+    (await svc.DispatchEvents(t.AddMinutes(30))).Get().Should().Be(0);
+
+    flaky.Calls.Should().Be(2);
+    (await PenaltiesOf(userId)).Should().Be(1);
+    var ev = await _db.CheckEvents.AsNoTracking().SingleAsync(e => e.HabitId == habitId);
+    ev.DispatchedAtUtc.Should().NotBeNull();
+    (await _db.CheckEventDeliveries.CountAsync(d => d.EventId == ev.Id)).Should().Be(2);
+  }
+}

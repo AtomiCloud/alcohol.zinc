@@ -4,102 +4,50 @@ namespace Domain.Habit;
 
 public class StreakService(IStreakRepository repo) : IStreakService
 {
+  // One timezone (the user's) drives today, the week and the time left. Each day's status
+  // comes from its execution's own date, so past days never move when the user travels.
   public Task<Result<HabitStreakStatus>> GetStatusForHabit(
     string userId,
     Guid habitId,
-    string userTimezone,
-    string habitTimezone,
+    string timezone,
     string[] daysOfWeek,
+    TimeOnly deadlineTime,
     DateTime? nowUtc = null)
   {
       var utcNow = nowUtc ?? DateTime.UtcNow;
-      var userToday = StreakCalculator.TodayFor(userTimezone, utcNow);
-      var (weekStart, weekEnd) = StreakCalculator.WeekSundayBounds(userToday);
+      var today = StreakCalculator.TodayFor(timezone, utcNow);
+      var (weekStart, weekEnd) = StreakCalculator.WeekSundayBounds(today);
 
-      var userTz = TimeZoneInfo.FindSystemTimeZoneById(userTimezone);
-      var habitTz = TimeZoneInfo.FindSystemTimeZoneById(habitTimezone);
-
-      // Weekly history stays user-local; actionable today follows the habit's date.
-      var weekStartUtc = TimeZoneInfo.ConvertTimeToUtc(new DateTime(weekStart.Year, weekStart.Month, weekStart.Day, 0, 0, 0, DateTimeKind.Unspecified), userTz);
-      var weekEndUtc = TimeZoneInfo.ConvertTimeToUtc(new DateTime(weekEnd.Year, weekEnd.Month, weekEnd.Day, 23, 59, 59, DateTimeKind.Unspecified), userTz);
-
-      // streaks in habit-local
-      var habitToday = StreakCalculator.TodayFor(habitTimezone, utcNow);
-
-      return repo.GetCurrentStreak(habitId, habitToday)
+      return repo.GetCurrentStreak(habitId, today)
         .ThenAwait(current => repo.GetMaxStreak(habitId)
           .Then(max => new { current, max }, Errors.MapNone))
-        .ThenAwait(ctx => repo.IsCompleteOn(habitId, habitToday)
-          .Then(doneToday => new { ctx.current, ctx.max, doneToday }, Errors.MapNone))
-        .ThenAwait(ctx => repo.GetCompletionsBetweenUtc(habitId, weekStartUtc, weekEndUtc)
-          .Then(completedUtc => new { ctx.current, ctx.max, ctx.doneToday, completedUtc }, Errors.MapNone))
-        .ThenAwait(ctx =>
-        {
-          // Expand user week into statuses
-          var habitApproxStart = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(weekStartUtc, DateTimeKind.Utc), habitTz).Date.AddDays(-1);
-          var habitApproxEnd = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(weekEndUtc, DateTimeKind.Utc), habitTz).Date.AddDays(1);
-          return repo.GetExecutionsInHabitDateRange(habitId, DateOnly.FromDateTime(habitApproxStart), DateOnly.FromDateTime(habitApproxEnd))
-            .Then(execs =>
-            {
-              var weekStatuses = InitWeekStatuses(daysOfWeek);
+        .ThenAwait(ctx => repo.GetExecutionsInHabitDateRange(habitId, weekStart, weekEnd)
+          .Then(execs =>
+          {
+            var weekStatuses = InitWeekStatuses(daysOfWeek);
+            foreach (var e in execs)
+              weekStatuses[e.Date.DayOfWeek] = MapStatus(e.Status);
 
-              // successes by CompletedAt mapped to user local day
-              foreach (var ts in ctx.completedUtc)
-              {
-                var local = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(ts, DateTimeKind.Utc), userTz);
-                var d = DateOnly.FromDateTime(local);
-                if (d >= weekStart && d <= weekEnd)
-                {
-                  weekStatuses[local.DayOfWeek] = HabitDayStatus.Succeeded;
-                }
-              }
+            var todayExecution = execs.FirstOrDefault(e => e.Date == today);
+            var doneToday = todayExecution?.Status == ExecutionStatus.Completed;
+            var todayStatus = todayExecution == null ? HabitDayStatus.NotApplicable : MapStatus(todayExecution.Status);
 
-              foreach (var e in execs)
-              {
-                if (e.Status == ExecutionStatus.Completed) continue;
+            var tz = TimeZoneInfo.FindSystemTimeZoneById(timezone);
+            var (_, deadlineUtc) = Check.CheckWindow.For(today, tz, deadlineTime);
+            var minutesLeft = (int)Math.Max(0, Math.Round((deadlineUtc - utcNow).TotalMinutes));
 
-                var eodLocalHabit = new DateTime(e.Date.Year, e.Date.Month, e.Date.Day, 23, 59, 0);
-                var eodUtc = TimeZoneInfo.ConvertTimeToUtc(eodLocalHabit, habitTz);
-                var userLocalAtEod = TimeZoneInfo.ConvertTimeFromUtc(eodUtc, userTz);
-                var userLocalDate = DateOnly.FromDateTime(userLocalAtEod);
-                if (userLocalDate < weekStart || userLocalDate > weekEnd) continue;
-
-                var dow = userLocalAtEod.DayOfWeek;
-                if (weekStatuses[dow] == HabitDayStatus.Succeeded) continue;
-
-                var mapped = MapStatus(e.Status);
-
-                if (mapped == HabitDayStatus.Vacation || mapped == HabitDayStatus.Frozen || mapped == HabitDayStatus.Skip
-                  || weekStatuses[dow] == HabitDayStatus.NotApplicable)
-                {
-                  weekStatuses[dow] = mapped;
-                }
-              }
-
-              // habit-local time left until EOD 23:59
-              var habitNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utcNow, DateTimeKind.Utc), habitTz);
-              var eodLocal = new DateTime(habitNow.Year, habitNow.Month, habitNow.Day, 23, 59, 0);
-              if (habitNow > eodLocal) eodLocal = eodLocal.AddDays(1);
-              var minutesLeft = (int)Math.Max(0, Math.Round((eodLocal - habitNow).TotalMinutes));
-
-              var todayExecution = execs.FirstOrDefault(e => e.Date == habitToday);
-              var todayStatus = ctx.doneToday
-                ? HabitDayStatus.Succeeded
-                : todayExecution == null ? HabitDayStatus.NotApplicable : MapStatus(todayExecution.Status);
-
-              return new HabitStreakStatus(
-                ctx.current,
-                ctx.max,
-                ctx.doneToday,
-                weekStatuses,
-                weekStart,
-                weekEnd,
-                minutesLeft,
-                habitToday,
-                todayStatus
-              );
-            }, Errors.MapNone);
-        });
+            return new HabitStreakStatus(
+              ctx.current,
+              ctx.max,
+              doneToday,
+              weekStatuses,
+              weekStart,
+              weekEnd,
+              minutesLeft,
+              today,
+              todayStatus
+            );
+          }, Errors.MapNone));
 
       static HabitDayStatus MapStatus(ExecutionStatus status) => status switch
       {

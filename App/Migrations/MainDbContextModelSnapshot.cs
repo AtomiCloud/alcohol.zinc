@@ -159,6 +159,178 @@ namespace App.Migrations
                     b.ToTable("ExternalIds");
                 });
 
+            modelBuilder.Entity("App.Modules.Check.Data.CheckEventData", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("CheckId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DispatchedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ExecutionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("HabitId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<DateTime>("NextAttemptAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<byte>("Outcome")
+                        .HasColumnType("smallint");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CheckId");
+
+                    b.HasIndex("DispatchedAtUtc", "NextAttemptAtUtc");
+
+                    b.ToTable("CheckEvents");
+                });
+
+            modelBuilder.Entity("App.Modules.Check.Data.CheckEventDeliveryData", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BindingId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("DeliveredAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId", "BindingId")
+                        .IsUnique();
+
+                    b.ToTable("CheckEventDeliveries");
+                });
+
+            modelBuilder.Entity("App.Modules.Check.Data.HabitCheckData", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("DeadlineUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ExecutionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("HabitId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("LocalDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("OpensAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("SettledAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SettledBy")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<byte>("Status")
+                        .HasColumnType("smallint");
+
+                    b.Property<string>("Timezone")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExecutionId")
+                        .IsUnique();
+
+                    b.HasIndex("HabitId", "LocalDate")
+                        .IsUnique();
+
+                    b.HasIndex("Status", "DeadlineUtc");
+
+                    b.ToTable("HabitChecks");
+                });
+
+            modelBuilder.Entity("App.Modules.Check.Data.HabitEvidenceData", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CheckId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Data")
+                        .HasMaxLength(4096)
+                        .HasColumnType("character varying(4096)");
+
+                    b.Property<string>("ExternalId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid>("HabitId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("Passed")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ProofKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("ReceivedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CheckId");
+
+                    b.HasIndex("HabitId", "ProofKey", "ExternalId")
+                        .IsUnique();
+
+                    b.ToTable("HabitEvidence");
+                });
+
             modelBuilder.Entity("App.Modules.Configurations.Data.ConfigurationData", b =>
                 {
                     b.Property<Guid>("Id")
@@ -254,6 +426,9 @@ namespace App.Migrations
                     b.Property<bool>("Enabled")
                         .HasColumnType("boolean");
 
+                    b.Property<Guid?>("RoutineId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("UserId")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -263,6 +438,8 @@ namespace App.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("RoutineId");
 
                     b.HasIndex("UserId");
 
@@ -315,6 +492,9 @@ namespace App.Migrations
                     b.Property<string[]>("DaysOfWeek")
                         .IsRequired()
                         .HasColumnType("text[]");
+
+                    b.Property<TimeOnly>("DeadlineTime")
+                        .HasColumnType("time without time zone");
 
                     b.Property<Guid>("HabitId")
                         .HasColumnType("uuid");
@@ -611,6 +791,35 @@ namespace App.Migrations
                     b.ToTable("UserProtections");
                 });
 
+            modelBuilder.Entity("App.Modules.Routine.Data.RoutineData", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("Routines");
+                });
+
             modelBuilder.Entity("App.Modules.Subscription.Data.UserSubscriptionData", b =>
                 {
                     b.Property<Guid>("Id")
@@ -762,6 +971,51 @@ namespace App.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("App.Modules.Check.Data.CheckEventData", b =>
+                {
+                    b.HasOne("App.Modules.Check.Data.HabitCheckData", null)
+                        .WithMany()
+                        .HasForeignKey("CheckId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("App.Modules.Check.Data.CheckEventDeliveryData", b =>
+                {
+                    b.HasOne("App.Modules.Check.Data.CheckEventData", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("App.Modules.Check.Data.HabitCheckData", b =>
+                {
+                    b.HasOne("App.Modules.HabitExecution.Data.HabitExecutionData", "Execution")
+                        .WithMany()
+                        .HasForeignKey("ExecutionId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("App.Modules.Habit.Data.HabitData", "Habit")
+                        .WithMany()
+                        .HasForeignKey("HabitId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Execution");
+
+                    b.Navigation("Habit");
+                });
+
+            modelBuilder.Entity("App.Modules.Check.Data.HabitEvidenceData", b =>
+                {
+                    b.HasOne("App.Modules.Check.Data.HabitCheckData", null)
+                        .WithMany()
+                        .HasForeignKey("CheckId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("App.Modules.Configurations.Data.ConfigurationData", b =>
                 {
                     b.HasOne("App.Modules.Charities.Data.CharityData", "Charity")
@@ -782,6 +1036,16 @@ namespace App.Migrations
                         .IsRequired();
 
                     b.Navigation("Charity");
+                });
+
+            modelBuilder.Entity("App.Modules.Habit.Data.HabitData", b =>
+                {
+                    b.HasOne("App.Modules.Routine.Data.RoutineData", "Routine")
+                        .WithMany("Habits")
+                        .HasForeignKey("RoutineId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Routine");
                 });
 
             modelBuilder.Entity("App.Modules.HabitExecution.Data.HabitExecutionData", b =>
@@ -955,6 +1219,11 @@ namespace App.Migrations
             modelBuilder.Entity("App.Modules.Payment.Data.PaymentCustomerData", b =>
                 {
                     b.Navigation("Consents");
+                });
+
+            modelBuilder.Entity("App.Modules.Routine.Data.RoutineData", b =>
+                {
+                    b.Navigation("Habits");
                 });
 #pragma warning restore 612, 618
         }

@@ -1,5 +1,6 @@
 using App.Modules.HabitExecution.Data;
 using App.Modules.HabitVersion.Data;
+using App.Modules.Routine.Data;
 using App.StartUp.Database;
 using CSharp_Result;
 using Domain.Exceptions;
@@ -10,44 +11,6 @@ namespace App.Modules.Habit.Data
 {
     public class HabitRepository(MainDbContext db, ILogger<HabitRepository> logger) : IHabitRepository
     {
-        public async Task<Result<List<string>>> GetDistinctTimezonesForEnabledHabits()
-        {
-            try
-            {
-                var tzs = await (from h in db.Habits
-                                 join hv in db.HabitVersions on new { h.Id, h.Version } equals new { Id = hv.HabitId, hv.Version }
-                                 where h.Enabled == true && h.DeletedAt == null
-                                 select hv.Timezone)
-                    .Distinct()
-                    .AsNoTracking()
-                    .ToListAsync();
-                return tzs;
-            }
-            catch (Exception e)
-            {
-                logger.LogError(e, "GetDistinctTimezonesForEnabledHabits failed");
-                throw;
-            }
-        }
-
-        public async Task<Result<List<Guid>>> GetEnabledHabitIdsByTimezone(string timezone)
-        {
-            try
-            {
-                var ids = await (from h in db.Habits
-                                 join hv in db.HabitVersions on new { h.Id, h.Version } equals new { Id = hv.HabitId, hv.Version }
-                                 where h.Enabled == true && h.DeletedAt == null && hv.Timezone == timezone
-                                 select h.Id)
-                    .Distinct()
-                    .ToListAsync();
-                return ids;
-            }
-            catch (Exception e)
-            {
-                logger.LogError(e, "GetEnabledHabitIdsByTimezone failed for {Timezone}", timezone);
-                throw;
-            }
-        }
         public async Task<Result<int>> CountHabitsForUser(string userId)
         {
             try
@@ -83,91 +46,6 @@ namespace App.Modules.Habit.Data
             }
         }
 
-        public async Task<Result<List<HabitVersionPrincipal>>> GetActiveHabitVersionsByIds(List<Guid> habitIds, DateOnly date)
-        {
-            try
-            {
-                var dayOfWeek = date.DayOfWeek.ToString();
-                var data = await db.HabitVersions
-                    .FromSqlRaw(@"
-                        SELECT hv.* FROM ""HabitVersions"" hv
-                        JOIN ""Habits"" h ON h.""Id"" = hv.""HabitId"" AND h.""Version"" = hv.""Version""
-                        WHERE h.""Id"" = ANY({0})
-                          AND h.""DeletedAt"" IS NULL
-                          AND h.""Enabled"" = true
-                          AND hv.""DaysOfWeek"" @> ARRAY[{1}]", habitIds, dayOfWeek)
-                    .AsNoTracking()
-                    .ToListAsync();
-                return data.Select(x => x.ToPrincipal()).ToList();
-            }
-            catch (Exception e)
-            {
-                logger.LogError(e, "GetActiveHabitVersionsByIds failed");
-                throw;
-            }
-        }
-        public async Task<Result<int>> CreateExecutionsForVersionsWithStatus(List<Guid> habitVersionIds, DateOnly date, Domain.Habit.ExecutionStatus status)
-        {
-            try
-            {
-                if (habitVersionIds.Count == 0) return 0;
-
-                var statusData = status.ToDataStatus();
-
-                var affectedRows = await db.Database.ExecuteSqlAsync($@"
-                    INSERT INTO ""HabitExecutions"" (""Id"", ""HabitVersionId"", ""Date"", ""Status"", ""PaymentProcessed"")
-                    SELECT gen_random_uuid(), hv.""Id"", {date}, {(int)statusData}, false
-                    FROM ""HabitVersions"" hv
-                    WHERE hv.""Id"" = ANY({habitVersionIds})
-                      AND NOT EXISTS (
-                          SELECT 1 FROM ""HabitExecutions"" he
-                          JOIN ""HabitVersions"" settled ON settled.""Id"" = he.""HabitVersionId""
-                          WHERE settled.""HabitId"" = hv.""HabitId"" AND he.""Date"" = {date}
-                      )
-                ");
-
-                return affectedRows;
-            }
-            catch (Exception e)
-            {
-                logger.LogError(e, "CreateExecutionsForVersionsWithStatus failed");
-                throw;
-            }
-        }
-
-        public async Task<Result<List<HabitPrincipal>>> GetHabitsByIds(List<Guid> habitIds)
-        {
-            try
-            {
-                var items = await db.Habits.AsNoTracking().Where(x => habitIds.Contains(x.Id) && x.DeletedAt == null).ToListAsync();
-                return items.Select(x => x.ToPrincipal()).ToList();
-            }
-            catch (Exception e)
-            {
-                logger.LogError(e, "GetHabitsByIds failed");
-                throw;
-            }
-        }
-        public async Task<Result<bool>> HasMissingExecutionsForVersions(List<Guid> habitVersionIds, DateOnly date)
-        {
-          try
-          {
-            if (habitVersionIds.Count == 0) return false;
-
-            var any = await db.HabitVersions.AsNoTracking()
-              .AnyAsync(hv => habitVersionIds.Contains(hv.Id)
-                              && !(from he in db.HabitExecutions
-                                   join settled in db.HabitVersions on he.HabitVersionId equals settled.Id
-                                   where settled.HabitId == hv.HabitId && he.Date == date
-                                   select he.Id).Any());
-            return any;
-          }
-          catch (Exception e)
-          {
-            logger.LogError(e, "HasMissingExecutionsForVersions failed");
-            throw;
-          }
-        }
         public async Task<Result<List<HabitVersionPrincipal>>> GetActiveHabitVersions(string userId, DateOnly date)
         {
             try
@@ -293,19 +171,44 @@ namespace App.Modules.Habit.Data
             }
         }
 
-        public async Task<Result<HabitVersionPrincipal>> Create(string userId, HabitVersionRecord versionRecord)
+        public async Task<Result<HabitVersionPrincipal>> Create(string userId, HabitVersionRecord versionRecord, Guid? routineId)
         {
             await using var transaction = await db.Database.BeginTransactionAsync();
             try
             {
-                logger.LogInformation("Creating habit for UserId: {UserId}, Task: {Task}", userId, versionRecord.Task);
-                
+                logger.LogInformation("Creating habit for UserId: {UserId}, Task: {Task}, RoutineId: {RoutineId}",
+                    userId, versionRecord.Task, routineId);
+
+                Guid resolvedRoutineId;
+                if (routineId != null)
+                {
+                    // A supplied routine must be the user's own, live routine
+                    var owned = await db.Routines
+                        .AnyAsync(r => r.Id == routineId && r.UserId == userId && r.DeletedAt == null);
+                    if (!owned)
+                    {
+                        logger.LogWarning("Routine {RoutineId} not found for UserId: {UserId}", routineId, userId);
+                        await transaction.RollbackAsync();
+                        return new NotFoundException("Routine Not Found", typeof(Domain.Routine.RoutinePrincipal),
+                            routineId.Value.ToString());
+                    }
+                    resolvedRoutineId = routineId.Value;
+                }
+                else
+                {
+                    // No routine supplied: the habit gets its own one-habit routine
+                    var routineData = new Domain.Routine.RoutineRecord { Name = versionRecord.Task }.ToData(userId);
+                    db.Routines.Add(routineData);
+                    resolvedRoutineId = routineData.Id;
+                }
+
                 // Create main habit record with version 1
                 var habitData = new HabitData
                 {
                     UserId = userId,
                     Version = 1,
-                    Enabled = true  // New habits are enabled by default
+                    Enabled = true,  // New habits are enabled by default
+                    RoutineId = resolvedRoutineId
                 };
                 db.Habits.Add(habitData);
                 
@@ -395,62 +298,25 @@ namespace App.Modules.Habit.Data
                 // forever (409 for other users, 404 for the owner).
                 await db.NfcTags.Where(x => x.HabitId == habitId).ExecuteDeleteAsync();
 
+                // A routine lives as long as it has a live habit: soft delete the
+                // habit's routine when this was its last non-deleted habit. One
+                // statement, so the emptiness check and the update see the same state.
+                await db.Database.ExecuteSqlAsync($@"
+                    UPDATE ""Routines"" r SET ""DeletedAt"" = {DateTime.UtcNow}
+                    WHERE r.""Id"" = (SELECT h.""RoutineId"" FROM ""Habits"" h WHERE h.""Id"" = {habitId})
+                      AND r.""DeletedAt"" IS NULL
+                      AND NOT EXISTS (
+                          SELECT 1 FROM ""Habits"" live
+                          WHERE live.""RoutineId"" = r.""Id"" AND live.""DeletedAt"" IS NULL
+                      )
+                ");
+
                 logger.LogInformation("Soft deleted habit for HabitId: {HabitId}", habitId);
                 return new Unit();
             }
             catch (Exception e)
             {
                 logger.LogError(e, "Failed to delete habit for HabitId: {HabitId}, UserId: {UserId}", habitId, userId);
-                throw;
-            }
-        }
-
-        public async Task<Result<List<FailedExecutionRow>>> CreateFailedExecutions(List<Guid> habitIds, DateOnly date)
-        {
-            try
-            {
-                logger.LogInformation("Creating failed executions for {HabitCount} habits on date: {Date}", habitIds.Count, date);
-
-                // Get day of week from the provided date
-                var dayOfWeek = date.DayOfWeek.ToString();
-                logger.LogInformation("Creating failures for habits scheduled on: {DayOfWeek}", dayOfWeek);
-
-                // A settled habit/date stays settled when its blueprint is edited.
-                // Keep the original execution/version for financial audit.
-                await db.Database.ExecuteSqlAsync($@"
-                    INSERT INTO ""HabitExecutions"" (""Id"", ""HabitVersionId"", ""Date"", ""Status"", ""PaymentProcessed"")
-                    SELECT gen_random_uuid(), hv.""Id"", {date}, {(int)App.Modules.HabitExecution.Data.HabitExecutionStatusData.Failed}, false
-                    FROM ""Habits"" h
-                    JOIN ""HabitVersions"" hv ON h.""Id"" = hv.""HabitId"" AND h.""Version"" = hv.""Version""
-                    WHERE h.""Id"" = ANY({habitIds})
-                      AND h.""DeletedAt"" IS NULL
-                      AND h.""Enabled"" = true
-                      AND hv.""DaysOfWeek"" @> ARRAY[{dayOfWeek}]
-                      AND NOT EXISTS (
-                          SELECT 1 FROM ""HabitExecutions"" he
-                          JOIN ""HabitVersions"" settled ON settled.""Id"" = he.""HabitVersionId""
-                          WHERE settled.""HabitId"" = hv.""HabitId"" AND he.""Date"" = {date}
-                      )
-                ");
-
-                // Re-project the failed-this-date executions so the service can enqueue penalties.
-                // Mirror StreakRepository join+projection shape.
-                var rows = await (from he in db.HabitExecutions
-                                  join hv in db.HabitVersions on he.HabitVersionId equals hv.Id
-                                  join h in db.Habits on new { hv.HabitId, hv.Version } equals new { HabitId = h.Id, h.Version }
-                                  where he.Date == date
-                                        && he.Status == App.Modules.HabitExecution.Data.HabitExecutionStatusData.Failed
-                                        && habitIds.Contains(h.Id)
-                                  select new FailedExecutionRow(he.Id, h.UserId, hv.CharityId, hv.StakeCents, hv.StakeCurrency, hv.RatioBasisPoints))
-                    .AsNoTracking()
-                    .ToListAsync();
-
-                logger.LogInformation("Created {Count} failed executions for date: {Date} ({DayOfWeek})", rows.Count, date, dayOfWeek);
-                return rows;
-            }
-            catch (Exception e)
-            {
-                logger.LogError(e, "Failed to create failed executions for date: {Date}", date);
                 throw;
             }
         }
@@ -467,140 +333,6 @@ namespace App.Modules.Habit.Data
             catch (Exception e)
             {
                 logger.LogError(e, "Failed to get task name for execution: {ExecutionId}", executionId);
-                throw;
-            }
-        }
-
-        public async Task<Result<DateOnly>> GetUserCurrentDate(string userId, Guid habitVersionId)
-        {
-            try
-            {
-                logger.LogInformation("Getting current date for UserId: {UserId}", userId);
-
-                // Get user's timezone from their configuration
-                var habitLevelTimezoneConfig = await (from hv in db.HabitVersions
-                                      where hv.Id == habitVersionId
-                                      select hv.Timezone).AsNoTracking().FirstOrDefaultAsync();
-
-                if (string.IsNullOrEmpty(habitLevelTimezoneConfig))
-                {
-                  var ex = new NotFoundException("HabitVersion not found",
-                    typeof(HabitExecutionPrincipal), habitVersionId.ToString());
-                  logger.LogError(ex, "GetUserCurrentDate failed to find HabitVersion");
-
-                  return ex;
-                }
-                var habitLevelTimezone = TimeZoneInfo.FindSystemTimeZoneById(habitLevelTimezoneConfig);
-                var userDateTime = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, habitLevelTimezone);
-                var userDate = DateOnly.FromDateTime(userDateTime);
-
-                logger.LogInformation("Current date for UserId: {UserId} in timezone {Timezone} is {Date}",
-                    userId, habitLevelTimezone, userDate);
-                return userDate;
-            }
-            catch (Exception e)
-            {
-                logger.LogError(e, "Failed to get current date for UserId: {UserId}", userId);
-                throw;
-            }
-        }
-
-        public async Task<Result<HabitExecutionPrincipal>> CompleteHabit(string userId, Guid habitVersionId, DateOnly date, string? notes)
-        {
-            try
-            {
-                logger.LogInformation("Completing habit for UserId: {UserId}, HabitId: {HabitId}, Date: {Date}", userId, habitVersionId, date);
-
-                // Get day of week from the provided date
-                var dayOfWeek = date.DayOfWeek.ToString();
-                logger.LogInformation("Validating habit is scheduled for: {DayOfWeek}", dayOfWeek);
-
-                // Atomic INSERT ... SELECT to get current version and create execution
-                var affectedRows = await db.Database.ExecuteSqlAsync($@"
-                    INSERT INTO ""HabitExecutions"" (""Id"", ""HabitVersionId"", ""Date"", ""Status"", ""CompletedAt"", ""Notes"", ""PaymentProcessed"")
-                    SELECT gen_random_uuid(), {habitVersionId}, {date}, {(int)App.Modules.HabitExecution.Data.HabitExecutionStatusData.Completed}, {DateTime.UtcNow}, {notes}, false
-                    FROM ""HabitVersions"" hv
-                    JOIN ""Habits"" h ON h.""Id"" = hv.""HabitId"" AND h.""Version"" = hv.""Version""
-                    WHERE hv.""Id"" = {habitVersionId}
-                      AND hv.""DaysOfWeek"" @> ARRAY[{dayOfWeek}]
-                      AND h.""UserId"" = {userId}
-                      AND h.""DeletedAt"" IS NULL
-                      AND h.""Enabled"" = true
-                      AND NOT EXISTS (
-                          SELECT 1 FROM ""HabitExecutions"" he
-                          JOIN ""HabitVersions"" settled ON settled.""Id"" = he.""HabitVersionId""
-                          WHERE settled.""HabitId"" = hv.""HabitId"" AND he.""Date"" = {date}
-                      )
-                ");
-
-                if (affectedRows == 0)
-                {
-                    logger.LogWarning("No habit execution created - habit not found, not enabled, not scheduled for {DayOfWeek}, or already completed " +
-                                      "for HabitVersionId: {HabitVersionId}, Date: {Date}", dayOfWeek, habitVersionId, date);
-                    return new NotFoundException("Habit not found, not enabled, not scheduled for this day, or already completed",
-                      typeof(HabitExecutionPrincipal), habitVersionId.ToString());
-                }
-
-                // Get the created execution to return
-                var execution = await (from hv in db.HabitVersions
-                                     join h in db.Habits on hv.HabitId equals h.Id
-                                     join he in db.HabitExecutions on hv.Id equals he.HabitVersionId
-                                     where hv.Id == habitVersionId && h.UserId == userId && he.Date == date
-                                     select he).AsNoTracking().FirstOrDefaultAsync();
-
-                logger.LogInformation("Habit completed for HabitVersionId: {HabitVersionId}, Date: {Date}", habitVersionId, date);
-                return execution!.ToPrincipal();
-            }
-            catch (Exception e)
-            {
-                logger.LogError(e, "Failed to complete habit for HabitVersionId: {HabitVersionId}, UserId: {UserId}, Date: {Date}", habitVersionId, userId, date);
-                throw;
-            }
-        }
-
-        public async Task<Result<HabitExecutionPrincipal>> SkipHabit(string userId, Guid habitVersionId, DateOnly date, string? notes)
-        {
-            try
-            {
-                logger.LogInformation("Skipping habit for UserId: {UserId}, HabitVersionId: {HabitVersionId}, Date: {Date}", userId, habitVersionId, date);
-
-                var dayOfWeek = date.DayOfWeek.ToString();
-
-                var affectedRows = await db.Database.ExecuteSqlAsync($@"
-                    INSERT INTO ""HabitExecutions"" (""Id"", ""HabitVersionId"", ""Date"", ""Status"", ""CompletedAt"", ""Notes"", ""PaymentProcessed"")
-                    SELECT gen_random_uuid(), {habitVersionId}, {date}, {(int)App.Modules.HabitExecution.Data.HabitExecutionStatusData.Skipped}, NULL, {notes}, false
-                    FROM ""HabitVersions"" hv
-                    JOIN ""Habits"" h ON h.""Id"" = hv.""HabitId"" AND h.""Version"" = hv.""Version""
-                    WHERE hv.""Id"" = {habitVersionId}
-                      AND hv.""DaysOfWeek"" @> ARRAY[{dayOfWeek}]
-                      AND h.""UserId"" = {userId}
-                      AND h.""DeletedAt"" IS NULL
-                      AND h.""Enabled"" = true
-                      AND NOT EXISTS (
-                          SELECT 1 FROM ""HabitExecutions"" he
-                          JOIN ""HabitVersions"" settled ON settled.""Id"" = he.""HabitVersionId""
-                          WHERE settled.""HabitId"" = hv.""HabitId"" AND he.""Date"" = {date}
-                      )
-                ");
-
-                if (affectedRows == 0)
-                {
-                    logger.LogWarning("No habit skip created - habit not found, not enabled, not scheduled for {DayOfWeek}, or already has execution for HabitVersionId: {HabitVersionId}, Date: {Date}", dayOfWeek, habitVersionId, date);
-                    return new NotFoundException("Habit not found, not enabled, not scheduled for this day, or already has execution",
-                      typeof(HabitExecutionPrincipal), habitVersionId.ToString());
-                }
-
-                var execution = await (from hv in db.HabitVersions
-                                     join h in db.Habits on hv.HabitId equals h.Id
-                                     join he in db.HabitExecutions on hv.Id equals he.HabitVersionId
-                                     where hv.Id == habitVersionId && h.UserId == userId && he.Date == date
-                                     select he).AsNoTracking().FirstOrDefaultAsync();
-
-                return execution!.ToPrincipal();
-            }
-            catch (Exception e)
-            {
-                logger.LogError(e, "Failed to skip habit for HabitVersionId: {HabitVersionId}, UserId: {UserId}, Date: {Date}", habitVersionId, userId, date);
                 throw;
             }
         }
@@ -635,6 +367,20 @@ namespace App.Modules.Habit.Data
       catch (Exception e)
       {
         logger.LogError(e, "Failed searching habit executions for UserId: {UserId}, Search: {@Search}", userId, habitExecutionSearch);
+        throw;
+      }
+    }
+
+    public async Task<Result<HabitVersionPrincipal?>> GetVersion(Guid habitVersionId)
+    {
+      try
+      {
+        var data = await db.HabitVersions.AsNoTracking().FirstOrDefaultAsync(x => x.Id == habitVersionId);
+        return data?.ToPrincipal();
+      }
+      catch (Exception e)
+      {
+        logger.LogError(e, "Failed to get habit version {HabitVersionId}", habitVersionId);
         throw;
       }
     }

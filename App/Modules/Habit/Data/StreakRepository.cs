@@ -76,24 +76,6 @@ public class StreakRepository(MainDbContext db, ILogger<StreakRepository> logger
     }
   }
 
-  public async Task<Result<bool>> IsCompleteOn(Guid habitId, DateOnly date)
-  {
-    try
-    {
-      var done = await (from he in db.HabitExecutions
-                        join hv in db.HabitVersions on he.HabitVersionId equals hv.Id
-                        where hv.HabitId == habitId && he.Date == date && he.Status == App.Modules.HabitExecution.Data.HabitExecutionStatusData.Completed
-                        select he.Id)
-        .AnyAsync();
-      return done;
-    }
-    catch (Exception e)
-    {
-      logger.LogError(e, "IsCompleteOn failed for HabitId={HabitId}", habitId);
-      throw;
-    }
-  }
-
   public async Task<Result<HashSet<DateOnly>>> GetCompletedInRange(Guid habitId, DateOnly start, DateOnly end)
   {
     try
@@ -111,28 +93,6 @@ public class StreakRepository(MainDbContext db, ILogger<StreakRepository> logger
     catch (Exception e)
     {
       logger.LogError(e, "GetCompletedInRange failed for HabitId={HabitId}", habitId);
-      throw;
-    }
-  }
-
-  public async Task<Result<List<DateTime>>> GetCompletionsBetweenUtc(Guid habitId, DateTime startUtc, DateTime endUtc)
-  {
-    try
-    {
-      var items = await (from he in db.HabitExecutions
-                         join hv in db.HabitVersions on he.HabitVersionId equals hv.Id
-                        where hv.HabitId == habitId
-                               && he.CompletedAt != null
-                               && he.CompletedAt >= startUtc
-                               && he.CompletedAt <= endUtc
-                               && he.Status == App.Modules.HabitExecution.Data.HabitExecutionStatusData.Completed
-                         select he.CompletedAt!.Value)
-        .ToListAsync();
-      return items;
-    }
-    catch (Exception e)
-    {
-      logger.LogError(e, "GetCompletionsBetweenUtc failed for HabitId={HabitId}", habitId);
       throw;
     }
   }

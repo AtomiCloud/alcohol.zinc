@@ -28,7 +28,7 @@ namespace UnitTest.Protection;
 //
 // Therefore the HAPPY path (skip succeeds) and SAD path (skip beyond limit
 // rejected) are unit-tested at the layer that actually owns each behaviour:
-//   - SkipHabit happy path        -> HabitService (delegation + correct date)
+//   - SkipHabit happy path        -> IntTest/Check/CheckScenarioTests.cs (CheckService.Skip)
 //   - skip-within-limit allowed   -> EntitlementService.EnsureSkipsAllowed
 //   - skip-beyond-limit rejected  -> EntitlementService.EnsureSkipsAllowed
 //
@@ -38,55 +38,6 @@ namespace UnitTest.Protection;
 public class SkipLimitTests
 {
   private const string UserId = "user-1";
-
-  private static HabitService BuildHabitService(FakeHabitRepository repo)
-  {
-    var vac = new FakeVacationRepository();
-    var prot = new FakeProtectionRepository(freezeBalance: 0);
-    var ent = new FakeEntitlementService();
-    var penaltyRepo = new FakePenaltyRepository();
-    return new HabitService(repo, vac, prot, ent, penaltyRepo, NullLogger<HabitService>.Instance);
-  }
-
-  // ---------------------------------------------------------------------------
-  // SKIP CRUD — happy path on the domain service.
-  // SkipHabit must resolve the user-local current date and delegate to the repo
-  // with exactly the userId/version/date/notes it was given.
-  // ---------------------------------------------------------------------------
-  [Fact]
-  public async Task SkipHabit_HappyPath_DelegatesToRepoWithUserLocalDate()
-  {
-    var hvId = Guid.NewGuid();
-    var today = new DateOnly(2026, 6, 7);
-    var repo = new FakeHabitRepository { CurrentDate = today };
-    var svc = BuildHabitService(repo);
-
-    var res = await svc.SkipHabit(UserId, hvId, "felt sick");
-
-    res.IsSuccess().Should().BeTrue();
-    var exec = res.SuccessOrDefault()!;
-    exec.HabitVersionId.Should().Be(hvId);
-    exec.Record.Status.Should().Be(ExecutionStatus.Skipped);
-    exec.Record.Date.Should().Be(today);
-    exec.Record.Notes.Should().Be("felt sick");
-
-    repo.SkipHabitCalls.Should().ContainSingle();
-    repo.SkipHabitCalls[0].Should().Be((UserId, hvId, today, "felt sick"));
-  }
-
-  [Fact]
-  public async Task SkipHabit_PassesNullNotesThrough()
-  {
-    var hvId = Guid.NewGuid();
-    var repo = new FakeHabitRepository { CurrentDate = new DateOnly(2026, 6, 7) };
-    var svc = BuildHabitService(repo);
-
-    var res = await svc.SkipHabit(UserId, hvId, null);
-
-    res.IsSuccess().Should().BeTrue();
-    repo.SkipHabitCalls.Should().ContainSingle();
-    repo.SkipHabitCalls[0].Notes.Should().BeNull();
-  }
 
   // ---------------------------------------------------------------------------
   // MONTHLY SKIP LIMIT — happy path: under the cap, EnsureSkipsAllowed succeeds.
@@ -199,21 +150,12 @@ internal sealed class FakeSkipCountRepository(int usedSkips) : IHabitRepository
   public Task<Result<List<HabitVersionPrincipal>>> SearchHabits(HabitSearch habitSearch) => throw new NotImplementedException();
   public Task<Result<HabitPrincipal?>> GetHabit(Guid habitId) => throw new NotImplementedException();
   public Task<Result<HabitVersionPrincipal?>> GetCurrentVersion(string userId, Guid habitId) => throw new NotImplementedException();
-  public Task<Result<HabitVersionPrincipal>> Create(string userId, HabitVersionRecord versionRecord) => throw new NotImplementedException();
+  public Task<Result<HabitVersionPrincipal>> Create(string userId, HabitVersionRecord versionRecord, Guid? routineId) => throw new NotImplementedException();
   public Task<Result<HabitVersionPrincipal?>> Update(Guid habitId, string userId, HabitVersionRecord versionRecord, bool enabled) => throw new NotImplementedException();
   public Task<Result<Unit?>> Delete(Guid habitId, string userId) => throw new NotImplementedException();
-  public Task<Result<List<FailedExecutionRow>>> CreateFailedExecutions(List<Guid> habitIds, DateOnly date) => throw new NotImplementedException();
-  public Task<Result<int>> CreateExecutionsForVersionsWithStatus(List<Guid> habitVersionIds, DateOnly date, ExecutionStatus status) => throw new NotImplementedException();
   public Task<Result<string?>> GetTaskNameByExecutionId(Guid executionId) => throw new NotImplementedException();
-  public Task<Result<DateOnly>> GetUserCurrentDate(string userId, Guid habitVersionId) => throw new NotImplementedException();
-  public Task<Result<HabitExecutionPrincipal>> CompleteHabit(string userId, Guid habitVersionId, DateOnly date, string? notes) => throw new NotImplementedException();
-  public Task<Result<HabitExecutionPrincipal>> SkipHabit(string userId, Guid habitVersionId, DateOnly date, string? notes) => throw new NotImplementedException();
   public Task<Result<List<HabitExecutionPrincipal>>> SearchHabitExecutions(string userId, HabitExecutionSearch habitExecutionSearch) => throw new NotImplementedException();
   public Task<Result<List<HabitVersionPrincipal>>> GetVersions(string userId, Guid habitId) => throw new NotImplementedException();
   public Task<Result<int>> CountHabitsForUser(string userId) => throw new NotImplementedException();
-  public Task<Result<List<HabitVersionPrincipal>>> GetActiveHabitVersionsByIds(List<Guid> habitIds, DateOnly date) => throw new NotImplementedException();
-  public Task<Result<List<HabitPrincipal>>> GetHabitsByIds(List<Guid> habitIds) => throw new NotImplementedException();
-  public Task<Result<bool>> HasMissingExecutionsForVersions(List<Guid> habitVersionIds, DateOnly date) => throw new NotImplementedException();
-  public Task<Result<List<string>>> GetDistinctTimezonesForEnabledHabits() => throw new NotImplementedException();
-  public Task<Result<List<Guid>>> GetEnabledHabitIdsByTimezone(string timezone) => throw new NotImplementedException();
+  public Task<Result<HabitVersionPrincipal?>> GetVersion(Guid habitVersionId) => throw new NotImplementedException();
 }

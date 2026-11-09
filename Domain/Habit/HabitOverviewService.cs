@@ -99,14 +99,14 @@ public class HabitOverviewService(
           .Then(ch => ch.Principal, Errors.MapNone)
           .Then(charity => new { habitPrincipal, charity }, Errors.MapNone)
         )
-        .ThenAwait(ctx => streakService.GetStatusForHabit(userId, hv.HabitId, userTz, hv.Record.Timezone, hv.Record.DaysOfWeek, nowUtc)
+        .ThenAwait(ctx => streakService.GetStatusForHabit(userId, hv.HabitId, userTz, hv.Record.DaysOfWeek, hv.Record.DeadlineTime, nowUtc)
           .Then(status => new { ctx.habitPrincipal, ctx.charity, status }, Errors.MapNone)
         )
         .Then(ctx2 => new HabitOverviewItem(
             hv.HabitId,
             hv.Record.Task,
             hv.Record.NotificationTime.ToString("HH:mm"),
-            hv.Record.Timezone,
+            userTz,
             hv.Record.DaysOfWeek,
             hv.Record.Stake.Amount,
             hv.Record.Stake.Currency.Code,
