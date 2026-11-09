@@ -1,3 +1,10 @@
+## [1.35.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.34.0...v1.35.0) (2026-11-09)
+
+
+### ✨ Features ✨
+
+* check deadlines follow the phone timezone in both directions ([3b6bcc3](https://github.com/AtomiCloud/alcohol.zinc/commit/3b6bcc321d751312454a028bc21dcbe12bfce032))
+
 ## [1.34.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.33.2...v1.34.0) (2026-11-09)
 
 
