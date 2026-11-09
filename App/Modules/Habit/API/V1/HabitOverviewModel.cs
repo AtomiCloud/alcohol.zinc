@@ -32,7 +32,9 @@ public record HabitStatusRes(
   int CurrentStreak,
   int MaxStreak,
   bool IsCompleteToday,
-  WeekStatusRes Week
+  WeekStatusRes Week,
+  string Today,
+  string TodayStatus
 );
 
 // For each day of the user's week, return one of:

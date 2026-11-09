@@ -41,7 +41,7 @@ namespace Domain.Habit
         Task<Result<List<HabitPrincipal>>> GetHabitsByIds(List<Guid> habitIds);
 
         // Helpers for protections
-        Task<Result<bool>> HasAnyCompletedOrSkippedForVersions(List<Guid> habitVersionIds, DateOnly date);
+        Task<Result<bool>> HasMissingExecutionsForVersions(List<Guid> habitVersionIds, DateOnly date);
 
         // Helpers for end-of-day failure marking
         Task<Result<List<string>>> GetDistinctTimezonesForEnabledHabits();

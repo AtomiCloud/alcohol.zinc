@@ -213,7 +213,7 @@ internal sealed class FakeSkipCountRepository(int usedSkips) : IHabitRepository
   public Task<Result<int>> CountHabitsForUser(string userId) => throw new NotImplementedException();
   public Task<Result<List<HabitVersionPrincipal>>> GetActiveHabitVersionsByIds(List<Guid> habitIds, DateOnly date) => throw new NotImplementedException();
   public Task<Result<List<HabitPrincipal>>> GetHabitsByIds(List<Guid> habitIds) => throw new NotImplementedException();
-  public Task<Result<bool>> HasAnyCompletedOrSkippedForVersions(List<Guid> habitVersionIds, DateOnly date) => throw new NotImplementedException();
+  public Task<Result<bool>> HasMissingExecutionsForVersions(List<Guid> habitVersionIds, DateOnly date) => throw new NotImplementedException();
   public Task<Result<List<string>>> GetDistinctTimezonesForEnabledHabits() => throw new NotImplementedException();
   public Task<Result<List<Guid>>> GetEnabledHabitIdsByTimezone(string timezone) => throw new NotImplementedException();
 }

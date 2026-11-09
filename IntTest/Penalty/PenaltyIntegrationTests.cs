@@ -3,11 +3,14 @@ using App.Modules.Habit.Data;
 using App.Modules.HabitExecution.Data;
 using App.Modules.HabitVersion.Data;
 using App.Modules.Penalty.Data;
+using App.Modules.Protection.Data;
 using App.Modules.Users.Data;
+using App.Modules.Vacation.Data;
 using App.StartUp.Database;
 using App.StartUp.Options;
 using CSharp_Result;
 using Domain.Exceptions;
+using Domain.Habit;
 using Domain.Payment;
 using Domain.Penalty;
 using IntTest.Notification;
@@ -131,6 +134,240 @@ public class PenaltyIntegrationTests : IAsyncLifetime
       Attempts = 0,
       LastError = null
     };
+
+  [SkippableTheory]
+  [InlineData(null)]
+  [InlineData("another-user")]
+  public async Task HabitSearch_UsesGuardedRouteOwner_NotQueryOwner(string? queryOwner)
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (owner, charityId) = await SeedUserAndCharity();
+    var (other, otherCharity) = await SeedUserAndCharity();
+    var ownExecution = await SeedExecution(owner, charityId);
+    await SeedExecution(other, otherCharity);
+    var ownVersionId = await _db.HabitExecutions.Where(x => x.Id == ownExecution)
+      .Select(x => x.HabitVersionId).SingleAsync();
+    var service = new HabitService(new HabitRepository(_db, NullLogger<HabitRepository>.Instance),
+      null!, null!, null!, null!, NullLogger<HabitService>.Instance);
+    var controller = new App.Modules.Habit.API.V1.HabitController(service, null!, null!, null!,
+      null!, null!, new(), new(), new(), new(), new())
+    {
+      ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext
+      {
+        HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext
+        {
+          User = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(
+            [new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Name, owner)], "test"))
+        }
+      }
+    };
+    var query = new SearchHabitQuery(null, queryOwner == null ? null : other, null, null, 100, 0);
+
+    var response = await controller.SearchHabits(owner, query);
+    var ok = response.Result.Should().BeOfType<Microsoft.AspNetCore.Mvc.OkObjectResult>().Subject;
+    var habits = ok.Value.Should().BeOfType<List<HabitVersionRes>>().Subject;
+    habits.Should().ContainSingle().Which.Id.Should().Be(ownVersionId);
+
+    var forbidden = await controller.SearchHabits(other, query);
+    forbidden.Result.Should().BeAssignableTo<Microsoft.AspNetCore.Mvc.Infrastructure.IStatusCodeActionResult>()
+      .Which.StatusCode.Should().Be(403);
+  }
+
+  [SkippableTheory]
+  [InlineData(HabitExecutionStatusData.Completed, 0)]
+  [InlineData(HabitExecutionStatusData.Completed, 2)]
+  [InlineData(HabitExecutionStatusData.Skipped, 2)]
+  [InlineData(HabitExecutionStatusData.Frozen, 2)]
+  [InlineData(HabitExecutionStatusData.Vacation, 2)]
+  public async Task SettledHabit_Edit_DoesNotCreateAnotherObligation(
+    HabitExecutionStatusData settledStatus, int freezeBalance)
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (userId, charityId) = await SeedUserAndCharity();
+    var executionId = await SeedExecution(userId, charityId);
+    var execution = await _db.HabitExecutions.SingleAsync(x => x.Id == executionId);
+    var original = await _db.HabitVersions.SingleAsync(x => x.Id == execution.HabitVersionId);
+    var date = new DateOnly(2026, 1, 5); // Monday
+    execution.Date = date;
+    execution.Status = settledStatus;
+    _db.UserProtections.Add(new UserProtectionData { UserId = userId, FreezeCurrent = freezeBalance });
+    await _db.SaveChangesAsync();
+    var repo = new HabitRepository(_db, NullLogger<HabitRepository>.Instance);
+    var updated = (await repo.Update(original.HabitId, userId,
+      original.ToRecord() with { Task = "Renamed", NotificationTime = new TimeOnly(13, 15) }, true)).Get()!;
+    updated.Version.Should().Be(2);
+
+    (await repo.HasMissingExecutionsForVersions([updated.Id], date)).Get().Should().BeFalse();
+    (await repo.CompleteHabit(userId, updated.Id, date, null)).IsFailure().Should().BeTrue();
+    (await repo.SkipHabit(userId, updated.Id, date, null)).IsFailure().Should().BeTrue();
+    (await repo.CreateExecutionsForVersionsWithStatus([updated.Id], date, ExecutionStatus.Vacation))
+      .Get().Should().Be(0);
+    var service = new HabitService(repo,
+      new VacationRepository(_db, NullLogger<VacationRepository>.Instance),
+      new ProtectionRepository(_db, NullLogger<ProtectionRepository>.Instance), null!,
+      Repo(_db), NullLogger<HabitService>.Instance);
+    (await service.MarkDailyFailures([original.HabitId], date)).Get().Should().Be(0);
+
+    await using var verify = NewContext(_conn!);
+    var executions = await verify.HabitExecutions.Where(x => x.HabitVersion.HabitId == original.HabitId)
+      .AsNoTracking().ToListAsync();
+    executions.Should().ContainSingle().Which.Id.Should().Be(executionId);
+    executions[0].Status.Should().Be(settledStatus);
+    executions[0].HabitVersionId.Should().Be(original.Id);
+    (await verify.Penalties.AnyAsync(x => x.UserId == userId)).Should().BeFalse();
+    (await verify.UserProtections.SingleAsync(x => x.UserId == userId)).FreezeCurrent.Should().Be(freezeBalance);
+
+    // A different date is a new obligation, despite the older version's history.
+    (await repo.HasMissingExecutionsForVersions([updated.Id], date.AddDays(7))).Get().Should().BeTrue();
+    (await repo.CreateExecutionsForVersionsWithStatus([updated.Id], date.AddDays(7), ExecutionStatus.Vacation))
+      .Get().Should().Be(1);
+  }
+
+  [SkippableFact]
+  public async Task MonthlySkipUsage_SurvivesHabitDeletion_AndRemainsOwnerAndMonthScoped()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (userId, charityId) = await SeedUserAndCharity();
+    var executionId = await SeedExecution(userId, charityId);
+    var execution = await _db.HabitExecutions.SingleAsync(x => x.Id == executionId);
+    var version = await _db.HabitVersions.SingleAsync(x => x.Id == execution.HabitVersionId);
+    execution.Status = HabitExecutionStatusData.Skipped;
+    execution.Date = new DateOnly(2026, 1, 5);
+    _db.HabitExecutions.Add(new HabitExecutionData
+    {
+      HabitVersionId = version.Id, Date = new DateOnly(2025, 12, 31), Status = HabitExecutionStatusData.Skipped
+    });
+    var (other, otherCharity) = await SeedUserAndCharity();
+    var otherExecution = await SeedExecution(other, otherCharity);
+    var stranger = await _db.HabitExecutions.SingleAsync(x => x.Id == otherExecution);
+    stranger.Status = HabitExecutionStatusData.Skipped;
+    stranger.Date = execution.Date;
+    await _db.SaveChangesAsync();
+    var repo = new HabitRepository(_db, NullLogger<HabitRepository>.Instance);
+
+    (await repo.Delete(version.HabitId, userId)).IsSuccess().Should().BeTrue();
+    (await repo.CountUserSkipsForMonth(userId, new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31)))
+      .Get().Should().Be(1);
+  }
+
+  [SkippableTheory]
+  [InlineData(HabitExecutionStatusData.Completed, "succeeded")]
+  [InlineData(HabitExecutionStatusData.Skipped, "skip")]
+  [InlineData(HabitExecutionStatusData.Frozen, "frozen")]
+  [InlineData(HabitExecutionStatusData.Vacation, "vacation")]
+  public async Task OverviewToday_UsesHabitDate_WithoutChangingUserWeek(
+    HabitExecutionStatusData executionStatus, string expectedStatus)
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (userId, charityId) = await SeedUserAndCharity();
+    var executionId = await SeedExecution(userId, charityId);
+    var execution = await _db.HabitExecutions.SingleAsync(x => x.Id == executionId);
+    var version = await _db.HabitVersions.SingleAsync(x => x.Id == execution.HabitVersionId);
+    var now = new DateTime(2026, 1, 4, 16, 30, 0, DateTimeKind.Utc);
+    execution.Date = new DateOnly(2026, 1, 5); // Monday in Singapore, Sunday in LA.
+    execution.Status = executionStatus;
+    execution.CompletedAt = executionStatus == HabitExecutionStatusData.Completed ? now : null;
+    await _db.SaveChangesAsync();
+    var service = new StreakService(new StreakRepository(_db, NullLogger<StreakRepository>.Instance));
+
+    var status = (await service.GetStatusForHabit(userId, version.HabitId,
+      "America/Los_Angeles", "Asia/Singapore", ["Monday"], now)).Get();
+    var response = App.Modules.Habit.API.V1.HabitOverviewMapper.ToRes(new HabitOverviewSummary(
+      [new HabitOverviewItem(version.HabitId, "Read", "22:00", "Asia/Singapore", ["Monday"],
+        3m, "USD", true, new Domain.Charity.CharityPrincipal
+        {
+          Id = charityId, Record = new Domain.Charity.CharityRecord { Name = "Charity" }
+        }, status, status.TimeLeftToEodMinutes, new HabitVersionMeta(version.Id, 1, true), 0m)],
+      0m, 0, 3));
+
+    response.Habits.Single().Status.Today.Should().Be("05-01-2026");
+    response.Habits.Single().Status.TodayStatus.Should().Be(expectedStatus);
+    status.IsCompleteToday.Should().Be(executionStatus == HabitExecutionStatusData.Completed);
+    status.WeekStart.Should().Be(new DateOnly(2026, 1, 4), "weekly history remains account-local");
+
+    // A previous habit-day completion can share the account's current calendar
+    // day; it must not mark the new habit day complete.
+    execution.Date = execution.Date.AddDays(-1);
+    execution.Status = HabitExecutionStatusData.Completed;
+    execution.CompletedAt = now.AddHours(-1);
+    await _db.SaveChangesAsync();
+    var nextDay = (await service.GetStatusForHabit(userId, version.HabitId,
+      "America/Los_Angeles", "Asia/Singapore", ["Monday"], now)).Get();
+    nextDay.IsCompleteToday.Should().BeFalse();
+    nextDay.TodayStatus.Should().Be(HabitDayStatus.NotApplicable);
+  }
+
+  [SkippableFact]
+  public async Task MixedDay_FreezesOnlyRemainingMisses_WithoutPenaltiesOrExtraConsumption()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (userId, charityId) = await SeedUserAndCharity();
+    var date = new DateOnly(2026, 1, 5); // Monday
+    var habits = new List<Guid>();
+    var versions = new List<Guid>();
+    var completedAt = new DateTime(2026, 1, 5, 10, 0, 0, DateTimeKind.Utc);
+    _db.UserProtections.Add(new UserProtectionData { UserId = userId, FreezeCurrent = 3 });
+    for (var i = 0; i < 4; i++)
+    {
+      var habitId = Guid.NewGuid();
+      var versionId = Guid.NewGuid();
+      habits.Add(habitId);
+      versions.Add(versionId);
+      _db.Habits.Add(new HabitData { Id = habitId, UserId = userId, Version = 1, Enabled = true });
+      _db.HabitVersions.Add(new HabitVersionData
+      {
+        Id = versionId, HabitId = habitId, CharityId = charityId, Version = 1,
+        Task = $"task-{i}", DaysOfWeek = ["Monday"], Timezone = "UTC",
+        StakeCents = 1000, StakeCurrency = "USD", RatioBasisPoints = 5000
+      });
+    }
+    _db.HabitExecutions.AddRange(
+      new HabitExecutionData
+      {
+        HabitVersionId = versions[0], Date = date, Status = HabitExecutionStatusData.Completed,
+        CompletedAt = completedAt, Notes = "Finished"
+      },
+      new HabitExecutionData
+      {
+        HabitVersionId = versions[1], Date = date, Status = HabitExecutionStatusData.Skipped,
+        Notes = "Resting"
+      },
+      // An execution on a different date must not prevent today's freeze.
+      new HabitExecutionData
+      {
+        HabitVersionId = versions[2], Date = date.AddDays(-1), Status = HabitExecutionStatusData.Completed,
+        CompletedAt = completedAt.AddDays(-1)
+      });
+    await _db.SaveChangesAsync();
+
+    var service = new HabitService(
+      new HabitRepository(_db, NullLogger<HabitRepository>.Instance),
+      new VacationRepository(_db, NullLogger<VacationRepository>.Instance),
+      new ProtectionRepository(_db, NullLogger<ProtectionRepository>.Instance),
+      null!, // Entitlements are not consulted by daily settlement.
+      Repo(_db), NullLogger<HabitService>.Instance);
+
+    (await service.MarkDailyFailures(habits, date)).Get().Should().Be(2);
+    (await service.MarkDailyFailures(habits, date)).Get().Should().Be(0);
+
+    await using var verify = NewContext(_conn!);
+    var executions = await verify.HabitExecutions.AsNoTracking()
+      .Where(x => versions.Contains(x.HabitVersionId) && x.Date == date).ToListAsync();
+    executions.Should().HaveCount(4);
+    var completed = executions.Single(x => x.HabitVersionId == versions[0]);
+    completed.Status.Should().Be(HabitExecutionStatusData.Completed);
+    completed.CompletedAt.Should().Be(completedAt);
+    completed.Notes.Should().Be("Finished");
+    var skipped = executions.Single(x => x.HabitVersionId == versions[1]);
+    skipped.Status.Should().Be(HabitExecutionStatusData.Skipped);
+    skipped.Notes.Should().Be("Resting");
+    executions.Where(x => versions.Skip(2).Contains(x.HabitVersionId))
+      .Should().OnlyContain(x => x.Status == HabitExecutionStatusData.Frozen);
+    (await verify.UserProtections.AsNoTracking().SingleAsync(x => x.UserId == userId))
+      .FreezeCurrent.Should().Be(2);
+    (await verify.FreezeConsumptions.CountAsync(x => x.UserId == userId)).Should().Be(1);
+    (await verify.Penalties.AnyAsync(x => x.UserId == userId)).Should().BeFalse();
+  }
 
   [SkippableFact]
   public async Task OneFailedExecution_ChargedOnce_CreditsCharity()

@@ -83,11 +83,11 @@ public static class HabitMapper
         Skip = query.Skip ?? 0      // Default skip
       };
 
-    public static HabitSearch ToDomain(this SearchHabitQuery query) =>
+    public static HabitSearch ToDomain(this SearchHabitQuery query, string userId) =>
       new()
       {
         Id = query.Id,
-        UserId = query.UserId,
+        UserId = userId,
         Task = query.Task,
         Enabled = query.Enabled,
         Limit = query.Limit ?? 20, 

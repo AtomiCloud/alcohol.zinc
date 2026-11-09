@@ -115,28 +115,6 @@ public class StreakRepository(MainDbContext db, ILogger<StreakRepository> logger
     }
   }
 
-  public async Task<Result<bool>> HasCompletionBetweenUtc(Guid habitId, DateTime startUtc, DateTime endUtc)
-  {
-    try
-    {
-      var done = await (from he in db.HabitExecutions
-                        join hv in db.HabitVersions on he.HabitVersionId equals hv.Id
-                        where hv.HabitId == habitId
-                              && he.CompletedAt != null
-                              && he.CompletedAt >= startUtc
-                              && he.CompletedAt <= endUtc
-                              && he.Status == App.Modules.HabitExecution.Data.HabitExecutionStatusData.Completed
-                        select he.Id)
-        .AnyAsync();
-      return done;
-    }
-    catch (Exception e)
-    {
-      logger.LogError(e, "HasCompletionBetweenUtc failed for HabitId={HabitId}", habitId);
-      throw;
-    }
-  }
-
   public async Task<Result<List<DateTime>>> GetCompletionsBetweenUtc(Guid habitId, DateTime startUtc, DateTime endUtc)
   {
     try

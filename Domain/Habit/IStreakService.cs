@@ -20,7 +20,9 @@ public record HabitStreakStatus
   Dictionary<DayOfWeek, HabitDayStatus> WeekStatuses,
   DateOnly WeekStart,
   DateOnly WeekEnd,
-  int TimeLeftToEodMinutes
+  int TimeLeftToEodMinutes,
+  DateOnly Today,
+  HabitDayStatus TodayStatus
 );
 
 public interface IStreakService

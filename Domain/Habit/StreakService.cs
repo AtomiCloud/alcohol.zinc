@@ -19,11 +19,7 @@ public class StreakService(IStreakRepository repo) : IStreakService
       var userTz = TimeZoneInfo.FindSystemTimeZoneById(userTimezone);
       var habitTz = TimeZoneInfo.FindSystemTimeZoneById(habitTimezone);
 
-      // windows for today/week in UTC (user-local)
-      var userStart = new DateTime(userToday.Year, userToday.Month, userToday.Day, 0, 0, 0, DateTimeKind.Unspecified);
-      var userEnd = new DateTime(userToday.Year, userToday.Month, userToday.Day, 23, 59, 59, DateTimeKind.Unspecified);
-      var startUtc = TimeZoneInfo.ConvertTimeToUtc(userStart, userTz);
-      var endUtc = TimeZoneInfo.ConvertTimeToUtc(userEnd, userTz);
+      // Weekly history stays user-local; actionable today follows the habit's date.
       var weekStartUtc = TimeZoneInfo.ConvertTimeToUtc(new DateTime(weekStart.Year, weekStart.Month, weekStart.Day, 0, 0, 0, DateTimeKind.Unspecified), userTz);
       var weekEndUtc = TimeZoneInfo.ConvertTimeToUtc(new DateTime(weekEnd.Year, weekEnd.Month, weekEnd.Day, 23, 59, 59, DateTimeKind.Unspecified), userTz);
 
@@ -33,7 +29,7 @@ public class StreakService(IStreakRepository repo) : IStreakService
       return repo.GetCurrentStreak(habitId, habitToday)
         .ThenAwait(current => repo.GetMaxStreak(habitId)
           .Then(max => new { current, max }, Errors.MapNone))
-        .ThenAwait(ctx => repo.HasCompletionBetweenUtc(habitId, startUtc, endUtc)
+        .ThenAwait(ctx => repo.IsCompleteOn(habitId, habitToday)
           .Then(doneToday => new { ctx.current, ctx.max, doneToday }, Errors.MapNone))
         .ThenAwait(ctx => repo.GetCompletionsBetweenUtc(habitId, weekStartUtc, weekEndUtc)
           .Then(completedUtc => new { ctx.current, ctx.max, ctx.doneToday, completedUtc }, Errors.MapNone))
@@ -71,14 +67,7 @@ public class StreakService(IStreakRepository repo) : IStreakService
                 var dow = userLocalAtEod.DayOfWeek;
                 if (weekStatuses[dow] == HabitDayStatus.Succeeded) continue;
 
-                var mapped = e.Status switch
-                {
-                  ExecutionStatus.Failed => HabitDayStatus.Failed,
-                  ExecutionStatus.Skipped => HabitDayStatus.Skip,
-                  ExecutionStatus.Freeze => HabitDayStatus.Frozen,
-                  ExecutionStatus.Vacation => HabitDayStatus.Vacation,
-                  _ => HabitDayStatus.NotApplicable
-                };
+                var mapped = MapStatus(e.Status);
 
                 if (mapped == HabitDayStatus.Vacation || mapped == HabitDayStatus.Frozen || mapped == HabitDayStatus.Skip
                   || weekStatuses[dow] == HabitDayStatus.NotApplicable)
@@ -93,6 +82,11 @@ public class StreakService(IStreakRepository repo) : IStreakService
               if (habitNow > eodLocal) eodLocal = eodLocal.AddDays(1);
               var minutesLeft = (int)Math.Max(0, Math.Round((eodLocal - habitNow).TotalMinutes));
 
+              var todayExecution = execs.FirstOrDefault(e => e.Date == habitToday);
+              var todayStatus = ctx.doneToday
+                ? HabitDayStatus.Succeeded
+                : todayExecution == null ? HabitDayStatus.NotApplicable : MapStatus(todayExecution.Status);
+
               return new HabitStreakStatus(
                 ctx.current,
                 ctx.max,
@@ -100,10 +94,22 @@ public class StreakService(IStreakRepository repo) : IStreakService
                 weekStatuses,
                 weekStart,
                 weekEnd,
-                minutesLeft
+                minutesLeft,
+                habitToday,
+                todayStatus
               );
             }, Errors.MapNone);
         });
+
+      static HabitDayStatus MapStatus(ExecutionStatus status) => status switch
+      {
+        ExecutionStatus.Completed => HabitDayStatus.Succeeded,
+        ExecutionStatus.Failed => HabitDayStatus.Failed,
+        ExecutionStatus.Skipped => HabitDayStatus.Skip,
+        ExecutionStatus.Freeze => HabitDayStatus.Frozen,
+        ExecutionStatus.Vacation => HabitDayStatus.Vacation,
+        _ => HabitDayStatus.NotApplicable
+      };
 
       static Dictionary<DayOfWeek, HabitDayStatus> InitWeekStatuses(string[] daysOfWeek)
       {
