@@ -45,7 +45,12 @@ public class CheckService(
   {
     var due = (List<CheckPrincipal>)await repo.ListDuePending(nowUtc - CheckWindow.Grace, CloseBatchSize);
     if (due.Count == 0) return 0;
+    return (await SettleDue(due, nowUtc)).Count;
+  }
 
+  // Settles Pending checks past deadline + grace, per user and date. Returns what was newly settled.
+  private async Task<List<SettledCheck>> SettleDue(List<CheckPrincipal> due, DateTime nowUtc)
+  {
     var habits = (List<SchedulableHabit>)await repo.ListSchedulableHabits(null,
       due.Select(c => c.HabitId).Distinct().ToList());
     var byId = habits.ToDictionary(h => h.HabitId);
@@ -60,7 +65,7 @@ public class CheckService(
     var live = due.Where(c => !stale.Contains(c.Id)).ToList();
     var recorded = (HashSet<Guid>)await repo.ListRecorded(live.Select(c => c.Id).ToList());
 
-    var settled = 0;
+    var settled = new List<SettledCheck>();
     foreach (var group in live.GroupBy(c => (byId[c.HabitId].UserId, c.Record.LocalDate)))
     {
       var (userId, date) = group.Key;
@@ -86,7 +91,7 @@ public class CheckService(
             },
             SettledAtUtc = nowUtc
           });
-          if (outcome is { Adopted: false }) settled++;
+          if (outcome is { Adopted: false }) settled.Add(new SettledCheck(c.HabitId, date, status));
         }
       }
       catch (Exception e)
@@ -207,8 +212,8 @@ public class CheckService(
     return outcome is { Adopted: false } ? outcome.Execution : null;
   }
 
-  // The Pending check whose window contains `at`. After an eastward trip two windows can
-  // overlap; the earlier day is settled first, so both days need their own completion.
+  // The Pending check whose window contains `at`. If two windows ever overlap, the earlier
+  // day is settled first, so both days need their own completion.
   private async Task<CheckPrincipal?> OpenCheckAt(SchedulableHabit habit, DateTime at)
   {
     var covering = (List<CheckPrincipal>)await repo.ListCovering(habit.HabitId, at);
@@ -234,9 +239,29 @@ public class CheckService(
       : null;
   }
 
-  public async Task<Result<int>> RetimePending(string? userId, List<Guid>? habitIds, DateTime? nowUtc = null)
+  public Task<Result<int>> RetimePending(string? userId, List<Guid>? habitIds, DateTime? nowUtc = null)
+    => Retime(userId, habitIds, nowUtc ?? DateTime.UtcNow, followTimezone: false);
+
+  public async Task<Result<List<SettledCheck>>> MoveToTimezone(string userId, DateTime? nowUtc = null)
   {
     var now = nowUtc ?? DateTime.UtcNow;
+    var retimed = await Retime(userId, null, now, followTimezone: true);
+    if (retimed.IsFailure()) return retimed.FailureOrDefault();
+
+    // After an eastward move a day can already be over in the new timezone: settle it now,
+    // so the response can tell the user, instead of on the next scheduler tick.
+    var habits = (List<SchedulableHabit>)await repo.ListSchedulableHabits(userId, null);
+    if (habits.Count == 0) return new List<SettledCheck>();
+    var pending = (List<CheckPrincipal>)await repo.ListPending([.. habits.Select(h => h.HabitId)]);
+    var due = pending.Where(c => c.Record.DeadlineUtc <= now - CheckWindow.Grace).ToList();
+    List<SettledCheck> settled = due.Count == 0 ? [] : await SettleDue(due, now);
+    return settled;
+  }
+
+  // followTimezone: a timezone change, where Start and End follow the new timezone either way.
+  // Otherwise (a habit edit) a started check never gets a shorter deadline.
+  private async Task<Result<int>> Retime(string? userId, List<Guid>? habitIds, DateTime now, bool followTimezone)
+  {
     var habits = (List<SchedulableHabit>)await repo.ListSchedulableHabits(userId, habitIds);
     var byId = habits.ToDictionary(h => h.HabitId);
     var pending = (List<CheckPrincipal>)await repo.ListPending(habitIds ?? [.. byId.Keys]);
@@ -253,13 +278,14 @@ public class CheckService(
 
       var tz = CheckWindow.Resolve(h.Timezone);
       var (opens, deadline) = CheckWindow.For(c.Record.LocalDate, tz, h.DeadlineTime);
-      // An open check never gets shorter (a day that would end before landing keeps its
-      // old deadline). A check that hasn't opened takes the new window, unless that
-      // window is already over.
-      var isOpen = c.Record.OpensAtUtc <= now;
-      var newDeadline = isOpen
-        ? (deadline > c.Record.DeadlineUtc ? deadline : c.Record.DeadlineUtc)
-        : (deadline > now ? deadline : c.Record.DeadlineUtc);
+      // On a habit edit a started check never gets shorter, and a check that hasn't started
+      // takes the new window unless that window is already over.
+      var started = c.Record.OpensAtUtc <= now;
+      var newDeadline = followTimezone
+        ? deadline
+        : started
+          ? (deadline > c.Record.DeadlineUtc ? deadline : c.Record.DeadlineUtc)
+          : (deadline > now ? deadline : c.Record.DeadlineUtc);
       if (opens >= newDeadline) opens = c.Record.OpensAtUtc;
 
       if (tz.Id == c.Record.Timezone && opens == c.Record.OpensAtUtc && newDeadline == c.Record.DeadlineUtc)

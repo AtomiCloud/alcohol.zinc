@@ -71,6 +71,8 @@ public sealed class FakeCheckService : ICheckService
     return Task.FromResult<Result<int>>(0);
   }
 
+  public Task<Result<List<SettledCheck>>> MoveToTimezone(string userId, DateTime? nowUtc = null)
+    => throw new NotImplementedException();
   public Task<Result<int>> OpenUpcoming(DateTime nowUtc) => throw new NotImplementedException();
   public Task<Result<int>> CloseDue(DateTime nowUtc) => throw new NotImplementedException();
   public Task<Result<int>> DispatchEvents(DateTime nowUtc) => throw new NotImplementedException();

@@ -76,6 +76,9 @@ public record SettleCheck
   public Evidence? Evidence { get; init; }
 }
 
+// A check settled by the scheduler or by a timezone change (Missed, Frozen or Vacation).
+public record SettledCheck(Guid HabitId, DateOnly LocalDate, CheckStatus Status);
+
 // Outbox row written in the same transaction as the settle.
 public record CheckEventPrincipal
 {

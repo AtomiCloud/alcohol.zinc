@@ -16,6 +16,14 @@ namespace Domain.Configuration
       public required ConfigurationRecord Record { get; init; }
     }
     
+    // An update, plus the days its timezone change settled because they had already ended
+    // in the new timezone (an eastward trip).
+    public record ConfigurationUpdate
+    {
+      public required ConfigurationPrincipal Principal { get; init; }
+      public required List<Check.SettledCheck> SettledChecks { get; init; }
+    }
+
     public record Configuration
     {
       public required ConfigurationPrincipal  Principal { get; init; }
