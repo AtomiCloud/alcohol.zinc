@@ -105,7 +105,7 @@ public class ConfigurationController(
 
   // New route shape: PUT /configuration/{userId}/{id}
   [Authorize, HttpPut("{userId}/{id:guid}")]
-  public async Task<ActionResult<ConfigurationPrincipalRes>> UpdateForUser(string userId, Guid id, [FromBody] UpdateConfigurationReq req)
+  public async Task<ActionResult<UpdateConfigurationRes>> UpdateForUser(string userId, Guid id, [FromBody] UpdateConfigurationReq req)
   {
     var guard = this.GuardOrAny(userId, AuthRoles.Field, AuthRoles.Admin);
     if (!guard.IsSuccess()) return this.ReturnUnitResult(guard);
@@ -118,12 +118,12 @@ public class ConfigurationController(
   }
 
   [Authorize, HttpPut("{id:guid}")]
-  public async Task<ActionResult<ConfigurationPrincipalRes>> Update(Guid id, [FromBody] UpdateConfigurationReq req)
+  public async Task<ActionResult<UpdateConfigurationRes>> Update(Guid id, [FromBody] UpdateConfigurationReq req)
   {
     var userId = this.Sub();
     if (userId == null)
     {
-      Result<ConfigurationPrincipalRes> error = new Unauthenticated("You are not authenticated").ToException();
+      Result<UpdateConfigurationRes> error = new Unauthenticated("You are not authenticated").ToException();
       return this.ReturnResult(error);
     }
 

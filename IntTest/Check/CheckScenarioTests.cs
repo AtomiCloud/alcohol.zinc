@@ -96,7 +96,7 @@ public class CheckScenarioTests : IAsyncLifetime
 
     (await svc.OpenUpcoming(U(2026, 1, 4, 17))).Get().Should().Be(1); // Mon 01:00 in Singapore
     await MoveUserTo(userId, LosAngeles);
-    (await svc.RetimePending(userId, null, U(2026, 1, 5, 2))).Get().Should().Be(1); // Sun 18:00 SF
+    (await svc.MoveToTimezone(userId, U(2026, 1, 5, 2))).Get().Should().BeEmpty(); // Sun 18:00 SF
 
     var monday = (await ChecksOf(habitId)).Single();
     monday.Timezone.Should().Be(LosAngeles);
@@ -128,7 +128,7 @@ public class CheckScenarioTests : IAsyncLifetime
       .Should().NotBeNull();
 
     await MoveUserTo(userId, LosAngeles);
-    await svc.RetimePending(userId, null, U(2026, 1, 5, 9));
+    await svc.MoveToTimezone(userId, U(2026, 1, 5, 9));
     var landed = U(2026, 1, 6, 0); // Mon 16:00 SF
     (await svc.OpenUpcoming(landed)).Get().Should().Be(0, "Monday already has its check");
     (await svc.Report(userId, habitId, Checks.Manual(landed), landed)).Get().Should().BeNull();
@@ -142,26 +142,51 @@ public class CheckScenarioTests : IAsyncLifetime
     (await ExecutionsOf(habitId)).Should().ContainSingle();
   }
 
-  // SF -> Singapore: Tuesday would have ended before landing; it keeps its SF deadline.
+  // SF -> Singapore: Tuesday already ended in Singapore when the phone syncs on landing. The End
+  // follows the phone, so Tuesday is settled by the change itself: a freeze if one is left, else missed.
+  [SkippableTheory]
+  [InlineData(1, CheckStatus.Frozen, HabitCheckStatusData.Frozen, 0)]
+  [InlineData(0, CheckStatus.Missed, HabitCheckStatusData.Missed, 1)]
+  public async Task SanFranciscoToSingapore_TuesdayEndedOnLanding_SettledByTheChange(int freezes,
+    CheckStatus expected, HabitCheckStatusData stored, int penalties)
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (userId, charityId) = await SeedUser(LosAngeles, freezes);
+    var habitId = await SeedHabit(userId, charityId, ["Tuesday"], LosAngeles);
+    var svc = Checks.Service(_db);
+
+    await svc.OpenUpcoming(U(2026, 1, 6, 10)); // Tue 02:00 SF
+    await MoveUserTo(userId, Singapore);
+    var landed = U(2026, 1, 7, 0); // Wed 08:00 Singapore
+    var settled = (await svc.MoveToTimezone(userId, landed)).Get();
+
+    settled.Should().Equal(new SettledCheck(habitId, new DateOnly(2026, 1, 6), expected));
+    var tuesday = (await ChecksOf(habitId)).Single();
+    tuesday.Timezone.Should().Be(Singapore);
+    tuesday.DeadlineUtc.Should().Be(U(2026, 1, 6, 16), "Tuesday ends at midnight Singapore time");
+    tuesday.Status.Should().Be(stored);
+
+    (await svc.MoveToTimezone(userId, landed.AddMinutes(1))).Get().Should().BeEmpty("a day settles once");
+    (await svc.Report(userId, habitId, Checks.Manual(landed), landed)).Get().Should().BeNull();
+    await svc.DispatchEvents(landed.AddMinutes(5));
+    (await PenaltiesOf(userId)).Should().Be(penalties);
+  }
+
+  // A habit edit is not a timezone change: a started day keeps its End when the deadline time moves earlier.
   [SkippableFact]
-  public async Task SanFranciscoToSingapore_OpenCheckNeverGetsShorter()
+  public async Task HabitDeadlineMovedEarlier_StartedDayKeepsItsEnd()
   {
     Skip.If(_conn == null, SkipReason);
     var (userId, charityId) = await SeedUser(LosAngeles);
     var habitId = await SeedHabit(userId, charityId, ["Tuesday"], LosAngeles);
     var svc = Checks.Service(_db);
 
-    await svc.OpenUpcoming(U(2026, 1, 6, 10)); // Tue 02:00 SF
-    await MoveUserTo(userId, Singapore);
-    await svc.RetimePending(userId, null, U(2026, 1, 7, 4)); // Wed 12:00 Singapore
+    await svc.OpenUpcoming(U(2026, 1, 6, 18)); // Tue 10:00 SF
+    await _db.HabitVersions.Where(v => v.HabitId == habitId)
+      .ExecuteUpdateAsync(x => x.SetProperty(v => v.DeadlineTime, new TimeOnly(8, 0)));
+    await svc.RetimePending(userId, [habitId], U(2026, 1, 6, 18));
 
-    var tuesday = (await ChecksOf(habitId)).Single();
-    tuesday.Timezone.Should().Be(Singapore);
-    tuesday.DeadlineUtc.Should().Be(U(2026, 1, 7, 8), "Tuesday in Singapore ended earlier; the old deadline stays");
-
-    (await svc.CloseDue(U(2026, 1, 7, 5))).Get().Should().Be(0);
-    var done = (await svc.Report(userId, habitId, Checks.Manual(U(2026, 1, 7, 6)), U(2026, 1, 7, 6))).Get();
-    done!.Record.Date.Should().Be(new DateOnly(2026, 1, 6));
+    (await ChecksOf(habitId)).Single().DeadlineUtc.Should().Be(U(2026, 1, 7, 8), "Tuesday 23:59 SF stays");
   }
 
   // DST change days in Los Angeles: one check of 25 h / 23 h that settles exactly once.

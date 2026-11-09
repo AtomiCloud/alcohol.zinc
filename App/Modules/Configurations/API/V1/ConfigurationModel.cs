@@ -10,4 +10,11 @@ public record UpdateConfigurationReq(string Timezone, string DefaultCharityId);
 // RESP
 public record ConfigurationPrincipalRes(string Id, string UserId, string Timezone, string DefaultCharityId);
 
+// The principal's fields, plus the days the timezone change settled (status: missed, frozen
+// or vacation). Empty unless the timezone moved east past the end of a pending day.
+public record UpdateConfigurationRes(string Id, string UserId, string Timezone, string DefaultCharityId,
+  List<TimezoneSettledCheckRes> SettledChecks);
+
+public record TimezoneSettledCheckRes(string HabitId, string Date, string Status);
+
 public record ConfigurationRes(ConfigurationPrincipalRes Principal, CharityPrincipalRes? Charity);

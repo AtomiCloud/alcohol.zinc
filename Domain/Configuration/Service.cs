@@ -31,20 +31,24 @@ public class ConfigurationService(
     );
   }
 
-  public async Task<Result<ConfigurationPrincipal?>> Update(Guid id, string userId, ConfigurationRecord record)
+  public async Task<Result<ConfigurationUpdate?>> Update(Guid id, string userId, ConfigurationRecord record)
   {
     var before = await repo.Get(id, userId);
     if (before.IsFailure()) return before.FailureOrDefault();
     var updated = await repo.Update(id, userId, record);
-    if (updated.IsFailure() || updated.Get() == null) return updated;
+    if (updated.IsFailure()) return updated.FailureOrDefault();
+    var principal = updated.Get();
+    if (principal == null) return (ConfigurationUpdate?)null;
 
-    // The user's timezone follows the phone: move their pending checks to it. Settled
-    // checks never change, and an open check never gets shorter.
+    // The user's timezone follows the phone: move their pending checks to it, and settle
+    // the days that already ended there. Settled checks never change.
+    var settled = new List<SettledCheck>();
     if (before.Get()?.Principal.Record.Timezone != record.Timezone)
     {
-      var retimed = await checkService.RetimePending(userId, null);
-      if (retimed.IsFailure()) return retimed.FailureOrDefault();
+      var moved = await checkService.MoveToTimezone(userId);
+      if (moved.IsFailure()) return moved.FailureOrDefault();
+      settled = moved.Get();
     }
-    return updated;
+    return new ConfigurationUpdate { Principal = principal, SettledChecks = settled };
   }
 }

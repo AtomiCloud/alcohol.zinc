@@ -24,9 +24,14 @@ public interface ICheckService
   // Skips the check that is open now. Null when there is none to skip.
   Task<Result<HabitExecutionPrincipal?>> Skip(string userId, Guid habitId, string? notes, DateTime? nowUtc = null);
 
-  // Re-times Pending checks after a timezone or habit change. Open checks never get a
-  // shorter deadline; checks no longer scheduled are removed. Settled checks never change.
+  // Re-times Pending checks after a habit change (days, deadline time, enabled). Started
+  // checks never get a shorter deadline; checks no longer scheduled are removed.
   Task<Result<int>> RetimePending(string? userId, List<Guid>? habitIds, DateTime? nowUtc = null);
+
+  // Moves the user's Pending checks to their new timezone: Start and End follow the phone,
+  // earlier or later. Days whose new End (+ grace) has already passed are settled now
+  // (vacation, then freeze, then missed) and returned. Settled checks never change.
+  Task<Result<List<SettledCheck>>> MoveToTimezone(string userId, DateTime? nowUtc = null);
 }
 
 // A stake plugin instance attached to a habit's routine. Delivery must be idempotent per
