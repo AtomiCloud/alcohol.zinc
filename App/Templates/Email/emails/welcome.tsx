@@ -22,19 +22,13 @@ export const WelcomeEmail = ({
       subject="Welcome to LazyTax — let's build habits that stick"
       previewText="Simple daily check-ins. Stakes that donate to charity. Rewards when you succeed."
     >
-      <Section className="text-center mb-3">
-        <Img
-          src={`${baseUrl}/images/email/mascot.png`}
-          alt="The LazyTax panda"
-          width="96"
-          height="96"
-          className="mx-auto"
-        />
+      <Section className="mb-4">
+        <Img src={`${baseUrl}/images/email/mascot.png`} alt="The LazyTax panda" width="64" height="64" />
       </Section>
-      <Headline>Welcome to LazyTax, {userName} 👋</Headline>
+      <Headline>Welcome to LazyTax, {userName}</Headline>
       <Paragraph>
-        Finally, a habit tracker that works. Simple daily check-ins. Optional stakes that donate to charity when you
-        miss. Rewards when you succeed.
+        Start with one tiny habit you can do today. Stakes are optional; consistency comes first. Check in each day and
+        build momentum, one small step at a time.
       </Paragraph>
       <ReceiptCard
         rows={[

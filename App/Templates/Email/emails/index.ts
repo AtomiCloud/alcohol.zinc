@@ -7,6 +7,7 @@ export { default as SubscriptionPaymentFailedEmail } from './subscription-paymen
 export { default as SubscriptionCancelledEmail } from './subscription-cancelled';
 export { default as WelcomeEmail } from './welcome';
 export { default as PaymentConsentChangedEmail } from './payment-consent-changed';
+export { default as VerificationCodeEmail } from './verification-code';
 
 // Component library
 export * from './lib/header';

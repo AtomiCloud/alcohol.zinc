@@ -6,16 +6,16 @@ interface CallToActionProps {
 }
 
 /**
- * THE LazyTax brand CTA: the orange→fuchsia→violet gradient pill from the
- * argon landing Hero/FinalCTA. bg-brand supplies the solid orange
- * background-color fallback for clients that strip background-image (Outlook).
+ * A solid, high-contrast action that still works when a mail client removes
+ * stylesheets or does not support rounded corners. No fixed minimum width:
+ * long labels can wrap on narrow screens instead of widening the email.
  */
 export const CallToAction = ({ buttonText, buttonUrl }: CallToActionProps) => {
   return (
-    <Section className="text-center my-6">
+    <Section className="my-6">
       <Button
         href={buttonUrl}
-        className="bg-brand [background-image:linear-gradient(to_right,#f97316,#d946ef,#7c3aed)] text-white font-semibold text-[15px] no-underline rounded-xl px-8 py-3.5 min-w-[240px] inline-block"
+        className="bg-brand text-white font-semibold text-[16px] leading-[1.5] no-underline rounded-full block text-center px-3 py-3.5"
       >
         {buttonText}
       </Button>
