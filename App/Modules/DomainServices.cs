@@ -11,6 +11,7 @@ using App.Modules.Notification;
 using App.Modules.Payment.Airwallex;
 using App.Modules.Payment.Data;
 using App.Modules.Penalty.Data;
+using App.Modules.Proof.Data;
 using App.Modules.Protection.Data;
 using App.Modules.Routine;
 using App.Modules.Routine.Data;
@@ -34,6 +35,7 @@ using Domain.NfcTag;
 using Domain.Notification;
 using Domain.Payment;
 using Domain.Penalty;
+using Domain.Proof;
 using Domain.Protection;
 using Domain.Routine;
 using Domain.Subscription;
@@ -87,6 +89,16 @@ public static class DomainServices
     s.AddScoped<ICheckRepository, App.Modules.Check.Data.CheckRepository>()
       .AutoTrace<ICheckRepository>();
     s.AddScoped<IStakeBinding, PenaltyStakeBinding>();
+
+    // PROOF: each plugin is one IProofPlugin registration
+    s.AddScoped<IProofPlugin, ManualProofPlugin>();
+    s.AddScoped<IProofPluginRegistry, ProofPluginRegistry>();
+    s.AddScoped<IProofRouter, ProofRouter>()
+      .AutoTrace<IProofRouter>();
+    s.AddScoped<IProofService, ProofService>()
+      .AutoTrace<IProofService>();
+    s.AddScoped<IProofBindingRepository, ProofBindingRepository>()
+      .AutoTrace<IProofBindingRepository>();
 
     // ROUTINE
     s.AddScoped<IRoutineService, RoutineService>()

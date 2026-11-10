@@ -5,6 +5,7 @@ using App.Utility;
 using CSharp_Result;
 using Domain.Entitlement;
 using Domain.Habit;
+using Domain.Proof;
 using Domain.Protection;
 using Domain.Subscription;
 using Domain.Vacation;
@@ -15,7 +16,8 @@ public class EntitlementService(
   ISubscriptionService subscription,
   IVacationRepository vacationRepository,
   IHabitRepository habitRepository,
-  IFreezePolicy freezePolicy
+  IFreezePolicy freezePolicy,
+  ISubscriptionPlanProvider plans
 ) : IEntitlementService
 {
   public async Task<Result<Unit>> EnsureVacationWindowAllowed(string userId, DateOnly startDate)
@@ -91,5 +93,23 @@ public class EntitlementService(
         return new TierInsufficient(tier, EntitlementKeys.HabitsMax, limit).ToException();
       return new Unit();
     });
+  }
+
+  public async Task<Result<Unit>> EnsureProofPluginAllowed(string userId, PluginManifest plugin)
+  {
+    if (plugin.MinTier == null) return new Unit();
+
+    var tierRes = await subscription.GetUserTier(userId);
+    if (tierRes.IsFailure()) return tierRes.FailureOrDefault();
+    var tier = tierRes.Get();
+    var have = plans.GetPlan(tier);
+    if (have.IsFailure()) return have.FailureOrDefault();
+    var need = plans.GetPlan(plugin.MinTier);
+    if (need.IsFailure()) return need.FailureOrDefault();
+
+    // Tiers have no explicit order; a plan is "at least" another when it costs as much or more.
+    if (have.Get().Price.Amount >= need.Get().Price.Amount) return new Unit();
+    return new TierInsufficient(tier, $"proof.{plugin.Key}", 0,
+      $"The {plugin.Name} proof needs the {plugin.MinTier} plan or higher").ToException();
   }
 }

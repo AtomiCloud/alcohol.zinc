@@ -721,6 +721,44 @@ namespace App.Migrations
                     b.ToTable("Penalties");
                 });
 
+            modelBuilder.Entity("App.Modules.Proof.Data.ProofBindingData", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("HabitId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PluginKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("PluginVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Settings")
+                        .IsRequired()
+                        .HasMaxLength(4096)
+                        .HasColumnType("character varying(4096)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HabitId")
+                        .IsUnique();
+
+                    b.HasIndex("PluginKey");
+
+                    b.ToTable("ProofBindings");
+                });
+
             modelBuilder.Entity("App.Modules.Protection.Data.FreezeAwardData", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1149,6 +1187,17 @@ namespace App.Migrations
                     b.Navigation("HabitExecution");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("App.Modules.Proof.Data.ProofBindingData", b =>
+                {
+                    b.HasOne("App.Modules.Habit.Data.HabitData", "Habit")
+                        .WithMany()
+                        .HasForeignKey("HabitId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Habit");
                 });
 
             modelBuilder.Entity("App.Modules.Protection.Data.FreezeAwardData", b =>

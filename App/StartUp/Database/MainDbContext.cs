@@ -9,6 +9,7 @@ using App.Modules.HabitVersion.Data;
 using App.Modules.NfcTag.Data;
 using App.Modules.Payment.Data;
 using App.Modules.Penalty.Data;
+using App.Modules.Proof.Data;
 using App.Modules.Protection.Data;
 using App.Modules.Routine.Data;
 using App.Modules.Subscription.Data;
@@ -59,6 +60,8 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
   public DbSet<UserSubscriptionData> UserSubscriptions { get; set; }
   // NFC tags (physical tag → habit mapping)
   public DbSet<NfcTagData> NfcTags { get; set; }
+  // Proof plugins bound to habits (one per habit)
+  public DbSet<ProofBindingData> ProofBindings { get; set; }
   // public DbSet<CompletionData> Completions { get; set; }
   // public DbSet<StatsData> Stats { get; set; }
 
@@ -147,6 +150,16 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
             .WithMany()
             .HasForeignKey(x => x.EventId)
             .OnDelete(DeleteBehavior.Cascade);
+
+    // Proof bindings: one per habit. The cascade covers hard deletes (account purge);
+    // a soft-deleted habit's binding stays but is never routed to.
+    var proofBinding = modelBuilder.Entity<ProofBindingData>();
+    proofBinding.HasIndex(x => x.HabitId).IsUnique();
+    proofBinding.HasIndex(x => x.PluginKey);
+    proofBinding.HasOne(x => x.Habit)
+                .WithMany()
+                .HasForeignKey(x => x.HabitId)
+                .OnDelete(DeleteBehavior.Cascade);
 
     // Charity configuration
     var charity = modelBuilder.Entity<CharityData>();

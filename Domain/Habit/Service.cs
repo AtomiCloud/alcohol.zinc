@@ -2,6 +2,7 @@ using CSharp_Result;
 using Domain.Check;
 using Domain.Entitlement;
 using Domain.Exceptions;
+using Domain.Proof;
 using Microsoft.Extensions.Logging;
 
 namespace Domain.Habit;
@@ -10,6 +11,7 @@ public class HabitService(
   IHabitRepository repo,
   IEntitlementService entitlementService,
   ICheckService checkService,
+  IProofRouter proofRouter,
   ILogger<HabitService> logger
 ) : IHabitService
 {
@@ -64,17 +66,18 @@ public class HabitService(
     var hv = (HabitVersionPrincipal?)await repo.GetVersion(habitVersionId);
     if (hv == null) return NotCompletable(habitVersionId);
 
-    // The app, widget and NFC tap complete through Report as manual evidence.
-    var reported = await checkService.Report(userId, hv.HabitId, new Evidence
+    // The app, widget and NFC tap complete through the manual proof plugin.
+    var routed = await proofRouter.Route(new ProofEvent
     {
-      ProofKey = CheckService.ManualProof,
+      PluginKey = ManualProofPlugin.Key,
+      UserId = userId,
+      HabitId = hv.HabitId,
       ExternalId = Guid.NewGuid().ToString(),
-      Verdict = EvidenceVerdict.Passed,
       OccurredAtUtc = DateTime.UtcNow,
       Notes = notes
     });
-    if (reported.IsFailure()) return reported.FailureOrDefault();
-    var execution = reported.Get();
+    if (routed.IsFailure()) return routed.FailureOrDefault();
+    var execution = routed.Get().SingleOrDefault()?.Execution;
     if (execution == null) return NotCompletable(habitVersionId);
     return execution;
   }

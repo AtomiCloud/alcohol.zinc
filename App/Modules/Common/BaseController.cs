@@ -7,6 +7,7 @@ using App.StartUp.Services.Auth;
 using App.Utility;
 using CSharp_Result;
 using Domain.Exceptions;
+using Domain.Proof;
 using Domain.Subscription;
 using Microsoft.AspNetCore.Mvc;
 
@@ -45,6 +46,8 @@ public class AtomiControllerBase(IAuthHelper h) : ControllerBase
       },
       NotFoundException nfe => this.Error(HttpStatusCode.NotFound,
         new EntityNotFound(nfe.Message, nfe.Type, nfe.RequestIdentifier)),
+      InvalidProofBindingException ipb => this.Error(HttpStatusCode.BadRequest,
+        new ValidationError(ipb.Message, ipb.Errors)),
       AccountDeletionBlockedException adb => this.Error(HttpStatusCode.Conflict,
         new AccountDeletionBlocked(adb.TotalDebt, adb.Currency)),
       NoPaymentConsentException npc => this.Error(HttpStatusCode.PreconditionFailed,

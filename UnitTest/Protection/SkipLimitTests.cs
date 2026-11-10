@@ -100,7 +100,7 @@ public class SkipLimitTests
   // ---------------------------------------------------------------------------
   private static EntitlementService BuildEntitlement(
     FakeSubscriptionService sub, FakeSkipCountRepository habitRepo)
-    => new(sub, new FakeVacationRepository(), habitRepo, new NoopFreezePolicy());
+    => new(sub, new FakeVacationRepository(), habitRepo, new NoopFreezePolicy(), null!);
 
   private static (DateOnly Start, DateOnly End) MonthWindow()
     => (new DateOnly(2026, 6, 1), new DateOnly(2026, 6, 30));
