@@ -1,3 +1,10 @@
+## [1.38.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.37.0...v1.38.0) (2026-11-10)
+
+
+### ✨ Features ✨
+
+* proof plugin framework with manual as the first plugin ([7517f15](https://github.com/AtomiCloud/alcohol.zinc/commit/7517f15a09600a9b2bb0e0068b4d526f3c8b4fbe))
+
 ## [1.37.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.36.0...v1.37.0) (2026-11-10)
 
 
