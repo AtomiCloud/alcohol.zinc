@@ -4,12 +4,17 @@ using App.Modules.Configurations.Data;
 using App.Modules.Habit.Data;
 using App.Modules.HabitExecution.Data;
 using App.Modules.HabitVersion.Data;
+using App.Modules.NfcTag.Data;
 using App.Modules.Protection.Data;
+using App.Modules.Routine.Data;
 using App.Modules.Users.Data;
 using App.Modules.Vacation.Data;
 using App.StartUp.Database;
 using CSharp_Result;
+using Domain.Allowance;
 using Domain.Check;
+using Domain.Habit;
+using Domain.Subscription;
 using IntTest.Penalty;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -445,5 +450,81 @@ public class CheckScenarioTests : IAsyncLifetime
     var ev = await _db.CheckEvents.AsNoTracking().SingleAsync(e => e.HabitId == habitId);
     ev.DispatchedAtUtc.Should().NotBeNull();
     (await _db.CheckEventDeliveries.CountAsync(d => d.EventId == ev.Id)).Should().Be(2);
+  }
+
+  // The overview gives each habit its deadline, today's check End, its proof and its routine.
+  // Today's End is the stored check's (here re-timed), not recomputed from the deadline time.
+  [SkippableFact]
+  public async Task Overview_DeadlineProofAndRoutine_PerHabit()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (userId, charityId) = await SeedUser(LosAngeles);
+    var tagged = await SeedHabit(userId, charityId, ["Monday"], LosAngeles);
+    var offDay = await SeedHabit(userId, charityId, ["Tuesday"], LosAngeles);
+    var routineId = Guid.NewGuid();
+    _db.Routines.Add(new RoutineData { Id = routineId, UserId = userId, Name = "Morning" });
+    _db.NfcTags.Add(new NfcTagData { Id = $"tag-{Guid.NewGuid():N}", UserId = userId, HabitId = tagged });
+    await _db.SaveChangesAsync();
+    await _db.Habits.Where(h => h.Id == tagged).ExecuteUpdateAsync(x => x.SetProperty(h => h.RoutineId, routineId));
+    await _db.HabitVersions.Where(v => v.HabitId == tagged)
+      .ExecuteUpdateAsync(x => x.SetProperty(v => v.DeadlineTime, new TimeOnly(20, 0)));
+
+    var now = U(2026, 1, 5, 18); // Mon 10:00 in Los Angeles
+    var checks = Checks.Service(_db);
+    await checks.OpenUpcoming(now);
+    var retimedEnd = U(2026, 1, 6, 6, 30);
+    await _db.HabitChecks.Where(c => c.HabitId == tagged)
+      .ExecuteUpdateAsync(x => x.SetProperty(c => c.DeadlineUtc, retimedEnd));
+
+    var overview = new HabitOverviewService(
+      new HabitService(new HabitRepository(_db, NullLogger<HabitRepository>.Instance), null!, checks,
+        NullLogger<HabitService>.Instance),
+      new HabitRepository(_db, NullLogger<HabitRepository>.Instance),
+      new Domain.Configuration.ConfigurationService(
+        new ConfigurationRepository(_db, NullLogger<ConfigurationRepository>.Instance), checks, new NoTransaction()),
+      new Domain.Charity.CharityService(new CharityRepository(_db, NullLogger<CharityRepository>.Instance)),
+      new StreakService(new StreakRepository(_db, NullLogger<StreakRepository>.Instance)),
+      new StreakRepository(_db, NullLogger<StreakRepository>.Instance),
+      new FixedMonth(),
+      new FreeTier(),
+      new CheckRepository(_db, NullLogger<CheckRepository>.Instance),
+      new NfcTagRepository(_db, NullLogger<NfcTagRepository>.Instance),
+      new NoTransaction());
+    var res = App.Modules.Habit.API.V1.HabitOverviewMapper.ToRes(
+      (await overview.GetOverview(new HabitOverviewSearch(userId, 10, 0), "skips", now)).Get());
+
+    var a = res.Habits.Single(h => h.Id == tagged.ToString());
+    a.DeadlineTime.Should().Be("20:00");
+    a.TodayDeadlineUtc.Should().Be(retimedEnd);
+    a.TodayDeadlineUtc!.Value.Kind.Should().Be(DateTimeKind.Utc);
+    a.Proof.Should().Be("nfc");
+    a.RoutineId.Should().Be(routineId.ToString());
+
+    var b = res.Habits.Single(h => h.Id == offDay.ToString());
+    b.DeadlineTime.Should().Be("23:59");
+    b.TodayDeadlineUtc.Should().BeNull("Tuesday habit, Monday today");
+    b.Proof.Should().Be("manual");
+    b.RoutineId.Should().BeNull();
+  }
+
+  private sealed class NoTransaction : Domain.ITransactionManager
+  {
+    public Task<Result<T>> Start<T>(Func<Task<Result<T>>> func) => func();
+  }
+
+  private sealed class FixedMonth : IAllowanceService
+  {
+    public Task<Result<UserMonthWindow>> GetUserMonthWindow(string userId, DateTime? utcNow = null)
+      => Task.FromResult<Result<UserMonthWindow>>(new UserMonthWindow(LosAngeles, new DateOnly(2026, 1, 1),
+        new DateOnly(2026, 1, 31), new DateTime(2026, 1, 5, 10, 0, 0)));
+
+    public Task<Result<(string Timezone, DateOnly Today)>> GetUserToday(string userId, DateTime? utcNow = null)
+      => throw new NotImplementedException();
+  }
+
+  private sealed class FreeTier : ISubscriptionService
+  {
+    public Task<Result<string>> GetUserTier(string userId) => Task.FromResult<Result<string>>("free");
+    public Task<Result<int>> GetLimitForTier(string tier, string key) => Task.FromResult<Result<int>>(3);
   }
 }

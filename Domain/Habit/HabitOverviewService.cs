@@ -1,8 +1,10 @@
 using CSharp_Result;
 using Domain.Allowance;
 using Domain.Charity;
+using Domain.Check;
 using Domain.Configuration;
 using Domain.Exceptions;
+using Domain.NfcTag;
 using Domain.Subscription;
 
 namespace Domain.Habit;
@@ -16,9 +18,13 @@ public class HabitOverviewService(
   IStreakRepository streakRepository,
   IAllowanceService allowanceService,
   ISubscriptionService subscriptionService,
+  ICheckRepository checkRepository,
+  INfcTagRepository nfcTagRepository,
   ITransactionManager tm
 ) : IHabitOverviewService
 {
+  public const string NfcProof = "nfc";
+
   public Task<Result<HabitOverviewSummary>> GetOverview(HabitOverviewSearch search, string skipsMonthlyKey, 
     DateTime? nowUtc = null)
   {
@@ -66,13 +72,25 @@ public class HabitOverviewService(
               }, Errors.MapNone)
           )
         )
+        .ThenAwait(ctx5 => nfcTagRepository.ListTaggedHabits(search.UserId)
+          .Then(tagged => new {
+              ctx5.habits,
+              ctx5.userTz,
+              ctx5.debtsByHabit,
+              ctx5.totalDebt,
+              ctx5.usedSkip,
+              ctx5.totalSkip,
+              tagged
+            }, Errors.MapNone)
+        )
         .ThenAwait(async ctx =>
         {
           var acc = new List<HabitOverviewItem>().ToAsyncResult();
           foreach (var hv in ctx.habits.OrderByDescending(x => x.Version))
           {
             acc = acc
-              .ThenAwait(list => BuildItem(hv, search.UserId, ctx.userTz, nowUtc, ctx.debtsByHabit.TryGetValue(hv.HabitId, out var ds) ? ds : [])
+              .ThenAwait(list => BuildItem(hv, search.UserId, ctx.userTz, nowUtc, ctx.debtsByHabit.TryGetValue(hv.HabitId, out var ds) ? ds : [],
+                ctx.tagged.Contains(hv.HabitId) ? NfcProof : CheckService.ManualProof)
                 .Then(item => { list.Add(item); return list; }, Errors.MapNone));
           }
           return await acc
@@ -85,7 +103,8 @@ public class HabitOverviewService(
       string userId,
       string userTz,
       DateTime? nowUtc,
-      List<HabitDebtItem> debtsForHabit)
+      List<HabitDebtItem> debtsForHabit,
+      string proof)
     {
       return habitRepository.GetHabit(hv.HabitId)
         .NullToError(hv.HabitId.ToString())
@@ -102,6 +121,9 @@ public class HabitOverviewService(
         .ThenAwait(ctx => streakService.GetStatusForHabit(userId, hv.HabitId, userTz, hv.Record.DaysOfWeek, hv.Record.DeadlineTime, nowUtc)
           .Then(status => new { ctx.habitPrincipal, ctx.charity, status }, Errors.MapNone)
         )
+        .ThenAwait(ctx => TodayDeadline(hv, userTz, ctx.status.Today)
+          .Then(deadline => new { ctx.habitPrincipal, ctx.charity, ctx.status, deadline }, Errors.MapNone)
+        )
         .Then(ctx2 => new HabitOverviewItem(
             hv.HabitId,
             hv.Record.Task,
@@ -115,8 +137,24 @@ public class HabitOverviewService(
             ctx2.status,
             ctx2.status.TimeLeftToEodMinutes,
             new HabitVersionMeta(hv.Id, hv.Version, true),
-            debtsForHabit.Sum(d => d.Amount)
+            debtsForHabit.Sum(d => d.Amount),
+            hv.Record.DeadlineTime,
+            ctx2.deadline,
+            proof,
+            ctx2.habitPrincipal.Record.RoutineId
           ), Errors.MapNone);
+    }
+
+    // Today's check End: the stored check when it exists (it may have been re-timed),
+    // otherwise the window the scheduler will open. Null on days the habit isn't scheduled.
+    async Task<Result<DateTime?>> TodayDeadline(HabitVersionPrincipal hv, string userTz, DateOnly today)
+    {
+      var check = (CheckPrincipal?)await checkRepository.Get(hv.HabitId, today);
+      if (check != null) return check.Record.DeadlineUtc;
+      var scheduled = hv.Record.DaysOfWeek.Any(d =>
+        string.Equals(d, today.DayOfWeek.ToString(), StringComparison.OrdinalIgnoreCase));
+      if (!scheduled) return (DateTime?)null;
+      return CheckWindow.For(today, CheckWindow.Resolve(userTz), hv.Record.DeadlineTime).DeadlineUtc;
     }
   }
 }

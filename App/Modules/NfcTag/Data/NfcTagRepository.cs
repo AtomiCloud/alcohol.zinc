@@ -26,6 +26,21 @@ public class NfcTagRepository(MainDbContext db, ILogger<NfcTagRepository> logger
     }
   }
 
+  public async Task<Result<HashSet<Guid>>> ListTaggedHabits(string userId)
+  {
+    try
+    {
+      var ids = await db.NfcTags.AsNoTracking().Where(x => x.UserId == userId)
+        .Select(x => x.HabitId).Distinct().ToListAsync();
+      return ids.ToHashSet();
+    }
+    catch (Exception e)
+    {
+      logger.LogError(e, "ListTaggedHabits failed for UserId={UserId}", userId);
+      throw;
+    }
+  }
+
   public async Task<Result<NfcTagPrincipal>> Upsert(string tagId, string userId, Guid habitId)
   {
     try
