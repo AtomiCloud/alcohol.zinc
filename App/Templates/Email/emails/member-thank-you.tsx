@@ -1,3 +1,4 @@
+import { Img, Section } from '@react-email/components';
 import { EmailLayout } from './lib/layout';
 import { Headline, Paragraph, FinePrint } from './lib/typography';
 import { ReceiptCard } from './lib/receipt-card';
@@ -34,6 +35,9 @@ export const MemberThankYouEmail = ({
       previewText={`Hi ${userName}, thanks for being a valued LazyTax member`}
       userEmail={userEmail}
     >
+      <Section className="mb-4">
+        <Img src={`${baseUrl}/images/email/mascot.png`} alt="The LazyTax panda" width="64" height="64" />
+      </Section>
       <Headline>Thank you, {userName}</Headline>
       <Paragraph>
         We&apos;re grateful to have you as a LazyTax member. You&apos;re part of a community building habits that stick

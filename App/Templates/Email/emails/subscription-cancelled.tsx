@@ -27,22 +27,18 @@ export const SubscriptionCancelledEmail = ({
       previewText={`${changeSummary} — effective ${effectiveDate}`}
     >
       <Headline>Change confirmed, {userName}</Headline>
-      <Paragraph>
-        We&apos;ve updated your LazyTax subscription, as requested. No hard feelings — your habits keep working on
-        whatever plan you&apos;re on.
-      </Paragraph>
+      <Paragraph>Your LazyTax subscription has changed. Review the change and its effective date below.</Paragraph>
       <ReceiptCard
         rows={[
           { label: 'Change', value: changeSummary },
           { label: 'Effective', value: effectiveDate },
-          { label: 'Until then', value: 'Full current-plan access' },
           { label: 'Refunds', value: 'No partial refunds' },
         ]}
       />
       <CallToAction buttonText="Manage subscription" buttonUrl={`${baseUrl}/billing`} />
       <FinePrint>
-        You keep everything your current plan gives you until {effectiveDate}. Changed your mind? You can resubscribe or
-        switch tiers from your billing page — it takes a minute.
+        Your habits and history stay safe. You can review your current plan, resubscribe or switch tiers from your
+        billing page.
       </FinePrint>
     </EmailLayout>
   );

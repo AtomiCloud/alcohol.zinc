@@ -8,7 +8,7 @@ namespace App.Modules.Notification;
 public static class EmailTemplates
 {
   public const string PenaltyCharged = "penalty-charged";
-  public const string PenaltyChargedSubject = "Your stake went to charity";
+  public const string PenaltyChargedSubject = "Your LazyTax habit stake receipt";
 
   public const string PenaltyPaymentFailed = "penalty-payment-failed";
   public const string PenaltyPaymentFailedSubject = "We couldn't process your stake";
