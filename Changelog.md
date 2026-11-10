@@ -1,3 +1,10 @@
+## [1.36.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.35.0...v1.36.0) (2026-11-10)
+
+
+### ✨ Features ✨
+
+* standardize LazyTax emails with friendly branding ([af92823](https://github.com/AtomiCloud/alcohol.zinc/commit/af92823a5918da272b1e3aa5603b9eba2782a4ed))
+
 ## [1.35.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.34.0...v1.35.0) (2026-11-09)
 
 
