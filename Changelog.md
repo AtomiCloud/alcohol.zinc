@@ -1,3 +1,18 @@
+## [1.37.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.36.0...v1.37.0) (2026-11-10)
+
+
+### ✨ Features ✨
+
+* overview returns deadline, today's check end, proof and routine ([82e42da](https://github.com/AtomiCloud/alcohol.zinc/commit/82e42dae743050548fe106691e33a6d103a073ae))
+
+
+### 🐛 Bug Fixes 🐛
+
+* pin dotnet-ef to 8.0.0 in the migration image ([acc6861](https://github.com/AtomiCloud/alcohol.zinc/commit/acc6861d803320f1dac54a85e614461eeb487a5b))
+* preserve existing LazyTax email design ([c738b01](https://github.com/AtomiCloud/alcohol.zinc/commit/c738b01b601c5db99ce619804a6b9123298fcc00))
+* preserve migration tooling fix merged on main ([68f5afa](https://github.com/AtomiCloud/alcohol.zinc/commit/68f5afa6618e61213fa76b5389d9f935314544e8)), closes [#87](https://github.com/AtomiCloud/alcohol.zinc/issues/87)
+* restore pinned EF tool for migration builds ([8fae12f](https://github.com/AtomiCloud/alcohol.zinc/commit/8fae12f6f71a488f0c5cb8f10aea8c0601bb1d77))
+
 ## [1.36.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.35.0...v1.36.0) (2026-11-10)
 
 
