@@ -9,9 +9,8 @@ COPY --chown=dotnet "App/App.csproj" "App/"
 RUN dotnet restore -a $TARGETARCH "App/App.csproj"
 COPY --chown=dotnet . .
 WORKDIR /app
-RUN dotnet tool install --global dotnet-ef
-ENV PATH="$PATH:/home/dotnet/.dotnet/tools"
+RUN dotnet tool restore
 ENV LANDSCAPE=lapras
-RUN dotnet-ef migrations bundle --project ./App
+RUN dotnet ef migrations bundle --project ./App
 ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=0
 CMD [ "./efbundle" ]
