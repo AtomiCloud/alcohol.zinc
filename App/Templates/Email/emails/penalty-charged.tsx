@@ -27,17 +27,16 @@ export const PenaltyChargedEmail = ({
     <EmailLayout
       baseUrl={baseUrl}
       supportEmail={supportEmail}
-      subject="Your stake went to charity"
+      subject="Your LazyTax habit stake receipt"
       previewText={`Your ${amount} stake is headed to ${charityName}`}
     >
-      <Headline>Your stake did some good, {userName}</Headline>
+      <Headline>Your stake was charged, {userName}</Headline>
       <Paragraph>
-        You missed {habitName}, so your stake was charged and is headed to your chosen charity. That was the deal — this
-        isn&apos;t punishment, it&apos;s your commitment made real.
+        You missed {habitName}, so your agreed stake was charged and is headed to your chosen charity.
       </Paragraph>
       <ReceiptCard
         amount={amount}
-        amountLabel="donated on your behalf"
+        amountLabel="Stake payment collected"
         rows={[
           { label: 'Charity', value: charityName, emphasis: 'emerald' },
           { label: 'Habit', value: habitName },

@@ -33,6 +33,7 @@ public class EmailTemplateRenderTests
     TelegramUrl = "https://t.me/lazytax",
     MemberSince = "January 2026",
     MembershipType = "Pro",
+    Code = "482619",
   };
 
   [Theory]
@@ -44,6 +45,7 @@ public class EmailTemplateRenderTests
   [InlineData(EmailTemplates.Welcome)]
   [InlineData(EmailTemplates.PaymentConsentChanged)]
   [InlineData(EmailTemplates.MemberThankYou)]
+  [InlineData("verification-code")]
   public async Task Template_RendersFromEmbeddedResource_WithNoTokenResidue(string templateId)
   {
     var renderer = new EmailRenderer(NullLogger<EmailRenderer>.Instance);
@@ -53,7 +55,7 @@ public class EmailTemplateRenderTests
     res.IsSuccess().Should().BeTrue(
       $"template '{templateId}' must exist as an embedded resource — did `task email:build` run before `dotnet build`?");
     var html = res.Get();
-    html.Should().Contain("Sarah");
+    html.Should().Contain(templateId == "verification-code" ? "482619" : "Sarah");
     html.Should().Contain("support@lazytax.club");
     html.Should().NotContain("{{", "every Handlebars token must be filled");
     html.Should().Contain("lazytax.club/images/email/logo.png", "the header must hotlink the argon logo PNG");
