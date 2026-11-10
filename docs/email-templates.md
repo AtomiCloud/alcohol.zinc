@@ -1,9 +1,10 @@
 # LazyTax email templates
 
-All templates use the shared **Friendly (B)** layout in
-`App/Templates/Email/emails/lib`: warm cream, navy text, a solid burnt-orange
-action, and table-based details. Only welcome and membership messages include
-the decorative panda; the small brand logo appears everywhere.
+Templates retain the existing LazyTax design in `App/Templates/Email/emails/lib`:
+white cards on a slate background, navy serif headings, gradient actions and
+two-column receipt details. The Friendly (B) restyle is deferred. Pixel-based
+styling, larger readable text, wrapping fixes and accurate billing copy remain.
+Only welcome includes the decorative panda; the small brand logo appears everywhere.
 
 ## Build and delivery
 
@@ -46,8 +47,9 @@ its README; this does not establish which connector is currently installed.
 - Keep codes and all financial details as text, with meaningful image alt text.
 - Test 320px and wider layouts with long names and values, blocked images, and
   removed head styles, as well as desktop rendering.
-- Buttons have no fixed minimum width. Solid backgrounds and readable link
-  text remain usable if rounded corners are unsupported.
+- Buttons have no fixed minimum width and stay within their container. The
+  gradient has a solid orange fallback for clients without gradient support;
+  rounded corners may degrade to square corners.
 - The layout declares light mode. Gmail and other apps can still force color
   inversion; browser dark preference is not a substitute for real inbox tests.
 - Before release, send approved samples to Apple Mail on iPhone, Gmail on
