@@ -277,7 +277,8 @@ public class PenaltyIntegrationTests : IAsyncLifetime
         3m, "USD", true, new Domain.Charity.CharityPrincipal
         {
           Id = charityId, Record = new Domain.Charity.CharityRecord { Name = "Charity" }
-        }, status, status.TimeLeftToEodMinutes, new HabitVersionMeta(version.Id, 1, true), 0m)],
+        }, status, status.TimeLeftToEodMinutes, new HabitVersionMeta(version.Id, 1, true), 0m,
+        new TimeOnly(23, 59), null, "manual", null)],
       0m, 0, 3));
 
     response.Habits.Single().Status.Today.Should().Be("04-01-2026");
