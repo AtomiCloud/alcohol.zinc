@@ -21,6 +21,10 @@ public interface ICheckService
   // evidence.OccurredAtUtc. Null when nothing changed (replay, already settled, too late).
   Task<Result<HabitExecutionPrincipal?>> Report(string userId, Guid habitId, Evidence evidence, DateTime? nowUtc = null);
 
+  // The Pending check whose window contains atUtc (clamped to now), created on demand like
+  // Report does. Null when that moment's day is settled, unscheduled, or over (past grace).
+  Task<Result<CheckPrincipal?>> PendingCheckAt(string userId, Guid habitId, DateTime atUtc, DateTime? nowUtc = null);
+
   // Skips the check that is open now. Null when there is none to skip.
   Task<Result<HabitExecutionPrincipal?>> Skip(string userId, Guid habitId, string? notes, DateTime? nowUtc = null);
 

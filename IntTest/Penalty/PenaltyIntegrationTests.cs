@@ -149,7 +149,7 @@ public class PenaltyIntegrationTests : IAsyncLifetime
     var ownVersionId = await _db.HabitExecutions.Where(x => x.Id == ownExecution)
       .Select(x => x.HabitVersionId).SingleAsync();
     var service = new HabitService(new HabitRepository(_db, NullLogger<HabitRepository>.Instance),
-      null!, null!, NullLogger<HabitService>.Instance);
+      null!, null!, null!, NullLogger<HabitService>.Instance);
     var controller = new App.Modules.Habit.API.V1.HabitController(service, null!, null!, null!,
       null!, null!, new(), new(), new(), new())
     {

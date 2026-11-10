@@ -24,7 +24,7 @@ public class HabitUpdateTests
       EnsureHabitsAllowedResult = new InvalidOperationException("Habit cap reached")
     };
     var checks = new FakeCheckService();
-    var service = new HabitService(repo, entitlements, checks, NullLogger<HabitService>.Instance);
+    var service = new HabitService(repo, entitlements, checks, null!, NullLogger<HabitService>.Instance);
 
     var result = await service.Update(userId, habitId, record, enabled);
 

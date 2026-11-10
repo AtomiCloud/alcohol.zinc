@@ -478,7 +478,7 @@ public class CheckScenarioTests : IAsyncLifetime
 
     var overview = new HabitOverviewService(
       new HabitService(new HabitRepository(_db, NullLogger<HabitRepository>.Instance), null!, checks,
-        NullLogger<HabitService>.Instance),
+        null!, NullLogger<HabitService>.Instance),
       new HabitRepository(_db, NullLogger<HabitRepository>.Instance),
       new Domain.Configuration.ConfigurationService(
         new ConfigurationRepository(_db, NullLogger<ConfigurationRepository>.Instance), checks, new NoTransaction()),

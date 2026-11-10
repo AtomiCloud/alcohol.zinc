@@ -188,6 +188,18 @@ public class CheckService(
     return outcome is { Adopted: false } ? outcome.Execution : null;
   }
 
+  public async Task<Result<CheckPrincipal?>> PendingCheckAt(string userId, Guid habitId, DateTime atUtc,
+    DateTime? nowUtc = null)
+  {
+    var now = nowUtc ?? DateTime.UtcNow;
+    var habit = ((List<SchedulableHabit>)await repo.ListSchedulableHabits(userId, [habitId])).FirstOrDefault();
+    if (habit == null)
+      return new NotFoundException("Habit not found or not enabled", typeof(HabitPrincipal), habitId.ToString());
+
+    var check = await OpenCheckAt(habit, atUtc > now ? now : atUtc);
+    return check == null || now > check.Record.DeadlineUtc + CheckWindow.Grace ? null : check;
+  }
+
   public async Task<Result<HabitExecutionPrincipal?>> Skip(string userId, Guid habitId, string? notes,
     DateTime? nowUtc = null)
   {

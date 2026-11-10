@@ -2,6 +2,7 @@ using CSharp_Result;
 using Domain.Check;
 using Domain.Entitlement;
 using Domain.Habit;
+using Domain.Proof;
 using Domain.Protection;
 using Domain.Vacation;
 
@@ -80,6 +81,8 @@ public sealed class FakeCheckService : ICheckService
   public Task<Result<HabitExecutionPrincipal?>> Report(string userId, Guid habitId, Evidence evidence, DateTime? nowUtc = null)
     => throw new NotImplementedException();
   public Task<Result<HabitExecutionPrincipal?>> Skip(string userId, Guid habitId, string? notes, DateTime? nowUtc = null)
+    => throw new NotImplementedException();
+  public Task<Result<CheckPrincipal?>> PendingCheckAt(string userId, Guid habitId, DateTime atUtc, DateTime? nowUtc = null)
     => throw new NotImplementedException();
 }
 
@@ -254,6 +257,9 @@ public sealed class FakeEntitlementService : IEntitlementService
     EnsureHabitsAllowedCalls.Add(userId);
     return Task.FromResult(EnsureHabitsAllowedResult);
   }
+
+  public Task<Result<Unit>> EnsureProofPluginAllowed(string userId, PluginManifest plugin)
+    => throw new NotImplementedException();
 }
 
 // ---------------------------------------------------------------------------
