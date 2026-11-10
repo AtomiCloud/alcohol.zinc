@@ -12,6 +12,8 @@ namespace UnitTest.NfcTag;
 
 public sealed class FakeNfcTagRepository : INfcTagRepository
 {
+  public Task<Result<HashSet<Guid>>> ListTaggedHabits(string userId) => throw new NotImplementedException();
+
   public Dictionary<string, NfcTagPrincipal> Tags { get; } = [];
   public Dictionary<(Guid HabitId, DateOnly Date), HabitExecutionPrincipal> Executions { get; } = [];
 

@@ -21,7 +21,11 @@ public record HabitOverviewHabitRes(
   HabitStatusRes Status,
   int TimeLeftToEodMinutes,
   HabitVersionMetaRes Version,
-  string TotalDebt
+  string TotalDebt,
+  string DeadlineTime,            // "HH:mm" in the user's timezone
+  DateTime? TodayDeadlineUtc,     // end of today's check (UTC); null when not scheduled today
+  string Proof,                   // "manual" | "nfc"
+  string? RoutineId
 );
 
 public record StakeRes(decimal Amount, string Currency);

@@ -9,6 +9,9 @@ public interface INfcTagRepository
   Task<Result<NfcTagPrincipal>> Upsert(string tagId, string userId, Guid habitId);
   Task<Result<Unit?>> Delete(string tagId, string userId);
 
+  // Habits of the user that have at least one tag linked.
+  Task<Result<HashSet<Guid>>> ListTaggedHabits(string userId);
+
   /// <summary>
   /// Latest execution of any version of the habit on the given date, or null
   /// when the habit has not been acted on that day.

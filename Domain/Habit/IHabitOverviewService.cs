@@ -19,7 +19,13 @@ public record HabitOverviewItem
   HabitStreakStatus Status,
   int TimeLeftToEodMinutes,
   HabitVersionMeta Version,
-  decimal TotalDebtAmount
+  decimal TotalDebtAmount,
+  TimeOnly DeadlineTime,
+  // End of today's check (absolute), null when the habit isn't scheduled today.
+  DateTime? TodayDeadlineUtc,
+  // How the habit is proven: "nfc" when a tag is linked, otherwise "manual".
+  string Proof,
+  Guid? RoutineId
 );
 
 public record HabitOverviewSearch(string UserId, int Limit, int Skip);
