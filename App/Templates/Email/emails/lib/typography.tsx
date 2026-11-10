@@ -3,7 +3,7 @@ import { ReactNode } from 'react';
 
 /** Georgia serif headline in brand navy — matches argon's rendered heading font */
 export const Headline = ({ children }: { children: ReactNode }) => (
-  <Heading as="h1" className="font-serif text-[26px] leading-[1.25] text-navy font-bold m-0 mb-4 break-words">
+  <Heading as="h1" className="font-serif text-[23px] leading-[1.3] text-navy font-bold m-0 mb-3 break-words">
     {children}
   </Heading>
 );

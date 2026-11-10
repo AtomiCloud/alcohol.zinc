@@ -22,8 +22,8 @@ export const Footer = ({
 }: FooterProps) => {
   const year = new Date().getFullYear();
   return (
-    <Section className="px-6 pb-6">
-      <Hr className="border-solid border-line border-t my-0 mb-4" />
+    <Section className="px-9 pb-7">
+      <Hr className="border-solid border-[#e2e8f0] border-t my-0 mb-4" />
       <Text className="text-[12px] leading-[1.65] text-[#59697b] m-0 mb-2 break-words">
         {reason} Questions?{' '}
         <Link href={`mailto:${supportEmail}`} className="text-[#455d7a] underline">

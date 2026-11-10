@@ -11,7 +11,7 @@ interface HeaderProps {
  */
 export const Header = ({ baseUrl }: HeaderProps) => {
   return (
-    <Section className="bg-warm rounded-t-xl px-6 py-5">
+    <Section className="mb-6">
       <Row>
         <Column className="w-[44px]">
           <Link href={baseUrl}>
@@ -20,7 +20,7 @@ export const Header = ({ baseUrl }: HeaderProps) => {
         </Column>
         <Column>
           <Link href={baseUrl} className="no-underline">
-            <Text className="font-serif font-bold text-[21px] text-navy m-0 leading-[36px]">LazyTax</Text>
+            <Text className="font-serif font-bold text-[19px] text-navy m-0 leading-[36px]">LazyTax</Text>
           </Link>
         </Column>
       </Row>

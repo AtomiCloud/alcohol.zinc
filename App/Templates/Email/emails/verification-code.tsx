@@ -18,7 +18,7 @@ export const VerificationCodeEmail = ({ code = '{{code}}' }: VerificationCodeEma
   >
     <Headline>Your verification code</Headline>
     <Paragraph>Use this code on the LazyTax verification screen you already opened.</Paragraph>
-    <Section className="bg-warm border border-solid border-line rounded-lg my-5 px-2 py-5">
+    <Section className="bg-[#f8fafc] border border-solid border-[#e2e8f0] rounded-lg my-5 px-2 py-5">
       <Text className="font-mono font-bold text-[32px] leading-[1.3] tracking-[4px] text-center text-navy m-0">
         {code}
       </Text>
