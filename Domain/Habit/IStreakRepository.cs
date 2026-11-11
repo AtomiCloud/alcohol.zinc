@@ -4,10 +4,9 @@ namespace Domain.Habit;
 
 public interface IStreakRepository
 {
-  Task<Result<int>> GetCurrentStreak(Guid habitId, DateOnly today);
-  Task<Result<int>> GetMaxStreak(Guid habitId);
   Task<Result<HashSet<DateOnly>>> GetCompletedInRange(Guid habitId, DateOnly start, DateOnly end);
-  Task<Result<List<HabitExecutionRecord>>> GetExecutionsInHabitDateRange(Guid habitId, DateOnly start, DateOnly end);
+  // Every execution of each habit (all versions), oldest first; habits without any are absent.
+  Task<Result<Dictionary<Guid, List<HabitExecutionRecord>>>> GetExecutionsForHabits(IReadOnlyCollection<Guid> habitIds);
   Task<Result<List<HabitDebtItem>>> GetOpenDebtsForHabit(Guid habitId);
   Task<Result<List<HabitDebtItem>>> GetOpenDebtsForUser(string userId);
   Task<Result<int>> GetUserMaxStreakAcrossHabits(string userId);

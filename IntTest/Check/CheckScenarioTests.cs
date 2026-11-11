@@ -484,21 +484,7 @@ public class CheckScenarioTests : IAsyncLifetime
     await _db.HabitChecks.Where(c => c.HabitId == tagged)
       .ExecuteUpdateAsync(x => x.SetProperty(c => c.DeadlineUtc, retimedEnd));
 
-    var overview = new HabitOverviewService(
-      new HabitService(new HabitRepository(_db, NullLogger<HabitRepository>.Instance), null!, checks,
-        null!, NullLogger<HabitService>.Instance),
-      new HabitRepository(_db, NullLogger<HabitRepository>.Instance),
-      new Domain.Configuration.ConfigurationService(
-        new ConfigurationRepository(_db, NullLogger<ConfigurationRepository>.Instance), checks, new NoTransaction()),
-      new Domain.Charity.CharityService(new CharityRepository(_db, NullLogger<CharityRepository>.Instance)),
-      new StreakService(new StreakRepository(_db, NullLogger<StreakRepository>.Instance)),
-      new StreakRepository(_db, NullLogger<StreakRepository>.Instance),
-      new FixedMonth(),
-      new FreeTier(),
-      new CheckRepository(_db, NullLogger<CheckRepository>.Instance),
-      new NfcTagRepository(_db, NullLogger<NfcTagRepository>.Instance),
-      new ProofBindingRepository(_db, NullLogger<ProofBindingRepository>.Instance),
-      new NoTransaction());
+    var overview = Overview(checks);
     var res = App.Modules.Habit.API.V1.HabitOverviewMapper.ToRes(
       (await overview.GetOverview(new HabitOverviewSearch(userId, 10, 0), "skips", now)).Get());
 
@@ -516,6 +502,96 @@ public class CheckScenarioTests : IAsyncLifetime
     b.RoutineId.Should().BeNull();
 
     res.Habits.Single(h => h.Id == bound.ToString()).Proof.Should().Be("strava");
+  }
+
+  private HabitOverviewService Overview(CheckService checks) => new(
+    new HabitService(new HabitRepository(_db, NullLogger<HabitRepository>.Instance), null!, checks,
+      null!, NullLogger<HabitService>.Instance),
+    new HabitRepository(_db, NullLogger<HabitRepository>.Instance),
+    new Domain.Configuration.ConfigurationService(
+      new ConfigurationRepository(_db, NullLogger<ConfigurationRepository>.Instance), checks, new NoTransaction()),
+    new Domain.Charity.CharityService(new CharityRepository(_db, NullLogger<CharityRepository>.Instance)),
+    new StreakService(new StreakRepository(_db, NullLogger<StreakRepository>.Instance)),
+    new StreakRepository(_db, NullLogger<StreakRepository>.Instance),
+    new FixedMonth(),
+    new FreeTier(),
+    new CheckRepository(_db, NullLogger<CheckRepository>.Instance),
+    new NfcTagRepository(_db, NullLogger<NfcTagRepository>.Instance),
+    new ProofBindingRepository(_db, NullLogger<ProofBindingRepository>.Instance),
+    new NoTransaction());
+
+  // Each habit gets its own streaks and week, across its versions: current counts Completed
+  // days after the last Failed day up to today, max is the longest Completed run (only a
+  // Failed day breaks it), and later days don't count toward today.
+  [SkippableFact]
+  public async Task Overview_StreaksAndWeek_PerHabit()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (userId, charityId) = await SeedUser(LosAngeles);
+    var a = await SeedHabit(userId, charityId, ["Sunday", "Monday", "Wednesday"], LosAngeles);
+    var b = await SeedHabit(userId, charityId, ["Monday"], LosAngeles);
+    var a1 = await _db.HabitVersions.Where(v => v.HabitId == a).Select(v => v.Id).SingleAsync();
+    var a2 = Guid.NewGuid();
+    _db.HabitVersions.Add(new HabitVersionData
+    {
+      Id = a2, HabitId = a, CharityId = charityId, Version = 2, Task = "Run 5 km", DaysOfWeek = ["Sunday", "Monday", "Wednesday"],
+      NotificationTime = new TimeOnly(19, 0), Timezone = LosAngeles,
+      StakeCents = 1000, StakeCurrency = "USD", RatioBasisPoints = 10000
+    });
+    await _db.SaveChangesAsync();
+    await _db.Habits.Where(h => h.Id == a).ExecuteUpdateAsync(x => x.SetProperty(h => h.Version, (ushort)2));
+    var b1 = await _db.HabitVersions.Where(v => v.HabitId == b).Select(v => v.Id).SingleAsync();
+
+    const HabitExecutionStatusData C = HabitExecutionStatusData.Completed, F = HabitExecutionStatusData.Failed;
+    void Exec(Guid versionId, int m, int d, HabitExecutionStatusData status) =>
+      _db.HabitExecutions.Add(new HabitExecutionData
+      {
+        HabitVersionId = versionId, Date = new DateOnly(m == 12 ? 2025 : 2026, m, d), Status = status
+      });
+    // a: a run of 4, a miss, the best run (5 Completed days across a skip, a vacation day
+    // and both versions), a miss, then 2 Completed days up to today and a miss on
+    // Wednesday, after today.
+    foreach (var d in new[] { 15, 16, 17, 18 }) Exec(a1, 12, d, C);
+    Exec(a1, 12, 19, F);
+    Exec(a1, 12, 20, C);
+    Exec(a1, 12, 21, C);
+    Exec(a1, 12, 22, HabitExecutionStatusData.Skipped);
+    Exec(a1, 12, 23, C);
+    Exec(a1, 12, 24, HabitExecutionStatusData.Vacation);
+    Exec(a2, 12, 25, C);
+    Exec(a2, 12, 26, C);
+    Exec(a2, 12, 27, F);
+    Exec(a2, 1, 3, HabitExecutionStatusData.Vacation);
+    Exec(a2, 1, 4, C);
+    Exec(a2, 1, 5, C);
+    Exec(a2, 1, 7, F);
+    // b: two Completed days, then a miss today.
+    Exec(b1, 1, 2, C);
+    Exec(b1, 1, 3, C);
+    Exec(b1, 1, 5, F);
+    await _db.SaveChangesAsync();
+
+    var now = U(2026, 1, 5, 18); // Mon 10:00 in Los Angeles; the week is Sun 4 to Sat 10
+    var summary = (await Overview(Checks.Service(_db))
+      .GetOverview(new HabitOverviewSearch(userId, 10, 0), "skips", now)).Get();
+
+    var sa = summary.Items.Single(i => i.HabitId == a).Status;
+    sa.CurrentStreak.Should().Be(2);
+    sa.MaxStreak.Should().Be(5);
+    sa.Today.Should().Be(new DateOnly(2026, 1, 5));
+    sa.IsCompleteToday.Should().BeTrue();
+    sa.TodayStatus.Should().Be(HabitDayStatus.Succeeded);
+    sa.WeekStatuses[DayOfWeek.Sunday].Should().Be(HabitDayStatus.Succeeded);
+    sa.WeekStatuses[DayOfWeek.Monday].Should().Be(HabitDayStatus.Succeeded);
+    sa.WeekStatuses[DayOfWeek.Wednesday].Should().Be(HabitDayStatus.Failed);
+    sa.WeekStatuses[DayOfWeek.Saturday].Should().Be(HabitDayStatus.NotApplicable, "Jan 3 is last week");
+
+    var sb = summary.Items.Single(i => i.HabitId == b).Status;
+    sb.CurrentStreak.Should().Be(0);
+    sb.MaxStreak.Should().Be(2);
+    sb.IsCompleteToday.Should().BeFalse();
+    sb.TodayStatus.Should().Be(HabitDayStatus.Failed);
+    sb.WeekStatuses[DayOfWeek.Sunday].Should().Be(HabitDayStatus.NotApplicable);
   }
 
   private sealed class NoTransaction : Domain.ITransactionManager
