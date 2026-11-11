@@ -12,6 +12,7 @@ using App.Modules.Penalty.Data;
 using App.Modules.Proof.Data;
 using App.Modules.Protection.Data;
 using App.Modules.Routine.Data;
+using App.Modules.Strava.Data;
 using App.Modules.Subscription.Data;
 using App.Modules.Users.Data;
 using App.Modules.Vacation.Data;
@@ -62,6 +63,9 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
   public DbSet<NfcTagData> NfcTags { get; set; }
   // Proof plugins bound to habits (one per habit)
   public DbSet<ProofBindingData> ProofBindings { get; set; }
+  // Strava proof plugin: each user's link, and the webhook inbox
+  public DbSet<StravaConnectionData> StravaConnections { get; set; }
+  public DbSet<StravaEventData> StravaEvents { get; set; }
   // public DbSet<CompletionData> Completions { get; set; }
   // public DbSet<StatsData> Stats { get; set; }
 
@@ -132,6 +136,7 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
 
     var evidence = modelBuilder.Entity<HabitEvidenceData>();
     evidence.HasIndex(x => new { x.HabitId, x.ProofKey, x.ExternalId }).IsUnique(); // Report idempotency
+    evidence.HasIndex(x => new { x.ProofKey, x.ExternalId }); // Strava activity deleted
     evidence.HasOne<HabitCheckData>()
             .WithMany()
             .HasForeignKey(x => x.CheckId)
@@ -160,6 +165,18 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
                 .WithMany()
                 .HasForeignKey(x => x.HabitId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+    // Strava: one connection per user and per Strava athlete. Cascades on the account purge.
+    var stravaConnection = modelBuilder.Entity<StravaConnectionData>();
+    stravaConnection.HasIndex(x => x.UserId).IsUnique();
+    stravaConnection.HasIndex(x => x.AthleteId).IsUnique();
+    stravaConnection.HasOne(x => x.User)
+                    .WithMany()
+                    .HasForeignKey(x => x.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+    var stravaEvent = modelBuilder.Entity<StravaEventData>();
+    stravaEvent.HasIndex(x => x.ReceivedAtUtc); // Claim scan
 
     // Charity configuration
     var charity = modelBuilder.Entity<CharityData>();

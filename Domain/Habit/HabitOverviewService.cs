@@ -5,6 +5,7 @@ using Domain.Check;
 using Domain.Configuration;
 using Domain.Exceptions;
 using Domain.NfcTag;
+using Domain.Proof;
 using Domain.Subscription;
 
 namespace Domain.Habit;
@@ -20,6 +21,7 @@ public class HabitOverviewService(
   ISubscriptionService subscriptionService,
   ICheckRepository checkRepository,
   INfcTagRepository nfcTagRepository,
+  IProofBindingRepository proofBindingRepository,
   ITransactionManager tm
 ) : IHabitOverviewService
 {
@@ -83,6 +85,18 @@ public class HabitOverviewService(
               tagged
             }, Errors.MapNone)
         )
+        .ThenAwait(ctx6 => proofBindingRepository.ListPluginKeys(search.UserId)
+          .Then(bound => new {
+              ctx6.habits,
+              ctx6.userTz,
+              ctx6.debtsByHabit,
+              ctx6.totalDebt,
+              ctx6.usedSkip,
+              ctx6.totalSkip,
+              ctx6.tagged,
+              bound
+            }, Errors.MapNone)
+        )
         .ThenAwait(async ctx =>
         {
           var acc = new List<HabitOverviewItem>().ToAsyncResult();
@@ -90,7 +104,9 @@ public class HabitOverviewService(
           {
             acc = acc
               .ThenAwait(list => BuildItem(hv, search.UserId, ctx.userTz, nowUtc, ctx.debtsByHabit.TryGetValue(hv.HabitId, out var ds) ? ds : [],
-                ctx.tagged.Contains(hv.HabitId) ? NfcProof : CheckService.ManualProof)
+                // A bound plugin (strava) wins over an NFC tag; Check in is always available too.
+                ctx.bound.TryGetValue(hv.HabitId, out var plugin) ? plugin
+                : ctx.tagged.Contains(hv.HabitId) ? NfcProof : CheckService.ManualProof)
                 .Then(item => { list.Add(item); return list; }, Errors.MapNone));
           }
           return await acc

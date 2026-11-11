@@ -49,6 +49,13 @@ HttpClient:
 Disbursement:
   Enabled: true
 
+# Strava app "LazyTax (pichu)". Secrets from the environment (see settings.yaml).
+Strava:
+  Enabled: true
+  ClientId: '296046'
+  CallbackUrl: 'https://api.zinc.alcohol.pichu.cluster.atomi.cloud/api/v1/Strava/callback'
+  AppRedirectUri: 'cloud.atomi.pichu.alcohol.neon.app://strava'
+
 WebPortal:
   Scheme: https
   Host: argon-alcohol-pichu.kirinnee.workers.dev

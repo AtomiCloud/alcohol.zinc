@@ -15,6 +15,8 @@ using App.Modules.Proof.Data;
 using App.Modules.Protection.Data;
 using App.Modules.Routine;
 using App.Modules.Routine.Data;
+using App.Modules.Strava;
+using App.Modules.Strava.Data;
 using App.Modules.Subscription;
 using App.Modules.Subscription.Data;
 using App.Modules.System;
@@ -38,6 +40,7 @@ using Domain.Penalty;
 using Domain.Proof;
 using Domain.Protection;
 using Domain.Routine;
+using Domain.Strava;
 using Domain.Subscription;
 using Domain.User;
 using Domain.Vacation;
@@ -99,6 +102,16 @@ public static class DomainServices
       .AutoTrace<IProofService>();
     s.AddScoped<IProofBindingRepository, ProofBindingRepository>()
       .AutoTrace<IProofBindingRepository>();
+
+    // STRAVA (the plugin itself is registered in Server when Strava.Enabled)
+    s.AddScoped<IStravaService, StravaService>()
+      .AutoTrace<IStravaService>();
+    s.AddScoped<IStravaConnectionRepository, StravaConnectionRepository>()
+      .AutoTrace<IStravaConnectionRepository>();
+    s.AddScoped<IStravaInboxRepository, StravaInboxRepository>()
+      .AutoTrace<IStravaInboxRepository>();
+    s.AddScoped<IStravaApi, StravaApi>()
+      .AutoTrace<IStravaApi>();
 
     // ROUTINE
     s.AddScoped<IRoutineService, RoutineService>()

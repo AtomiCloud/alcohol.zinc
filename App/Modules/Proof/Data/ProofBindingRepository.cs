@@ -41,6 +41,21 @@ public class ProofBindingRepository(MainDbContext db, ILogger<ProofBindingReposi
     }
   }
 
+  public async Task<Result<Dictionary<Guid, string>>> ListPluginKeys(string userId)
+  {
+    try
+    {
+      return await db.ProofBindings.AsNoTracking()
+        .Where(x => x.Habit!.UserId == userId && x.Habit.DeletedAt == null)
+        .ToDictionaryAsync(x => x.HabitId, x => x.PluginKey);
+    }
+    catch (Exception e)
+    {
+      logger.LogError(e, "ListPluginKeys failed for UserId={UserId}", userId);
+      throw;
+    }
+  }
+
   public async Task<Result<ProofBindingPrincipal>> Upsert(Guid habitId, ProofBindingRecord record)
   {
     try

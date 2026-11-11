@@ -325,6 +325,8 @@ namespace App.Migrations
 
                     b.HasIndex("CheckId");
 
+                    b.HasIndex("ProofKey", "ExternalId");
+
                     b.HasIndex("HabitId", "ProofKey", "ExternalId")
                         .IsUnique();
 
@@ -858,6 +860,99 @@ namespace App.Migrations
                     b.ToTable("Routines");
                 });
 
+            modelBuilder.Entity("App.Modules.Strava.Data.StravaConnectionData", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccessToken")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<long>("AthleteId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("ConnectedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RefreshToken")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("Scope")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AthleteId")
+                        .IsUnique();
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
+                    b.ToTable("StravaConnections");
+                });
+
+            modelBuilder.Entity("App.Modules.Strava.Data.StravaEventData", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AspectType")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ClaimedUntilUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("Deauthorized")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("EventTimeUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("ObjectId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ObjectType")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<long>("OwnerId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("ReceivedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReceivedAtUtc");
+
+                    b.ToTable("StravaEvents");
+                });
+
             modelBuilder.Entity("App.Modules.Subscription.Data.UserSubscriptionData", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1223,6 +1318,17 @@ namespace App.Migrations
                 });
 
             modelBuilder.Entity("App.Modules.Protection.Data.UserProtectionData", b =>
+                {
+                    b.HasOne("App.Modules.Users.Data.UserData", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("App.Modules.Strava.Data.StravaConnectionData", b =>
                 {
                     b.HasOne("App.Modules.Users.Data.UserData", "User")
                         .WithMany()

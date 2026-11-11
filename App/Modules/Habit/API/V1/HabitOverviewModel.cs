@@ -24,7 +24,7 @@ public record HabitOverviewHabitRes(
   string TotalDebt,
   string DeadlineTime,            // "HH:mm" in the user's timezone
   DateTime? TodayDeadlineUtc,     // end of today's check (UTC); null when not scheduled today
-  string Proof,                   // "manual" | "nfc"
+  string Proof,                   // "manual" | "nfc" | a bound plugin key ("strava")
   string? RoutineId
 );
 

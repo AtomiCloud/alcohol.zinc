@@ -5,6 +5,7 @@ using App.Modules.Habit.Data;
 using App.Modules.HabitExecution.Data;
 using App.Modules.HabitVersion.Data;
 using App.Modules.NfcTag.Data;
+using App.Modules.Proof.Data;
 using App.Modules.Protection.Data;
 using App.Modules.Routine.Data;
 using App.Modules.Users.Data;
@@ -464,6 +465,13 @@ public class CheckScenarioTests : IAsyncLifetime
     var routineId = Guid.NewGuid();
     _db.Routines.Add(new RoutineData { Id = routineId, UserId = userId, Name = "Morning" });
     _db.NfcTags.Add(new NfcTagData { Id = $"tag-{Guid.NewGuid():N}", UserId = userId, HabitId = tagged });
+    // Tagged and bound to a plugin: the plugin is the proof the overview reports.
+    var bound = await SeedHabit(userId, charityId, ["Monday"], LosAngeles);
+    _db.NfcTags.Add(new NfcTagData { Id = $"tag-{Guid.NewGuid():N}", UserId = userId, HabitId = bound });
+    _db.ProofBindings.Add(new ProofBindingData
+    {
+      HabitId = bound, PluginKey = "strava", PluginVersion = 1, Settings = """{"sportTypes":["Run"]}"""
+    });
     await _db.SaveChangesAsync();
     await _db.Habits.Where(h => h.Id == tagged).ExecuteUpdateAsync(x => x.SetProperty(h => h.RoutineId, routineId));
     await _db.HabitVersions.Where(v => v.HabitId == tagged)
@@ -489,6 +497,7 @@ public class CheckScenarioTests : IAsyncLifetime
       new FreeTier(),
       new CheckRepository(_db, NullLogger<CheckRepository>.Instance),
       new NfcTagRepository(_db, NullLogger<NfcTagRepository>.Instance),
+      new ProofBindingRepository(_db, NullLogger<ProofBindingRepository>.Instance),
       new NoTransaction());
     var res = App.Modules.Habit.API.V1.HabitOverviewMapper.ToRes(
       (await overview.GetOverview(new HabitOverviewSearch(userId, 10, 0), "skips", now)).Get());
@@ -505,6 +514,8 @@ public class CheckScenarioTests : IAsyncLifetime
     b.TodayDeadlineUtc.Should().BeNull("Tuesday habit, Monday today");
     b.Proof.Should().Be("manual");
     b.RoutineId.Should().BeNull();
+
+    res.Habits.Single(h => h.Id == bound.ToString()).Proof.Should().Be("strava");
   }
 
   private sealed class NoTransaction : Domain.ITransactionManager
