@@ -325,6 +325,8 @@ namespace App.Migrations
 
                     b.HasIndex("CheckId");
 
+                    b.HasIndex("ProofKey", "ExternalId");
+
                     b.HasIndex("HabitId", "ProofKey", "ExternalId")
                         .IsUnique();
 
@@ -412,6 +414,115 @@ namespace App.Migrations
                     b.HasIndex("Status");
 
                     b.ToTable("Disbursements");
+                });
+
+            modelBuilder.Entity("App.Modules.Friend.Data.FriendInviteData", b =>
+                {
+                    b.Property<string>("Code")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("Code");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("FriendInvites");
+                });
+
+            modelBuilder.Entity("App.Modules.Friend.Data.FriendRequestData", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FromUserId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ToUserId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ToUserId");
+
+                    b.HasIndex("FromUserId", "ToUserId")
+                        .IsUnique();
+
+                    b.ToTable("FriendRequests");
+                });
+
+            modelBuilder.Entity("App.Modules.Friend.Data.FriendshipData", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FriendUserId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FriendUserId");
+
+                    b.HasIndex("UserId", "FriendUserId")
+                        .IsUnique();
+
+                    b.ToTable("Friendships");
+                });
+
+            modelBuilder.Entity("App.Modules.FriendStake.Data.HabitFriendWatcherData", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FriendUserId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid>("HabitId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FriendUserId");
+
+                    b.HasIndex("HabitId", "FriendUserId")
+                        .IsUnique();
+
+                    b.ToTable("HabitFriendWatchers");
                 });
 
             modelBuilder.Entity("App.Modules.Habit.Data.HabitData", b =>
@@ -558,6 +669,63 @@ namespace App.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("NfcTags");
+                });
+
+            modelBuilder.Entity("App.Modules.Notification.Data.InboxNotificationData", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ActorUserId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Data")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("DedupeKey")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime?>("ReadAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorUserId");
+
+                    b.HasIndex("UserId", "CreatedAtUtc");
+
+                    b.HasIndex("UserId", "DedupeKey")
+                        .IsUnique()
+                        .HasFilter("\"DedupeKey\" IS NOT NULL");
+
+                    b.ToTable("InboxNotifications");
                 });
 
             modelBuilder.Entity("App.Modules.Payment.Data.PaymentConsentData", b =>
@@ -858,6 +1026,99 @@ namespace App.Migrations
                     b.ToTable("Routines");
                 });
 
+            modelBuilder.Entity("App.Modules.Strava.Data.StravaConnectionData", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccessToken")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<long>("AthleteId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("ConnectedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RefreshToken")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("Scope")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AthleteId")
+                        .IsUnique();
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
+                    b.ToTable("StravaConnections");
+                });
+
+            modelBuilder.Entity("App.Modules.Strava.Data.StravaEventData", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AspectType")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ClaimedUntilUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("Deauthorized")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("EventTimeUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("ObjectId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ObjectType")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<long>("OwnerId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("ReceivedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReceivedAtUtc");
+
+                    b.ToTable("StravaEvents");
+                });
+
             modelBuilder.Entity("App.Modules.Subscription.Data.UserSubscriptionData", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1076,6 +1337,74 @@ namespace App.Migrations
                     b.Navigation("Charity");
                 });
 
+            modelBuilder.Entity("App.Modules.Friend.Data.FriendInviteData", b =>
+                {
+                    b.HasOne("App.Modules.Users.Data.UserData", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("App.Modules.Friend.Data.FriendRequestData", b =>
+                {
+                    b.HasOne("App.Modules.Users.Data.UserData", "From")
+                        .WithMany()
+                        .HasForeignKey("FromUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("App.Modules.Users.Data.UserData", "To")
+                        .WithMany()
+                        .HasForeignKey("ToUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("From");
+
+                    b.Navigation("To");
+                });
+
+            modelBuilder.Entity("App.Modules.Friend.Data.FriendshipData", b =>
+                {
+                    b.HasOne("App.Modules.Users.Data.UserData", "FriendUser")
+                        .WithMany()
+                        .HasForeignKey("FriendUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("App.Modules.Users.Data.UserData", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("FriendUser");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("App.Modules.FriendStake.Data.HabitFriendWatcherData", b =>
+                {
+                    b.HasOne("App.Modules.Users.Data.UserData", "FriendUser")
+                        .WithMany()
+                        .HasForeignKey("FriendUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("App.Modules.Habit.Data.HabitData", "Habit")
+                        .WithMany()
+                        .HasForeignKey("HabitId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("FriendUser");
+
+                    b.Navigation("Habit");
+                });
+
             modelBuilder.Entity("App.Modules.Habit.Data.HabitData", b =>
                 {
                     b.HasOne("App.Modules.Routine.Data.RoutineData", "Routine")
@@ -1131,6 +1460,24 @@ namespace App.Migrations
                         .IsRequired();
 
                     b.Navigation("Habit");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("App.Modules.Notification.Data.InboxNotificationData", b =>
+                {
+                    b.HasOne("App.Modules.Users.Data.UserData", "Actor")
+                        .WithMany()
+                        .HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("App.Modules.Users.Data.UserData", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Actor");
 
                     b.Navigation("User");
                 });
@@ -1223,6 +1570,17 @@ namespace App.Migrations
                 });
 
             modelBuilder.Entity("App.Modules.Protection.Data.UserProtectionData", b =>
+                {
+                    b.HasOne("App.Modules.Users.Data.UserData", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("App.Modules.Strava.Data.StravaConnectionData", b =>
                 {
                     b.HasOne("App.Modules.Users.Data.UserData", "User")
                         .WithMany()

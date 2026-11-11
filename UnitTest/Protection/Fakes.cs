@@ -22,6 +22,8 @@ public sealed class FakeHabitRepository : IHabitRepository
   public Task<Result<HabitPrincipal?>> GetHabit(Guid habitId)
     => Task.FromResult<Result<HabitPrincipal?>>(Habits.FirstOrDefault(h => h.Id == habitId));
 
+  public Task<Result<List<HabitPrincipal>>> GetHabits(List<Guid> habitIds) => throw new NotImplementedException();
+
   public Task<Result<HabitVersionPrincipal?>> Update(Guid habitId, string userId, HabitVersionRecord versionRecord, bool enabled)
   {
     var index = Habits.FindIndex(h => h.Id == habitId && h.UserId == userId);

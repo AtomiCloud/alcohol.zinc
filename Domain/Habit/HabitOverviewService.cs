@@ -5,6 +5,7 @@ using Domain.Check;
 using Domain.Configuration;
 using Domain.Exceptions;
 using Domain.NfcTag;
+using Domain.Proof;
 using Domain.Subscription;
 
 namespace Domain.Habit;
@@ -20,6 +21,7 @@ public class HabitOverviewService(
   ISubscriptionService subscriptionService,
   ICheckRepository checkRepository,
   INfcTagRepository nfcTagRepository,
+  IProofBindingRepository proofBindingRepository,
   ITransactionManager tm
 ) : IHabitOverviewService
 {
@@ -83,77 +85,104 @@ public class HabitOverviewService(
               tagged
             }, Errors.MapNone)
         )
+        .ThenAwait(ctx6 => proofBindingRepository.ListPluginKeys(search.UserId)
+          .Then(bound => new {
+              ctx6.habits,
+              ctx6.userTz,
+              ctx6.debtsByHabit,
+              ctx6.totalDebt,
+              ctx6.usedSkip,
+              ctx6.totalSkip,
+              ctx6.tagged,
+              bound
+            }, Errors.MapNone)
+        )
         .ThenAwait(async ctx =>
         {
-          var acc = new List<HabitOverviewItem>().ToAsyncResult();
-          foreach (var hv in ctx.habits.OrderByDescending(x => x.Version))
+          // Everything per habit is read once for all habits, so the number of queries
+          // doesn't grow with the habit count.
+          var utcNow = nowUtc ?? DateTime.UtcNow;
+          var today = StreakCalculator.TodayFor(ctx.userTz, utcNow);
+          var habitIds = ctx.habits.Select(h => h.HabitId).Distinct().ToList();
+          var charities = new Dictionary<Guid, CharityPrincipal>();
+          return await habitRepository.GetHabits(habitIds)
+            .ThenAwait(habits => streakService.GetStatusForHabits(ctx.userTz, ctx.habits, utcNow)
+              .Then(statuses => new { habits = habits.ToDictionary(h => h.Id), statuses }, Errors.MapNone))
+            .ThenAwait(b => checkRepository.ListForDate(habitIds, today)
+              .Then(checks => new { b.habits, b.statuses, checks = checks.ToDictionary(c => c.HabitId) }, Errors.MapNone))
+            .ThenAwait(async b =>
+            {
+              var acc = new List<HabitOverviewItem>().ToAsyncResult();
+              foreach (var hv in ctx.habits.OrderByDescending(x => x.Version))
+              {
+                acc = acc
+                  .ThenAwait(list => BuildItem(hv, search.UserId, ctx.userTz, today,
+                    b.habits.GetValueOrDefault(hv.HabitId), b.statuses[hv.HabitId], b.checks.GetValueOrDefault(hv.HabitId),
+                    ctx.debtsByHabit.TryGetValue(hv.HabitId, out var ds) ? ds : [],
+                    // A bound plugin (strava) wins over an NFC tag; Check in is always available too.
+                    ctx.bound.TryGetValue(hv.HabitId, out var plugin) ? plugin
+                    : ctx.tagged.Contains(hv.HabitId) ? NfcProof : CheckService.ManualProof)
+                    .Then(item => { list.Add(item); return list; }, Errors.MapNone));
+              }
+              return await acc
+                .Then(items => new HabitOverviewSummary(items, ctx.totalDebt, ctx.usedSkip, ctx.totalSkip), Errors.MapNone);
+            });
+
+          // Habits usually share a charity, so each one is read once.
+          Task<Result<CharityPrincipal>> CharityFor(Guid id) =>
+            charities.TryGetValue(id, out var cached)
+              ? Task.FromResult(cached.ToResult())
+              : charityService.Get(id)
+                .NullToError(id.ToString())
+                .Then(ch => charities[id] = ch.Principal, Errors.MapNone);
+
+          Task<Result<HabitOverviewItem>> BuildItem(
+            HabitVersionPrincipal hv,
+            string userId,
+            string userTz,
+            DateOnly localToday,
+            HabitPrincipal? habitPrincipal,
+            HabitStreakStatus status,
+            CheckPrincipal? check,
+            List<HabitDebtItem> debtsForHabit,
+            string proof)
           {
-            acc = acc
-              .ThenAwait(list => BuildItem(hv, search.UserId, ctx.userTz, nowUtc, ctx.debtsByHabit.TryGetValue(hv.HabitId, out var ds) ? ds : [],
-                ctx.tagged.Contains(hv.HabitId) ? NfcProof : CheckService.ManualProof)
-                .Then(item => { list.Add(item); return list; }, Errors.MapNone));
+            if (habitPrincipal == null || habitPrincipal.UserId != userId)
+              return Task.FromResult<Result<HabitOverviewItem>>(
+                new NotFoundException("Habit Not Found", typeof(HabitPrincipal), hv.HabitId.ToString()));
+
+            return CharityFor(hv.Record.CharityId)
+              .Then(charity => new HabitOverviewItem(
+                  hv.HabitId,
+                  hv.Record.Task,
+                  hv.Record.NotificationTime.ToString("HH:mm"),
+                  userTz,
+                  hv.Record.DaysOfWeek,
+                  hv.Record.Stake.Amount,
+                  hv.Record.Stake.Currency.Code,
+                  habitPrincipal.Record.Enabled,
+                  charity,
+                  status,
+                  status.TimeLeftToEodMinutes,
+                  new HabitVersionMeta(hv.Id, hv.Version, true),
+                  debtsForHabit.Sum(d => d.Amount),
+                  hv.Record.DeadlineTime,
+                  TodayDeadline(hv, userTz, localToday, check),
+                  proof,
+                  habitPrincipal.Record.RoutineId
+                ), Errors.MapNone);
           }
-          return await acc
-            .Then(items => new HabitOverviewSummary(items, ctx.totalDebt, ctx.usedSkip, ctx.totalSkip), Errors.MapNone);
         })
     );
 
-    Task<Result<HabitOverviewItem>> BuildItem(
-      HabitVersionPrincipal hv,
-      string userId,
-      string userTz,
-      DateTime? nowUtc,
-      List<HabitDebtItem> debtsForHabit,
-      string proof)
-    {
-      return habitRepository.GetHabit(hv.HabitId)
-        .NullToError(hv.HabitId.ToString())
-        .Then(habitPrincipal =>
-          habitPrincipal.UserId != userId
-            ? new NotFoundException("Habit Not Found", typeof(HabitPrincipal), hv.HabitId.ToString())
-            : habitPrincipal.ToResult()
-        )
-        .ThenAwait(habitPrincipal => charityService.Get(hv.Record.CharityId)
-          .NullToError(hv.Record.CharityId.ToString())
-          .Then(ch => ch.Principal, Errors.MapNone)
-          .Then(charity => new { habitPrincipal, charity }, Errors.MapNone)
-        )
-        .ThenAwait(ctx => streakService.GetStatusForHabit(userId, hv.HabitId, userTz, hv.Record.DaysOfWeek, hv.Record.DeadlineTime, nowUtc)
-          .Then(status => new { ctx.habitPrincipal, ctx.charity, status }, Errors.MapNone)
-        )
-        .ThenAwait(ctx => TodayDeadline(hv, userTz, ctx.status.Today)
-          .Then(deadline => new { ctx.habitPrincipal, ctx.charity, ctx.status, deadline }, Errors.MapNone)
-        )
-        .Then(ctx2 => new HabitOverviewItem(
-            hv.HabitId,
-            hv.Record.Task,
-            hv.Record.NotificationTime.ToString("HH:mm"),
-            userTz,
-            hv.Record.DaysOfWeek,
-            hv.Record.Stake.Amount,
-            hv.Record.Stake.Currency.Code,
-            ctx2.habitPrincipal.Record.Enabled,
-            ctx2.charity,
-            ctx2.status,
-            ctx2.status.TimeLeftToEodMinutes,
-            new HabitVersionMeta(hv.Id, hv.Version, true),
-            debtsForHabit.Sum(d => d.Amount),
-            hv.Record.DeadlineTime,
-            ctx2.deadline,
-            proof,
-            ctx2.habitPrincipal.Record.RoutineId
-          ), Errors.MapNone);
-    }
-
     // Today's check End: the stored check when it exists (it may have been re-timed),
     // otherwise the window the scheduler will open. Null on days the habit isn't scheduled.
-    async Task<Result<DateTime?>> TodayDeadline(HabitVersionPrincipal hv, string userTz, DateOnly today)
+    static DateTime? TodayDeadline(HabitVersionPrincipal hv, string userTz, DateOnly today, CheckPrincipal? check)
     {
-      var check = (CheckPrincipal?)await checkRepository.Get(hv.HabitId, today);
       if (check != null) return check.Record.DeadlineUtc;
       var scheduled = hv.Record.DaysOfWeek.Any(d =>
         string.Equals(d, today.DayOfWeek.ToString(), StringComparison.OrdinalIgnoreCase));
-      if (!scheduled) return (DateTime?)null;
+      if (!scheduled) return null;
       return CheckWindow.For(today, CheckWindow.Resolve(userTz), hv.Record.DeadlineTime).DeadlineUtc;
     }
   }

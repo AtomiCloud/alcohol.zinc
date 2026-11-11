@@ -35,7 +35,8 @@ public class Server(
   IOptionsMonitor<Dictionary<string, HttpClientOption>> http,
   IOptionsMonitor<AuthOption> auth,
   IOptionsMonitor<Dictionary<string, CacheOption>> cache,
-  IOptionsMonitor<Dictionary<string, SmtpOption>> smtp
+  IOptionsMonitor<Dictionary<string, SmtpOption>> smtp,
+  IOptionsMonitor<StravaOption> strava
 )
 {
   private void ConfigureResourceBuilder(ResourceBuilder r)
@@ -150,12 +151,15 @@ public class Server(
 
 
     services.AddDomainServices();
+    if (strava.CurrentValue.Enabled)
+      services.AddScoped<Domain.Proof.IProofPlugin, Domain.Strava.StravaProofPlugin>();
 
     // Background jobs
     services.AddHostedService<App.Modules.Check.CheckSchedulerHostedService>();
     services.AddHostedService<PenaltyProcessorHostedService>();
     services.AddHostedService<App.Modules.Disbursement.DisbursementHostedService>();
     services.AddHostedService<App.Modules.Subscription.SubscriptionRenewalHostedService>();
+    services.AddHostedService<App.Modules.Strava.StravaWebhookHostedService>();
 
     // Data seeding for development (lapras only)
     services.AddHostedService<DataSeederHostedService>();

@@ -198,6 +198,9 @@ HttpClient:
   AIRWALLEX:
     BaseAddress: 'https://api.airwallex.com'
     Timeout: 60
+  STRAVA:
+    BaseAddress: 'https://www.strava.com'
+    Timeout: 30
 Auth:
   Enabled: true
   Management:
@@ -241,6 +244,18 @@ Disbursement:
   DonorFirstName: LazyTax
   DonorLastName: Donations
   DonorEmail: donations@lazytax.club
+# Strava proof plugin. One Strava API app per landscape (www.strava.com/settings/api);
+# landscapes with an app enable it in their override file. ClientSecret and VerifyToken
+# come from the environment (Atomi_Strava__ClientSecret, Atomi_Strava__VerifyToken).
+Strava:
+  Enabled: false
+  ClientId: 'your-strava-client-id'
+  ClientSecret: 'your-strava-client-secret'
+  VerifyToken: 'your-strava-verify-token'
+  SubscriptionId: 0
+  CallbackUrl: 'http://localhost:9050/api/v1/Strava/callback'
+  AppRedirectUri: 'cloud.atomi.lapras.alcohol.neon.app://strava'
+  MaxAttempts: 5
 # Subscription tier catalog + renewal worker. Single source of truth for tiers,
 # caps and prices. MUST match the public pricing page (alcohol.argon
 # src/lib/billing/pricing.ts + components/landing/Pricing.tsx):

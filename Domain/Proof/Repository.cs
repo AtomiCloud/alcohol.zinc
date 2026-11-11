@@ -10,6 +10,9 @@ public interface IProofBindingRepository
   // The user's non-deleted habits bound to the plugin.
   Task<Result<List<ProofBinding>>> ListForUser(string userId, string pluginKey);
 
+  // HabitId -> bound plugin key, for the user's non-deleted habits with a binding.
+  Task<Result<Dictionary<Guid, string>>> ListPluginKeys(string userId);
+
   // Binds the habit, replacing its existing binding (one per habit).
   Task<Result<ProofBindingPrincipal>> Upsert(Guid habitId, ProofBindingRecord record);
 

@@ -3,15 +3,19 @@ using App.Modules.Charities.Data;
 using App.Modules.Check.Data;
 using App.Modules.Configurations.Data;
 using App.Modules.Disbursement.Data;
+using App.Modules.Friend.Data;
+using App.Modules.FriendStake.Data;
 using App.Modules.Habit.Data;
 using App.Modules.HabitExecution.Data;
 using App.Modules.HabitVersion.Data;
 using App.Modules.NfcTag.Data;
+using App.Modules.Notification.Data;
 using App.Modules.Payment.Data;
 using App.Modules.Penalty.Data;
 using App.Modules.Proof.Data;
 using App.Modules.Protection.Data;
 using App.Modules.Routine.Data;
+using App.Modules.Strava.Data;
 using App.Modules.Subscription.Data;
 using App.Modules.Users.Data;
 using App.Modules.Vacation.Data;
@@ -62,6 +66,15 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
   public DbSet<NfcTagData> NfcTags { get; set; }
   // Proof plugins bound to habits (one per habit)
   public DbSet<ProofBindingData> ProofBindings { get; set; }
+  // Strava proof plugin: each user's link, and the webhook inbox
+  public DbSet<StravaConnectionData> StravaConnections { get; set; }
+  public DbSet<StravaEventData> StravaEvents { get; set; }
+  // Friends, the in-app inbox, and the "tell my friends if I miss" stake
+  public DbSet<FriendRequestData> FriendRequests { get; set; }
+  public DbSet<FriendshipData> Friendships { get; set; }
+  public DbSet<FriendInviteData> FriendInvites { get; set; }
+  public DbSet<InboxNotificationData> InboxNotifications { get; set; }
+  public DbSet<HabitFriendWatcherData> HabitFriendWatchers { get; set; }
   // public DbSet<CompletionData> Completions { get; set; }
   // public DbSet<StatsData> Stats { get; set; }
 
@@ -132,6 +145,7 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
 
     var evidence = modelBuilder.Entity<HabitEvidenceData>();
     evidence.HasIndex(x => new { x.HabitId, x.ProofKey, x.ExternalId }).IsUnique(); // Report idempotency
+    evidence.HasIndex(x => new { x.ProofKey, x.ExternalId }); // Strava activity deleted
     evidence.HasOne<HabitCheckData>()
             .WithMany()
             .HasForeignKey(x => x.CheckId)
@@ -160,6 +174,49 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
                 .WithMany()
                 .HasForeignKey(x => x.HabitId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+    // Strava: one connection per user and per Strava athlete. Cascades on the account purge.
+    var stravaConnection = modelBuilder.Entity<StravaConnectionData>();
+    stravaConnection.HasIndex(x => x.UserId).IsUnique();
+    stravaConnection.HasIndex(x => x.AthleteId).IsUnique();
+    stravaConnection.HasOne(x => x.User)
+                    .WithMany()
+                    .HasForeignKey(x => x.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+    var stravaEvent = modelBuilder.Entity<StravaEventData>();
+    stravaEvent.HasIndex(x => x.ReceivedAtUtc); // Claim scan
+
+    // Friends: one pending request per ordered pair, one friendship row per direction. Every
+    // user reference cascades, so deleting an account removes their side of everything.
+    var friendRequest = modelBuilder.Entity<FriendRequestData>();
+    friendRequest.HasIndex(x => new { x.FromUserId, x.ToUserId }).IsUnique();
+    friendRequest.HasIndex(x => x.ToUserId);
+    friendRequest.HasOne(x => x.From).WithMany().HasForeignKey(x => x.FromUserId).OnDelete(DeleteBehavior.Cascade);
+    friendRequest.HasOne(x => x.To).WithMany().HasForeignKey(x => x.ToUserId).OnDelete(DeleteBehavior.Cascade);
+
+    var friendship = modelBuilder.Entity<FriendshipData>();
+    friendship.HasIndex(x => new { x.UserId, x.FriendUserId }).IsUnique();
+    friendship.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+    friendship.HasOne(x => x.FriendUser).WithMany().HasForeignKey(x => x.FriendUserId).OnDelete(DeleteBehavior.Cascade);
+
+    var friendInvite = modelBuilder.Entity<FriendInviteData>();
+    friendInvite.HasIndex(x => x.UserId);
+    friendInvite.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+
+    // Inbox: newest-first per user; DedupeKey makes outbox retries post once.
+    var inbox = modelBuilder.Entity<InboxNotificationData>();
+    inbox.HasIndex(x => new { x.UserId, x.CreatedAtUtc });
+    inbox.HasIndex(x => new { x.UserId, x.DedupeKey }).IsUnique().HasFilter("\"DedupeKey\" IS NOT NULL");
+    inbox.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+    inbox.HasOne(x => x.Actor).WithMany().HasForeignKey(x => x.ActorUserId).OnDelete(DeleteBehavior.Cascade);
+
+    // Friend stake: one row per (habit, friend). Habit deletes are soft; the cascade covers purges.
+    var watcher = modelBuilder.Entity<HabitFriendWatcherData>();
+    watcher.HasIndex(x => new { x.HabitId, x.FriendUserId }).IsUnique();
+    watcher.HasIndex(x => x.FriendUserId);
+    watcher.HasOne(x => x.Habit).WithMany().HasForeignKey(x => x.HabitId).OnDelete(DeleteBehavior.Cascade);
+    watcher.HasOne(x => x.FriendUser).WithMany().HasForeignKey(x => x.FriendUserId).OnDelete(DeleteBehavior.Cascade);
 
     // Charity configuration
     var charity = modelBuilder.Entity<CharityData>();

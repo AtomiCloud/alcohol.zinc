@@ -143,6 +143,23 @@ namespace App.Modules.Habit.Data
             }
         }
 
+        public async Task<Result<List<HabitPrincipal>>> GetHabits(List<Guid> habitIds)
+        {
+            try
+            {
+                var data = await db.Habits
+                    .AsNoTracking()
+                    .Where(x => habitIds.Contains(x.Id) && x.DeletedAt == null)
+                    .ToListAsync();
+                return data.Select(x => x.ToPrincipal()).ToList();
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Failed retrieving {Count} habits", habitIds.Count);
+                throw;
+            }
+        }
+
         public async Task<Result<HabitVersionPrincipal?>> GetCurrentVersion(string userId, Guid habitId)
         {
             try

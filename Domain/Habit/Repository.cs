@@ -13,6 +13,7 @@ namespace Domain.Habit
         Task<Result<List<HabitVersionPrincipal>>> GetActiveHabitVersions(string userId, DateOnly date);
         Task<Result<List<HabitVersionPrincipal>>> SearchHabits(HabitSearch habitSearch);
         Task<Result<HabitPrincipal?>> GetHabit(Guid habitId);
+        Task<Result<List<HabitPrincipal>>> GetHabits(List<Guid> habitIds);  // Non-deleted only
         Task<Result<HabitVersionPrincipal?>> GetCurrentVersion(string userId, Guid habitId);
         // Creates habit + first version. routineId null => a new one-habit routine is created;
         // otherwise it must be the user's own non-deleted routine (NotFoundException failure).
