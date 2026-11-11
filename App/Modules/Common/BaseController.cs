@@ -48,6 +48,8 @@ public class AtomiControllerBase(IAuthHelper h) : ControllerBase
         new EntityNotFound(nfe.Message, nfe.Type, nfe.RequestIdentifier)),
       InvalidProofBindingException ipb => this.Error(HttpStatusCode.BadRequest,
         new ValidationError(ipb.Message, ipb.Errors)),
+      InvalidRequestException ire => this.Error(HttpStatusCode.BadRequest,
+        new ValidationError(ire.Message, ire.Errors)),
       AccountDeletionBlockedException adb => this.Error(HttpStatusCode.Conflict,
         new AccountDeletionBlocked(adb.TotalDebt, adb.Currency)),
       NoPaymentConsentException npc => this.Error(HttpStatusCode.PreconditionFailed,

@@ -21,6 +21,7 @@ public interface ICheckRepository
   Task<Result<List<CheckPrincipal>>> ListDuePending(DateTime deadlineBeforeUtc, int limit);
   Task<Result<List<CheckPrincipal>>> ListPending(List<Guid> habitIds);
   Task<Result<List<CheckPrincipal>>> ListCovering(Guid habitId, DateTime atUtc);
+  Task<Result<CheckPrincipal?>> Get(Guid id);
   Task<Result<CheckPrincipal?>> Get(Guid habitId, DateOnly localDate);
 
   Task<Result<bool>> UpdatePendingWindow(Guid id, string timezone, DateTime opensAtUtc, DateTime deadlineUtc);

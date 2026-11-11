@@ -127,6 +127,20 @@ public class CheckRepository(MainDbContext db, ILogger<CheckRepository> logger) 
     }
   }
 
+  public async Task<Result<CheckPrincipal?>> Get(Guid id)
+  {
+    try
+    {
+      var data = await db.HabitChecks.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id);
+      return data?.ToPrincipal();
+    }
+    catch (Exception e)
+    {
+      logger.LogError(e, "Get check failed for CheckId={CheckId}", id);
+      throw;
+    }
+  }
+
   public async Task<Result<CheckPrincipal?>> Get(Guid habitId, DateOnly localDate)
   {
     try
