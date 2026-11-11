@@ -110,6 +110,22 @@ public class CheckRepository(MainDbContext db, ILogger<CheckRepository> logger) 
     }
   }
 
+  public async Task<Result<List<CheckPrincipal>>> ListForDate(List<Guid> habitIds, DateOnly localDate)
+  {
+    try
+    {
+      var data = await db.HabitChecks.AsNoTracking()
+        .Where(c => c.LocalDate == localDate && habitIds.Contains(c.HabitId))
+        .ToListAsync();
+      return data.Select(x => x.ToPrincipal()).ToList();
+    }
+    catch (Exception e)
+    {
+      logger.LogError(e, "ListForDate failed for Date={Date}", localDate);
+      throw;
+    }
+  }
+
   public async Task<Result<List<CheckPrincipal>>> ListCovering(Guid habitId, DateTime atUtc)
   {
     try
@@ -123,6 +139,20 @@ public class CheckRepository(MainDbContext db, ILogger<CheckRepository> logger) 
     catch (Exception e)
     {
       logger.LogError(e, "ListCovering failed for HabitId={HabitId}", habitId);
+      throw;
+    }
+  }
+
+  public async Task<Result<CheckPrincipal?>> Get(Guid id)
+  {
+    try
+    {
+      var data = await db.HabitChecks.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id);
+      return data?.ToPrincipal();
+    }
+    catch (Exception e)
+    {
+      logger.LogError(e, "Get check failed for CheckId={CheckId}", id);
       throw;
     }
   }

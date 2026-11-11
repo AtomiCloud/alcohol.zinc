@@ -14,40 +14,77 @@ public class StreakService(IStreakRepository repo) : IStreakService
     TimeOnly deadlineTime,
     DateTime? nowUtc = null)
   {
-      var utcNow = nowUtc ?? DateTime.UtcNow;
+    var utcNow = nowUtc ?? DateTime.UtcNow;
+    return repo.GetExecutionsForHabits([habitId])
+      .Then(byHabit => Status(byHabit.GetValueOrDefault(habitId) ?? [], timezone, daysOfWeek, deadlineTime, utcNow),
+        Errors.MapNone);
+  }
+
+  // The same status for many habits from one read of their executions.
+  public Task<Result<Dictionary<Guid, HabitStreakStatus>>> GetStatusForHabits(
+    string timezone,
+    IReadOnlyCollection<HabitVersionPrincipal> versions,
+    DateTime? nowUtc = null)
+  {
+    var utcNow = nowUtc ?? DateTime.UtcNow;
+    return repo.GetExecutionsForHabits(versions.Select(v => v.HabitId).Distinct().ToList())
+      .Then(byHabit => versions
+        .DistinctBy(v => v.HabitId)
+        .ToDictionary(v => v.HabitId, v => Status(byHabit.GetValueOrDefault(v.HabitId) ?? [], timezone,
+          v.Record.DaysOfWeek, v.Record.DeadlineTime, utcNow)), Errors.MapNone);
+  }
+
+  // executions: every execution of the habit, oldest first.
+  static HabitStreakStatus Status(
+    List<HabitExecutionRecord> executions,
+    string timezone,
+    string[] daysOfWeek,
+    TimeOnly deadlineTime,
+    DateTime utcNow)
+  {
       var today = StreakCalculator.TodayFor(timezone, utcNow);
       var (weekStart, weekEnd) = StreakCalculator.WeekSundayBounds(today);
 
-      return repo.GetCurrentStreak(habitId, today)
-        .ThenAwait(current => repo.GetMaxStreak(habitId)
-          .Then(max => new { current, max }, Errors.MapNone))
-        .ThenAwait(ctx => repo.GetExecutionsInHabitDateRange(habitId, weekStart, weekEnd)
-          .Then(execs =>
-          {
-            var weekStatuses = InitWeekStatuses(daysOfWeek);
-            foreach (var e in execs)
-              weekStatuses[e.Date.DayOfWeek] = MapStatus(e.Status);
+      // Current: Completed days after the last Failed day, up to today.
+      var since = executions
+        .Where(e => e.Date <= today && e.Status == ExecutionStatus.Failed)
+        .Select(e => (DateOnly?)e.Date)
+        .Max() ?? DateOnly.MinValue;
+      var current = executions.Count(e =>
+        e.Status == ExecutionStatus.Completed && e.Date > since && e.Date <= today);
 
-            var todayExecution = execs.FirstOrDefault(e => e.Date == today);
-            var doneToday = todayExecution?.Status == ExecutionStatus.Completed;
-            var todayStatus = todayExecution == null ? HabitDayStatus.NotApplicable : MapStatus(todayExecution.Status);
+      // Max: the longest run of Completed days; a Failed day resets it, other statuses don't.
+      int run = 0, max = 0;
+      foreach (var e in executions)
+      {
+        if (e.Status == ExecutionStatus.Completed) max = Math.Max(max, ++run);
+        else if (e.Status == ExecutionStatus.Failed) run = 0;
+      }
 
-            var tz = TimeZoneInfo.FindSystemTimeZoneById(timezone);
-            var (_, deadlineUtc) = Check.CheckWindow.For(today, tz, deadlineTime);
-            var minutesLeft = (int)Math.Max(0, Math.Round((deadlineUtc - utcNow).TotalMinutes));
+      var execs = executions.Where(e => e.Date >= weekStart && e.Date <= weekEnd).ToList();
+      var weekStatuses = InitWeekStatuses(daysOfWeek);
+      foreach (var e in execs)
+        weekStatuses[e.Date.DayOfWeek] = MapStatus(e.Status);
 
-            return new HabitStreakStatus(
-              ctx.current,
-              ctx.max,
-              doneToday,
-              weekStatuses,
-              weekStart,
-              weekEnd,
-              minutesLeft,
-              today,
-              todayStatus
-            );
-          }, Errors.MapNone));
+      var todayExecution = execs.FirstOrDefault(e => e.Date == today);
+      var doneToday = todayExecution?.Status == ExecutionStatus.Completed;
+      var todayStatus = todayExecution == null ? HabitDayStatus.NotApplicable : MapStatus(todayExecution.Status);
+
+      var tz = TimeZoneInfo.FindSystemTimeZoneById(timezone);
+      var (_, deadlineUtc) = Check.CheckWindow.For(today, tz, deadlineTime);
+      var minutesLeft = (int)Math.Max(0, Math.Round((deadlineUtc - utcNow).TotalMinutes));
+
+      return new HabitStreakStatus(
+        current,
+        max,
+        doneToday,
+        weekStatuses,
+        weekStart,
+        weekEnd,
+        minutesLeft,
+        today,
+        todayStatus
+      );
 
       static HabitDayStatus MapStatus(ExecutionStatus status) => status switch
       {

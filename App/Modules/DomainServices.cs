@@ -4,10 +4,13 @@ using App.Modules.Charities.Data;
 using App.Modules.Charities.Sync;
 using App.Modules.Configurations.Data;
 using App.Modules.Entitlement;
+using App.Modules.Friend.Data;
+using App.Modules.FriendStake.Data;
 using App.Modules.Habit.Data;
 using App.Modules.NfcTag;
 using App.Modules.NfcTag.Data;
 using App.Modules.Notification;
+using App.Modules.Notification.Data;
 using App.Modules.Payment.Airwallex;
 using App.Modules.Payment.Data;
 using App.Modules.Penalty.Data;
@@ -32,6 +35,8 @@ using Domain.Check;
 using Domain.Configuration;
 using Domain.Disbursement;
 using Domain.Entitlement;
+using Domain.Friend;
+using Domain.FriendStake;
 using Domain.Habit;
 using Domain.NfcTag;
 using Domain.Notification;
@@ -92,6 +97,7 @@ public static class DomainServices
     s.AddScoped<ICheckRepository, App.Modules.Check.Data.CheckRepository>()
       .AutoTrace<ICheckRepository>();
     s.AddScoped<IStakeBinding, PenaltyStakeBinding>();
+    s.AddScoped<IStakeBinding, FriendStakeBinding>();
 
     // PROOF: each plugin is one IProofPlugin registration
     s.AddScoped<IProofPlugin, ManualProofPlugin>();
@@ -102,6 +108,20 @@ public static class DomainServices
       .AutoTrace<IProofService>();
     s.AddScoped<IProofBindingRepository, ProofBindingRepository>()
       .AutoTrace<IProofBindingRepository>();
+
+    // FRIENDS, INBOX and the friend stake ("tell my friends if I miss")
+    s.AddScoped<IFriendService, FriendService>()
+      .AutoTrace<IFriendService>();
+    s.AddScoped<IFriendRepository, FriendRepository>()
+      .AutoTrace<IFriendRepository>();
+    s.AddScoped<IInboxService, InboxService>()
+      .AutoTrace<IInboxService>();
+    s.AddScoped<IInboxRepository, InboxRepository>()
+      .AutoTrace<IInboxRepository>();
+    s.AddScoped<IFriendStakeService, FriendStakeService>()
+      .AutoTrace<IFriendStakeService>();
+    s.AddScoped<IFriendStakeRepository, FriendStakeRepository>()
+      .AutoTrace<IFriendStakeRepository>();
 
     // STRAVA (the plugin itself is registered in Server when Strava.Enabled)
     s.AddScoped<IStravaService, StravaService>()
