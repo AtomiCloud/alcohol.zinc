@@ -10,6 +10,7 @@ using Asp.Versioning;
 using CSharp_Result;
 using Domain.Notification;
 using Domain.Payment;
+using Domain.Strava;
 using Domain.User;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -30,6 +31,7 @@ public class UserController(
   ITokenDataExtractor tokenDataExtractor,
   IOptions<AppOption> appOption,
   IPaymentService paymentService,
+  IStravaService stravaService,
   IEmailNotifier notifier,
   IAuthHelper h
 ) : AtomiControllerBase(h)
@@ -167,6 +169,10 @@ public class UserController(
         // error — and always resolve to success.
         try { await paymentService.DisableAllPaymentConsentsAsync(sub!); }
         catch { /* best-effort — failure already logged downstream; never block deletion */ }
+        // Best-effort: revoke LazyTax in Strava (Strava's terms). The purge's cascade deletes the
+        // connection either way; a Strava outage must not block deletion.
+        try { await stravaService.Disconnect(sub!); }
+        catch { /* best-effort — never block deletion */ }
         return new Unit();
       }))
       .Then(_ => new Unit(), Errors.MapAll)

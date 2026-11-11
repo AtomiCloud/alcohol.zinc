@@ -35,6 +35,37 @@ tasks:
       LANDSCAPE: lapras
     cmds:
       - dotnet ef migrations --project ./App add {{.CLI_ARGS}}
+  strava:webhook:
+    desc: >-
+      View, create or delete a landscape's Strava webhook (one per Strava app).
+      Usage: pls strava:webhook -- <landscape> view|create|delete [id].
+      Needs STRAVA_CLIENT_SECRET, and STRAVA_VERIFY_TOKEN (zinc's Atomi_Strava__VerifyToken) for create.
+      After create, set Strava.SubscriptionId in App/Config/settings.<landscape>.yaml.
+    cmds:
+      - |
+        set -euo pipefail
+        set -- {{.CLI_ARGS}}
+        landscape="${1:?landscape, e.g. pichu}"
+        action="${2:?view, create or delete}"
+        config="App/Config/settings.${landscape}.yaml"
+        api="https://www.strava.com/api/v3/push_subscriptions"
+        client_id="$(yq -r '.Strava.ClientId' "$config")"
+        callback="$(yq -r '.Strava.CallbackUrl' "$config" | sed 's#/Strava/callback$#/Strava/webhook#')"
+        : "${STRAVA_CLIENT_SECRET:?set STRAVA_CLIENT_SECRET}"
+        case "$action" in
+          view)
+            curl -fsS -G "$api" -d "client_id=$client_id" -d "client_secret=$STRAVA_CLIENT_SECRET" ;;
+          create)
+            # Strava calls GET <callback>?hub.challenge=... before answering: zinc must be live.
+            : "${STRAVA_VERIFY_TOKEN:?set STRAVA_VERIFY_TOKEN}"
+            curl -fsS -X POST "$api" -F "client_id=$client_id" -F "client_secret=$STRAVA_CLIENT_SECRET" \
+              -F "callback_url=$callback" -F "verify_token=$STRAVA_VERIFY_TOKEN" ;;
+          delete)
+            curl -fsS -X DELETE "$api/${3:?subscription id}?client_id=$client_id&client_secret=$STRAVA_CLIENT_SECRET" ;;
+          *)
+            echo "unknown action: $action (view, create or delete)" >&2; exit 1 ;;
+        esac
+        echo
   run:
     desc: Runs local .NET Server
     env:

@@ -4,8 +4,10 @@ using App.Modules.Habit.Data;
 using App.Modules.HabitExecution.Data;
 using App.Modules.HabitVersion.Data;
 using App.Modules.Payment.Data;
+using App.Modules.Proof.Data;
 using App.Modules.Protection.Data;
 using App.Modules.Routine.Data;
+using App.Modules.Strava.Data;
 using App.Modules.System;
 using App.Modules.Users.Data;
 using App.Modules.Vacation.Data;
@@ -100,6 +102,8 @@ public class DeleteAllRemnantsIntegrationTests : IAsyncLifetime
     (await _db.UserProtections.CountAsync()).Should().Be(1);
     (await _db.FreezeConsumptions.CountAsync()).Should().Be(1);
     (await _db.PaymentCustomers.CountAsync()).Should().Be(1);
+    (await _db.ProofBindings.CountAsync()).Should().Be(1);
+    (await _db.StravaConnections.CountAsync()).Should().Be(1, "Strava's terms: the link and tokens go with the account");
 
     // None of user-A's rows remain anywhere.
     (await _db.Users.CountAsync(x => x.Id == "user-A")).Should().Be(0);
@@ -110,6 +114,7 @@ public class DeleteAllRemnantsIntegrationTests : IAsyncLifetime
     (await _db.UserProtections.CountAsync(x => x.UserId == "user-A")).Should().Be(0);
     (await _db.FreezeConsumptions.CountAsync(x => x.UserId == "user-A")).Should().Be(0);
     (await _db.PaymentCustomers.CountAsync(x => x.UserId == "user-A")).Should().Be(0);
+    (await _db.StravaConnections.CountAsync(x => x.UserId == "user-A")).Should().Be(0);
 
     // The shared charity catalog is untouched.
     (await _db.Charities.CountAsync()).Should().Be(1);
@@ -216,6 +221,15 @@ public class DeleteAllRemnantsIntegrationTests : IAsyncLifetime
       AirwallexCustomerId = $"awx_{id}",
       CreatedAt = DateTime.UtcNow,
       UpdatedAt = DateTime.UtcNow,
+    });
+    _db.ProofBindings.Add(new ProofBindingData
+    {
+      HabitId = habitId, PluginKey = "strava", PluginVersion = 1, Settings = """{"sportTypes":["Run"]}"""
+    });
+    _db.StravaConnections.Add(new StravaConnectionData
+    {
+      UserId = id, AthleteId = Math.Abs(id.GetHashCode()), AccessToken = "enc", RefreshToken = "enc",
+      ExpiresAtUtc = DateTime.UtcNow, Scope = "read,activity:read_all"
     });
     await _db.SaveChangesAsync();
   }
