@@ -1,3 +1,17 @@
+## [1.39.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.38.0...v1.39.0) (2026-11-11)
+
+
+### ✨ Features ✨
+
+* friends, in-app inbox and the friend stake ([8781239](https://github.com/AtomiCloud/alcohol.zinc/commit/8781239b0370d760f1ca9c553683611df5f3210f))
+* revoke Strava on account deletion and add webhook task ([b862eea](https://github.com/AtomiCloud/alcohol.zinc/commit/b862eeaa39d2a14ccc9464c488e696c299cf2c55))
+* Strava proof plugin ([809f4d7](https://github.com/AtomiCloud/alcohol.zinc/commit/809f4d7e389c2d99d7bcd7528c42c446c93c27ac))
+
+
+### 🚀 Performance Improvement 🚀
+
+* read the Today overview in a fixed number of queries ([97a5e00](https://github.com/AtomiCloud/alcohol.zinc/commit/97a5e00998a8ae02f7b9c724e93091a36aec7866))
+
 ## [1.38.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.37.0...v1.38.0) (2026-11-10)
 
 
