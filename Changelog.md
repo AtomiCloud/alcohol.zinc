@@ -1,3 +1,10 @@
+## [1.41.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.40.0...v1.41.0) (2026-11-12)
+
+
+### ✨ Features ✨
+
+* a charity only for habits with a money stake ([8751e46](https://github.com/AtomiCloud/alcohol.zinc/commit/8751e464832e1c2b0980d07b5e4980759a67cb00))
+
 ## [1.40.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.39.0...v1.40.0) (2026-11-12)
 
 
