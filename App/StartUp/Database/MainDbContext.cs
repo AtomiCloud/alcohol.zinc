@@ -94,6 +94,10 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
     // Configuration
     var configuration = modelBuilder.Entity<ConfigurationData>();
     configuration.HasIndex(c => c.UserId).IsUnique(); // One configuration per user
+    configuration.HasOne(c => c.Charity)
+                 .WithMany()
+                 .HasForeignKey(c => c.DefaultCharityId)
+                 .OnDelete(DeleteBehavior.Cascade);
 
     // Habit configuration (main entity)
     var habit = modelBuilder.Entity<HabitData>();
@@ -119,7 +123,8 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
     habitVersion.HasIndex(x => new { x.HabitId, x.Version }).IsUnique();  // Unique version per habit
     habitVersion.HasOne(hv => hv.Charity)
                 .WithMany()
-                .HasForeignKey(hv => hv.CharityId);
+                .HasForeignKey(hv => hv.CharityId)
+                .OnDelete(DeleteBehavior.Cascade);
     habitVersion.HasMany(hv => hv.Executions)
                 .WithOne(he => he.HabitVersion)
                 .HasForeignKey(he => he.HabitVersionId);

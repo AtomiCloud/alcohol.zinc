@@ -13,7 +13,7 @@ public static class ConfigurationMapper
         configPrincipal.Id.ToString(),
         configPrincipal.UserId,
         configPrincipal.Record.Timezone,
-        configPrincipal.Record.DefaultCharityId.ToString()
+        configPrincipal.Record.DefaultCharityId?.ToString()
       );
 
   public static UpdateConfigurationRes ToRes(this ConfigurationUpdate update)
@@ -21,7 +21,7 @@ public static class ConfigurationMapper
         update.Principal.Id.ToString(),
         update.Principal.UserId,
         update.Principal.Record.Timezone,
-        update.Principal.Record.DefaultCharityId.ToString(),
+        update.Principal.Record.DefaultCharityId?.ToString(),
         update.SettledChecks.Select(c => new TimezoneSettledCheckRes(
           c.HabitId.ToString(),
           c.LocalDate.ToStandardDateFormat(),
@@ -44,13 +44,13 @@ public static class ConfigurationMapper
     new()
     {
       Timezone = req.Timezone,
-      DefaultCharityId = Guid.Parse(req.DefaultCharityId)
+      DefaultCharityId = string.IsNullOrEmpty(req.DefaultCharityId) ? null : Guid.Parse(req.DefaultCharityId)
     };
 
   public static ConfigurationRecord ToRecord(this UpdateConfigurationReq req) =>
     new()
     {
       Timezone = req.Timezone,
-      DefaultCharityId = Guid.Parse(req.DefaultCharityId)
+      DefaultCharityId = string.IsNullOrEmpty(req.DefaultCharityId) ? null : Guid.Parse(req.DefaultCharityId)
     };
 }

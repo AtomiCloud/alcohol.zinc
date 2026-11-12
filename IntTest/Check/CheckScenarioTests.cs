@@ -504,6 +504,67 @@ public class CheckScenarioTests : IAsyncLifetime
     res.Habits.Single(h => h.Id == bound.ToString()).Proof.Should().Be("strava");
   }
 
+  // A habit without a money stake has no charity: Today shows it without one beside a staked
+  // habit that keeps its charity, and its missed day settles with no penalty.
+  [SkippableFact]
+  public async Task FreeHabitWithoutCharity_InOverview_AndMissedWithoutPenalty()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (userId, charityId) = await SeedUser(LosAngeles);
+    var staked = await SeedHabit(userId, charityId, ["Monday"], LosAngeles);
+    var free = await SeedHabit(userId, charityId, ["Monday"], LosAngeles);
+    await _db.HabitVersions.Where(v => v.HabitId == free).ExecuteUpdateAsync(x => x
+      .SetProperty(v => v.CharityId, (Guid?)null)
+      .SetProperty(v => v.StakeCents, 0));
+
+    var now = U(2026, 1, 5, 18); // Mon 10:00 in Los Angeles
+    var svc = Checks.Service(_db);
+    var res = App.Modules.Habit.API.V1.HabitOverviewMapper.ToRes(
+      (await Overview(svc).GetOverview(new HabitOverviewSearch(userId, 10, 0), "skips", now)).Get());
+    res.Habits.Single(h => h.Id == free.ToString()).Charity.Should().BeNull();
+    res.Habits.Single(h => h.Id == staked.ToString()).Charity!.Id.Should().Be(charityId.ToString());
+
+    await svc.OpenUpcoming(now);
+    (await svc.CloseDue(U(2026, 1, 6, 9))).Get().Should().Be(2);
+    await svc.DispatchEvents(U(2026, 1, 6, 9));
+    (await ExecutionsOf(free)).Single().Status.Should().Be(HabitExecutionStatusData.Failed);
+    (await _db.Penalties.AsNoTracking().Where(p => p.UserId == userId).Select(p => p.CharityId).ToListAsync())
+      .Should().Equal(charityId);
+    (await _db.CheckEvents.AsNoTracking().Where(e => e.HabitId == free).Select(e => e.DispatchedAtUtc).SingleAsync())
+      .Should().NotBeNull("delivered, not stuck retrying");
+  }
+
+  // A configuration needs no charity; an update without one clears the default.
+  [SkippableFact]
+  public async Task Configuration_WithoutCharity_SavesReadsAndClears()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (_, charityId) = await SeedUser(Singapore);
+    var userId = $"user-{Guid.NewGuid():N}";
+    _db.Users.Add(new UserData { Id = userId, Username = userId, Email = $"{userId}@test.local" });
+    await _db.SaveChangesAsync();
+    var configs = new Domain.Configuration.ConfigurationService(
+      new ConfigurationRepository(_db, NullLogger<ConfigurationRepository>.Instance), Checks.Service(_db),
+      new NoTransaction());
+
+    var created = (await configs.Create(userId,
+      new Domain.Configuration.ConfigurationRecord { Timezone = Singapore }, null)).Get();
+    created.Record.DefaultCharityId.Should().BeNull();
+    var read = (await configs.GetByUserId(userId)).Get()!;
+    read.Principal.Record.DefaultCharityId.Should().BeNull();
+    read.Charity.Should().BeNull();
+
+    await configs.Update(created.Id, userId,
+      new Domain.Configuration.ConfigurationRecord { Timezone = Singapore, DefaultCharityId = charityId });
+    (await configs.GetByUserId(userId)).Get()!.Charity!.Id.Should().Be(charityId);
+
+    await configs.Update(created.Id, userId, new Domain.Configuration.ConfigurationRecord { Timezone = Singapore });
+    _db.ChangeTracker.Clear();
+    var cleared = (await configs.GetByUserId(userId)).Get()!;
+    cleared.Principal.Record.DefaultCharityId.Should().BeNull();
+    cleared.Charity.Should().BeNull();
+  }
+
   private HabitOverviewService Overview(CheckService checks) => new(
     new HabitService(new HabitRepository(_db, NullLogger<HabitRepository>.Instance), null!, checks,
       null!, NullLogger<HabitService>.Instance),

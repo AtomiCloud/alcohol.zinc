@@ -23,7 +23,7 @@ public static class HabitOverviewMapper
       ToDays(i.DaysOfWeek),
       new StakeRes(i.StakeAmount, i.StakeCurrency),
       i.Enabled,
-      new HabitCharityRefRes(i.Charity.Id.ToString(), i.Charity.Record.Name, null),
+      i.Charity is { } c ? new HabitCharityRefRes(c.Id.ToString(), c.Record.Name, null) : null,
       ToStatus(i.Status),
       i.TimeLeftToEodMinutes,
       new HabitVersionMetaRes(i.Version.Id.ToString(), i.Version.Version, i.Version.IsActive),

@@ -128,13 +128,14 @@ public class HabitOverviewService(
                 .Then(items => new HabitOverviewSummary(items, ctx.totalDebt, ctx.usedSkip, ctx.totalSkip), Errors.MapNone);
             });
 
-          // Habits usually share a charity, so each one is read once.
-          Task<Result<CharityPrincipal>> CharityFor(Guid id) =>
-            charities.TryGetValue(id, out var cached)
-              ? Task.FromResult(cached.ToResult())
-              : charityService.Get(id)
-                .NullToError(id.ToString())
-                .Then(ch => charities[id] = ch.Principal, Errors.MapNone);
+          // Habits usually share a charity, so each one is read once. A habit without a
+          // money stake has none.
+          Task<Result<CharityPrincipal?>> CharityFor(Guid? charityId) =>
+            charityId is not { } id ? Task.FromResult<Result<CharityPrincipal?>>((CharityPrincipal?)null)
+            : charities.TryGetValue(id, out var cached) ? Task.FromResult<Result<CharityPrincipal?>>(cached)
+            : charityService.Get(id)
+              .NullToError(id.ToString())
+              .Then(ch => (CharityPrincipal?)(charities[id] = ch.Principal), Errors.MapNone);
 
           Task<Result<HabitOverviewItem>> BuildItem(
             HabitVersionPrincipal hv,

@@ -7,6 +7,6 @@ public record HabitDebtItem(
   DateOnly Date,
   decimal Amount,
   string Currency,
-  Guid CharityId,
+  Guid? CharityId,
   string Task
 );

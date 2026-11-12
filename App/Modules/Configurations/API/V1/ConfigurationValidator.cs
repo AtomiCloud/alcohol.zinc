@@ -13,8 +13,8 @@ public class CreateConfigurationReqValidator : AbstractValidator<CreateConfigura
       .WithMessage("Timezone must be between 1 and 64 characters");
     
     this.RuleFor(x => x.DefaultCharityId)
-      .NotNull()
       .Must(x => Guid.TryParse(x, out _))
+      .When(x => !string.IsNullOrEmpty(x.DefaultCharityId))
       .WithMessage("DefaultCharityId must be a valid GUID");
   }
 }
@@ -29,8 +29,8 @@ public class UpdateConfigurationReqValidator : AbstractValidator<UpdateConfigura
       .WithMessage("Timezone must be between 1 and 64 characters");
       
     this.RuleFor(x => x.DefaultCharityId)
-      .NotNull()
       .Must(x => Guid.TryParse(x, out _))
+      .When(x => !string.IsNullOrEmpty(x.DefaultCharityId))
       .WithMessage("DefaultCharityId must be a valid GUID");
   }
 }

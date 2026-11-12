@@ -339,7 +339,7 @@ namespace App.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("DefaultCharityId")
+                    b.Property<Guid?>("DefaultCharityId")
                         .HasColumnType("uuid");
 
                     b.Property<TimeOnly>("EndOfDay")
@@ -595,7 +595,7 @@ namespace App.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("CharityId")
+                    b.Property<Guid?>("CharityId")
                         .HasColumnType("uuid");
 
                     b.Property<string[]>("DaysOfWeek")
@@ -1318,8 +1318,7 @@ namespace App.Migrations
                     b.HasOne("App.Modules.Charities.Data.CharityData", "Charity")
                         .WithMany()
                         .HasForeignKey("DefaultCharityId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("Charity");
                 });
@@ -1429,8 +1428,7 @@ namespace App.Migrations
                     b.HasOne("App.Modules.Charities.Data.CharityData", "Charity")
                         .WithMany()
                         .HasForeignKey("CharityId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.HasOne("App.Modules.Habit.Data.HabitData", "Habit")
                         .WithMany("Versions")

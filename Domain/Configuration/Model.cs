@@ -6,7 +6,8 @@ namespace Domain.Configuration
     public record ConfigurationRecord
     {
       public required string Timezone { get; init; }
-      public Guid DefaultCharityId { get; init; }
+      // Null until the user picks one; only staked habits need a charity.
+      public Guid? DefaultCharityId { get; init; }
     }
     
     public record ConfigurationPrincipal

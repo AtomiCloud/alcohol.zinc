@@ -17,7 +17,7 @@ public record HabitOverviewHabitRes(
   bool[] Days,
   StakeRes Stake,
   bool Enabled,
-  HabitCharityRefRes Charity,
+  HabitCharityRefRes? Charity,  // null for a habit without a money stake
   HabitStatusRes Status,
   int TimeLeftToEodMinutes,
   HabitVersionMetaRes Version,
