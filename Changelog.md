@@ -1,3 +1,10 @@
+## [1.40.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.39.0...v1.40.0) (2026-11-12)
+
+
+### ✨ Features ✨
+
+* permanent friend invite links that send a request ([72fd98a](https://github.com/AtomiCloud/alcohol.zinc/commit/72fd98ae57a78e56fef1ce2e86d3e0603cbf592c))
+
 ## [1.39.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.38.0...v1.39.0) (2026-11-11)
 
 
