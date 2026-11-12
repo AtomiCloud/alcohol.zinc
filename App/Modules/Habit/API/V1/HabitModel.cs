@@ -3,7 +3,7 @@ public record CreateHabitReq(
     string[] DaysOfWeek,
     string NotificationTime, // string (e.g. "HH:mm")
     string Stake,            // string decimal (e.g. "10.50")
-    Guid CharityId,
+    Guid? CharityId,         // Needed only when Stake > 0; null or empty: no charity
     string Timezone,         // string (e.g. "Asia/Singapore", "America/New_York")
     string? DeadlineTime = null, // "HH:mm", the day's check deadline; defaults to 23:59
     Guid? RoutineId = null   // Optional: existing routine of the user; omitted => new one-habit routine
@@ -14,7 +14,7 @@ public record UpdateHabitReq(
     string[] DaysOfWeek,
     string NotificationTime,
     string Stake,
-    Guid CharityId,
+    Guid? CharityId,         // Needed only when Stake > 0; null or empty: no charity
     bool Enabled,
     string Timezone,         // string (e.g. "Asia/Singapore", "America/New_York")
     string? DeadlineTime = null  // "HH:mm", the day's check deadline; defaults to 23:59
@@ -37,7 +37,7 @@ public record HabitVersionRes(
     string NotificationTime,
     string Stake,
     string Ratio,
-    Guid CharityId,
+    Guid? CharityId,         // Null for a habit without a money stake
     string Timezone,         // string (e.g. "Asia/Singapore", "America/New_York")
     string DeadlineTime      // "HH:mm"
 );

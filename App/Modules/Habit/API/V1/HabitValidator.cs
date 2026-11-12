@@ -30,7 +30,9 @@ public class CreateHabitReqValidator : AbstractValidator<CreateHabitReq>
 
 
         RuleFor(x => x.CharityId)
-            .NotEmpty();
+            .Must(id => id is { } g && g != Guid.Empty)
+            .When(x => HasMoneyStake(x.Stake))
+            .WithMessage("A habit with a stake needs a charity.");
 
         RuleFor(x => x.Timezone)
             .NotEmpty()
@@ -56,7 +58,9 @@ public class CreateHabitReqValidator : AbstractValidator<CreateHabitReq>
         return decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var d) && d >= 0;
     }
 
-
+    // An unparsable stake fails the Stake rules; it isn't also reported as a missing charity.
+    internal static bool HasMoneyStake(string? stake) =>
+        decimal.TryParse(stake, NumberStyles.Number, CultureInfo.InvariantCulture, out var d) && d > 0;
 }
 
 public class UpdateHabitReqValidator : AbstractValidator<UpdateHabitReq>
@@ -85,7 +89,9 @@ public class UpdateHabitReqValidator : AbstractValidator<UpdateHabitReq>
 
 
         RuleFor(x => x.CharityId)
-            .NotEmpty();
+            .Must(id => id is { } g && g != Guid.Empty)
+            .When(x => CreateHabitReqValidator.HasMoneyStake(x.Stake))
+            .WithMessage("A habit with a stake needs a charity.");
 
         RuleFor(x => x.Timezone)
             .NotEmpty()

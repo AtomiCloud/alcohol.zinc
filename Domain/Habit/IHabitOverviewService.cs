@@ -15,7 +15,7 @@ public record HabitOverviewItem
   decimal StakeAmount,
   string StakeCurrency,
   bool Enabled,
-  CharityPrincipal Charity,
+  CharityPrincipal? Charity,  // null for a habit without a money stake
   HabitStreakStatus Status,
   int TimeLeftToEodMinutes,
   HabitVersionMeta Version,

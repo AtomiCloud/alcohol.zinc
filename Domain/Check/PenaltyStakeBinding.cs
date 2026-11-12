@@ -20,13 +20,14 @@ public class PenaltyStakeBinding(ICheckRepository repo, IPenaltyRepository penal
 
     // Exact cents math (mirrors StreakRepository): cents * bps / 10000
     var amountCents = (long)row.StakeCents * row.RatioBasisPoints / 10_000L;
-    if (amountCents <= 0) return new Unit();
+    // No money stake, so nothing to charge (and no charity to give it to).
+    if (amountCents <= 0 || row.CharityId is not { } charityId) return new Unit();
 
     await penaltyRepo.EnqueuePending(new PenaltyRecord
     {
       HabitExecutionId = row.ExecutionId,
       UserId = row.UserId,
-      CharityId = row.CharityId,
+      CharityId = charityId,
       Amount = new Money(amountCents / 100m, Currency.FromCode(row.StakeCurrency)),
       Status = PenaltyStatus.Pending,
       PaymentIntentId = null,

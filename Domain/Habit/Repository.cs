@@ -5,7 +5,7 @@ namespace Domain.Habit
     // Stake of a failed execution, so the penalty stake binding can enqueue its penalty.
     // Carries persisted int cents + basis points so the amount is computed exactly
     // as StreakRepository does (cents * bps / 10000).
-    public record FailedExecutionRow(Guid ExecutionId, string UserId, Guid CharityId, int StakeCents, string StakeCurrency, int RatioBasisPoints);
+    public record FailedExecutionRow(Guid ExecutionId, string UserId, Guid? CharityId, int StakeCents, string StakeCurrency, int RatioBasisPoints);
 
     public interface IHabitRepository
     {

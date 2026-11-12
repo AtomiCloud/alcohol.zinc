@@ -28,7 +28,8 @@ namespace Domain.Habit
     // Habit version details - versioned blueprint configuration
     public record HabitVersionRecord
     {
-        public required Guid CharityId { get; init; }
+        // Null for a habit without a money stake; a stake above 0 needs a charity.
+        public required Guid? CharityId { get; init; }
         public required string Task { get; init; }
         public required string[] DaysOfWeek { get; init; }
         public required TimeOnly NotificationTime { get; init; }   // phone reminder only

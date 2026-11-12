@@ -18,9 +18,9 @@ namespace App.Modules.Configurations.Data
         public TimeOnly EndOfDay { get; set; }
         
         [ForeignKey(nameof(Charity))]
-        public Guid DefaultCharityId { get; set; }
+        public Guid? DefaultCharityId { get; set; }
         
         // Navigation property
-        public CharityData Charity { get; set; }
+        public CharityData? Charity { get; set; }
     }
 }

@@ -35,7 +35,7 @@ public static class HabitMapper
     public static HabitVersionRecord ToVersionRecord(this CreateHabitReq req) =>
         new ()
         {
-            CharityId = req.CharityId,
+            CharityId = req.CharityId == Guid.Empty ? null : req.CharityId,
             Task = req.Task,
             DaysOfWeek = req.DaysOfWeek,
             NotificationTime = req.NotificationTime.ToTime(),
@@ -48,7 +48,7 @@ public static class HabitMapper
     public static HabitVersionRecord ToVersionRecord(this UpdateHabitReq req) =>
         new ()
         {
-            CharityId = req.CharityId,
+            CharityId = req.CharityId == Guid.Empty ? null : req.CharityId,
             Task = req.Task,
             DaysOfWeek = req.DaysOfWeek,
             NotificationTime = req.NotificationTime.ToTime(),

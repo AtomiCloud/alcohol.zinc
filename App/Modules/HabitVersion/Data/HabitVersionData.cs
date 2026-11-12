@@ -10,7 +10,7 @@ namespace App.Modules.HabitVersion.Data
         [Key]
         public Guid Id { get; set; }
         public required Guid HabitId { get; set; }
-        public required Guid CharityId { get; set; }
+        public required Guid? CharityId { get; set; }
         public required ushort Version { get; set; }
         
         // Habit blueprint data
