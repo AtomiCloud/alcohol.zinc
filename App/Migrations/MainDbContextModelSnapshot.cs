@@ -425,9 +425,6 @@ namespace App.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTime>("ExpiresAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<string>("UserId")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -435,7 +432,8 @@ namespace App.Migrations
 
                     b.HasKey("Code");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("UserId")
+                        .IsUnique();
 
                     b.ToTable("FriendInvites");
                 });

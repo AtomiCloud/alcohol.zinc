@@ -15,5 +15,5 @@ public static class FriendMapper
     new(r.Incoming.Select(x => new FriendRequestRes(x.From.UserId, x.From.Username, x.CreatedAtUtc)).ToList(),
       r.Outgoing.Select(x => new FriendRequestRes(x.To.UserId, x.To.Username, x.CreatedAtUtc)).ToList());
 
-  public static FriendInviteRes ToRes(this FriendInvitePrincipal i) => new(i.Code, i.ExpiresAtUtc);
+  public static FriendInviteRes ToRes(this FriendInvitePrincipal i) => new(i.Code);
 }

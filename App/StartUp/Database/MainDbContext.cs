@@ -201,7 +201,7 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
     friendship.HasOne(x => x.FriendUser).WithMany().HasForeignKey(x => x.FriendUserId).OnDelete(DeleteBehavior.Cascade);
 
     var friendInvite = modelBuilder.Entity<FriendInviteData>();
-    friendInvite.HasIndex(x => x.UserId);
+    friendInvite.HasIndex(x => x.UserId).IsUnique();
     friendInvite.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
 
     // Inbox: newest-first per user; DedupeKey makes outbox retries post once.

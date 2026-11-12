@@ -7,8 +7,12 @@ using CSharp_Result;
 using Domain.Exceptions;
 using Domain.Friend;
 using Domain.Notification;
+using EntityFramework.Exceptions.Common;
 using IntTest.Penalty;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace IntTest.Friend;
@@ -301,8 +305,10 @@ public class FriendIntegrationTests : IAsyncLifetime
     (await service.Search(me, "al", 20)).IsSuccess().Should().BeTrue();
   }
 
+  // One permanent code per user. Accepting it asks the owner, like a friend request: nobody is
+  // friends until the owner accepts, unless the owner had already asked the person accepting.
   [SkippableFact]
-  public async Task Invite_AcceptMakesFriends_ReusableUntilExpiry_OwnAndExpiredRefused()
+  public async Task Invite_OneCodePerUser_AcceptSendsTheOwnerARequest()
   {
     Skip.If(_conn == null, SkipReason);
     var alice = await SeedUser("alice");
@@ -311,34 +317,112 @@ public class FriendIntegrationTests : IAsyncLifetime
     var inbox = new RecordingInbox();
     var service = Service(inbox);
 
-    var invite = (await service.CreateInvite(alice)).Get();
+    var invite = (await service.GetOrCreateInvite(alice)).Get();
     invite.Code.Should().HaveLength(FriendService.InviteCodeLength).And.MatchRegex("^[23456789abcdefghjkmnpqrstuvwxyz]+$");
-    invite.ExpiresAtUtc.Should().BeCloseTo(DateTime.UtcNow.AddDays(7), TimeSpan.FromMinutes(1));
-    (await service.CreateInvite(alice)).Get().Code.Should().NotBe(invite.Code);
+    (await service.GetOrCreateInvite(alice)).Get().Code.Should().Be(invite.Code);
+    (await service.GetOrCreateInvite(bob)).Get().Code.Should().NotBe(invite.Code);
+    (await _db.FriendInvites.CountAsync(x => x.UserId == alice)).Should().Be(1);
 
     (await service.AcceptInvite(alice, invite.Code)).FailureOrDefault().Should().BeOfType<InvalidRequestException>();
+    (await service.AcceptInvite(bob, "nosuchcode")).Get().Should().BeNull();
 
-    var friendship = (await service.AcceptInvite(bob, invite.Code)).Get();
-    friendship!.Friend.Should().Be(new FriendUser(alice, "alice"));
-    (await FriendshipRows()).Should().BeEquivalentTo([(alice, bob), (bob, alice)]);
+    // bob uses alice's link: alice gets a request to approve, they aren't friends yet.
+    (await service.AcceptInvite(bob, invite.Code)).Get().Should().Be(FriendRelation.Outgoing);
+    (await service.AreFriends(alice, bob)).Get().Should().BeFalse();
+    var requests = (await service.ListRequests(alice)).Get();
+    requests.Incoming.Select(r => r.From).Should().Equal(new FriendUser(bob, "bob"));
     inbox.Posts.Select(p => (p.UserId, p.Record.Kind, p.Record.ActorUserId)).Should()
-      .Equal((alice, InboxKinds.FriendAccepted, bob));
+      .Equal((alice, InboxKinds.FriendRequest, bob));
 
-    // Again: the existing friendship, no new notification.
-    var again = (await service.AcceptInvite(bob, invite.Code)).Get();
-    again!.SinceUtc.Should().Be(friendship.SinceUtc);
+    // Again: still just the one request and notification.
+    (await service.AcceptInvite(bob, invite.Code.ToUpperInvariant())).Get().Should().Be(FriendRelation.Outgoing);
+    (await _db.FriendRequests.CountAsync()).Should().Be(1);
     inbox.Posts.Should().HaveCount(1);
 
-    // Reusable by someone else; a pending request between them is cleared.
-    await service.SendRequest(carol, alice);
-    (await service.AcceptInvite(carol, invite.Code.ToUpperInvariant())).Get().Should().NotBeNull();
+    // alice had already asked carol: carol using alice's link accepts that request.
+    await service.SendRequest(alice, carol);
+    inbox.Posts.Clear();
+    (await service.AcceptInvite(carol, invite.Code)).Get().Should().Be(FriendRelation.Friend);
     (await service.AreFriends(alice, carol)).Get().Should().BeTrue();
-    (await _db.FriendRequests.CountAsync()).Should().Be(0);
+    inbox.Posts.Select(p => (p.UserId, p.Record.Kind, p.Record.ActorUserId)).Should()
+      .Equal((alice, InboxKinds.FriendAccepted, carol));
+  }
 
-    (await service.AcceptInvite(bob, "nosuchcode")).Get().Should().BeNull();
-    var expired = (await Repo().CreateInvite(carol, "expired234", DateTime.UtcNow.AddSeconds(-1))).Get();
-    (await service.AcceptInvite(bob, expired.Code)).Get().Should().BeNull();
-    (await service.AreFriends(bob, carol)).Get().Should().BeFalse();
+  // Codes never expire: a link made long ago still works.
+  [SkippableFact]
+  public async Task Invite_OldCodeStillWorks()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var alice = await SeedUser("alice");
+    var bob = await SeedUser("bob");
+    _db.FriendInvites.Add(new FriendInviteData { Code = "oldcode234", UserId = alice, CreatedAtUtc = DateTime.UtcNow.AddYears(-2) });
+    await _db.SaveChangesAsync();
+
+    (await Service(new RecordingInbox()).GetOrCreateInvite(alice)).Get().Code.Should().Be("oldcode234");
+    (await Service(new RecordingInbox()).AcceptInvite(bob, "oldcode234")).Get().Should().Be(FriendRelation.Outgoing);
+  }
+
+  // Two first calls race: the other request stores its invite between our check and our insert.
+  // We get the code that was stored, never an error or a second code.
+  [SkippableFact]
+  public async Task Invite_LosingTheFirstCallRace_ReturnsTheStoredCode()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var alice = await SeedUser("alice");
+    await using var db = PenaltyIntegrationTests.NewContext(_conn!);
+    var raced = false;
+    db.SavingChanges += (_, _) =>
+    {
+      if (raced) return;
+      raced = true;
+      using var other = PenaltyIntegrationTests.NewContext(_conn!);
+      other.FriendInvites.Add(new FriendInviteData { Code = "winner2345", UserId = alice });
+      other.SaveChanges();
+    };
+    var service = new FriendService(new FriendRepository(db, NullLogger<FriendRepository>.Instance),
+      new RecordingInbox(), NullLogger<FriendService>.Instance);
+
+    (await service.GetOrCreateInvite(alice)).Get().Code.Should().Be("winner2345");
+    raced.Should().BeTrue();
+    (await _db.FriendInvites.AsNoTracking().Where(x => x.UserId == alice).Select(x => x.Code).ToListAsync())
+      .Should().Equal("winner2345");
+  }
+
+  // Before this change a user could make several invites. The migration keeps each user's
+  // oldest code (the one most likely shared) and then allows only one per user.
+  [SkippableFact]
+  public async Task Migration_KeepsEachUsersOldestInvite_ThenOnlyOne()
+  {
+    Skip.If(_conn == null, SkipReason);
+    await using var db = PenaltyIntegrationTests.NewContext(
+      string.Join(';', _conn!.Split(';').Where(p => !p.Trim().StartsWith("Database=", StringComparison.OrdinalIgnoreCase)))
+      + ";Database=friends_migrate_test");
+    await db.Database.EnsureDeletedAsync();
+    try
+    {
+      var migrator = db.GetInfrastructure().GetRequiredService<IMigrator>();
+      await migrator.MigrateAsync("20261111091657_AddFriendsInboxAndFriendStake");
+      var t = new DateTime(2026, 11, 1, 0, 0, 0, DateTimeKind.Utc);
+      db.Users.AddRange(new UserData { Id = "a", Username = "alice", Email = "a@test.local" },
+        new UserData { Id = "b", Username = "bob", Email = "b@test.local" });
+      await db.SaveChangesAsync();
+      await db.Database.ExecuteSqlRawAsync("""
+        INSERT INTO "FriendInvites" ("Code", "UserId", "ExpiresAtUtc", "CreatedAtUtc") VALUES
+          ('alicenew22', 'a', {0}, {1}), ('aliceold22', 'a', {0}, {2}), ('alicemid22', 'a', {0}, {3}),
+          ('bobonly222', 'b', {0}, {1});
+        """, t.AddDays(7), t.AddDays(2), t, t.AddDays(1));
+
+      await migrator.MigrateAsync();
+
+      (await db.FriendInvites.AsNoTracking().OrderBy(x => x.UserId).Select(x => x.Code).ToListAsync())
+        .Should().Equal("aliceold22", "bobonly222");
+      db.FriendInvites.Add(new FriendInviteData { Code = "second2222", UserId = "a" });
+      await FluentActions.Awaiting(() => db.SaveChangesAsync()).Should().ThrowAsync<UniqueConstraintException>();
+    }
+    finally
+    {
+      await db.Database.EnsureDeletedAsync();
+    }
   }
 
   [SkippableFact]
@@ -356,8 +440,8 @@ public class FriendIntegrationTests : IAsyncLifetime
     (await throwing.Accept(bob, alice)).Get().Should().NotBeNull();
     (await failing.AreFriends(alice, bob)).Get().Should().BeTrue();
 
-    var invite = (await throwing.CreateInvite(alice)).Get();
-    (await throwing.AcceptInvite(carol, invite.Code)).Get().Should().NotBeNull();
-    (await failing.AreFriends(alice, carol)).Get().Should().BeTrue();
+    var invite = (await throwing.GetOrCreateInvite(alice)).Get();
+    (await throwing.AcceptInvite(carol, invite.Code)).Get().Should().Be(FriendRelation.Outgoing);
+    (await failing.ListRequests(alice)).Get().Incoming.Select(r => r.From.UserId).Should().Equal(carol);
   }
 }

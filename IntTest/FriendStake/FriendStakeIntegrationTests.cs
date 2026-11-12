@@ -91,8 +91,8 @@ public class FriendStakeIntegrationTests : IAsyncLifetime
     public Task<Result<Unit?>> DeleteRequest(string userId, string otherUserId) => throw new NotImplementedException();
     public Task<Result<List<FriendshipPrincipal>>> ListFriends(string userId) => throw new NotImplementedException();
     public Task<Result<Unit?>> Remove(string userId, string friendUserId) => throw new NotImplementedException();
-    public Task<Result<FriendInvitePrincipal>> CreateInvite(string userId) => throw new NotImplementedException();
-    public Task<Result<FriendshipPrincipal?>> AcceptInvite(string userId, string code) => throw new NotImplementedException();
+    public Task<Result<FriendInvitePrincipal>> GetOrCreateInvite(string userId) => throw new NotImplementedException();
+    public Task<Result<FriendRelation?>> AcceptInvite(string userId, string code) => throw new NotImplementedException();
   }
 
   private FriendStakeRepository Repo() => new(_db, NullLogger<FriendStakeRepository>.Instance);

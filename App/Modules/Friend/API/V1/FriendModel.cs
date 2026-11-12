@@ -14,5 +14,5 @@ public record FriendRequestRes(string UserId, string Username, DateTime CreatedA
 
 public record FriendRequestsRes(List<FriendRequestRes> Incoming, List<FriendRequestRes> Outgoing);
 
-// The app builds the link: lazytax.club/f/{Code}.
-public record FriendInviteRes(string Code, DateTime ExpiresAtUtc);
+// The app builds the link: lazytax.club/f/{Code}. It never expires.
+public record FriendInviteRes(string Code);

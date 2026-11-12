@@ -21,8 +21,8 @@ public record FriendRequests(List<FriendRequestPrincipal> Incoming, List<FriendR
 
 public record FriendshipPrincipal(FriendUser Friend, DateTime SinceUtc);
 
-// A link for someone who isn't on LazyTax yet: lazytax.club/f/{Code}.
-public record FriendInvitePrincipal(string Code, string UserId, DateTime ExpiresAtUtc);
+// A user's permanent invite link: lazytax.club/f/{Code}. It never expires.
+public record FriendInvitePrincipal(string Code, string UserId);
 
 public interface IFriendService
 {
@@ -48,10 +48,12 @@ public interface IFriendService
   // Null when they weren't friends.
   Task<Result<Unit?>> Remove(string userId, string friendUserId);
 
-  Task<Result<FriendInvitePrincipal>> CreateInvite(string userId);
+  // The user's one invite: the same code every time, created on the first call.
+  Task<Result<FriendInvitePrincipal>> GetOrCreateInvite(string userId);
 
-  // Becomes friends with the invite's owner and notifies them. Null for an unknown or expired code.
-  Task<Result<FriendshipPrincipal?>> AcceptInvite(string userId, string code);
+  // Sends the invite's owner a friend request, exactly as SendRequest does: Outgoing, or Friend
+  // when the owner had already asked the caller. Null for an unknown code.
+  Task<Result<FriendRelation?>> AcceptInvite(string userId, string code);
 
   Task<Result<bool>> AreFriends(string userId, string otherUserId);
 }
@@ -76,6 +78,7 @@ public interface IFriendRepository
   // Deletes both directions and the HabitFriendWatchers each had on the other's habits.
   Task<Result<bool>> DeleteFriendship(string userId, string friendUserId);
 
-  Task<Result<FriendInvitePrincipal>> CreateInvite(string userId, string code, DateTime expiresAtUtc);
+  // The user's invite, or a new one with this code when they have none (one per user).
+  Task<Result<FriendInvitePrincipal>> GetOrCreateInvite(string userId, string code);
   Task<Result<FriendInvitePrincipal?>> GetInvite(string code);
 }
