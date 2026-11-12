@@ -16,7 +16,6 @@ public class FriendService(
   public const int MinQueryLength = 2;
   public const int MaxSearchLimit = 20;
   public const int InviteCodeLength = 10;
-  public static readonly TimeSpan InviteLifetime = TimeSpan.FromDays(7);
 
   // Lowercase letters and digits without the look-alikes 0/o, 1/l/i, so a code read aloud or
   // retyped from a screenshot still works.
@@ -104,32 +103,20 @@ public class FriendService(
     return deleted.Get() ? new Unit() : (Unit?)null;
   }
 
-  public Task<Result<FriendInvitePrincipal>> CreateInvite(string userId)
-  {
-    var code = RandomNumberGenerator.GetString(InviteAlphabet, InviteCodeLength);
-    return repo.CreateInvite(userId, code, DateTime.UtcNow.Add(InviteLifetime));
-  }
+  public Task<Result<FriendInvitePrincipal>> GetOrCreateInvite(string userId) =>
+    repo.GetOrCreateInvite(userId, RandomNumberGenerator.GetString(InviteAlphabet, InviteCodeLength));
 
-  public async Task<Result<FriendshipPrincipal?>> AcceptInvite(string userId, string code)
+  public async Task<Result<FriendRelation?>> AcceptInvite(string userId, string code)
   {
     var invite = await repo.GetInvite((code ?? "").Trim().ToLowerInvariant());
     if (invite.IsFailure()) return invite.FailureOrDefault();
-    if (invite.Get() is not { } i || i.ExpiresAtUtc <= DateTime.UtcNow) return (FriendshipPrincipal?)null;
+    if (invite.Get() is not { } i) return (FriendRelation?)null;
     if (i.UserId == userId) return new InvalidRequestException("code", "You can't accept your own invite");
 
-    var relation = await repo.Relation(userId, i.UserId);
-    if (relation.IsFailure()) return relation.FailureOrDefault();
-    var wereFriends = relation.Get() == FriendRelation.Friend;
-
-    var me = await repo.GetUser(userId);
-    if (me.IsFailure()) return me.FailureOrDefault();
-    if (me.Get() is not { } accepter) return new NotFoundException("User not found", typeof(FriendUser), userId);
-
-    // Idempotent: already friends returns the existing friendship (and clears any stale request).
-    var friendship = await repo.CreateFriendship(userId, i.UserId);
-    if (friendship.IsFailure()) return friendship.FailureOrDefault();
-    if (!wereFriends) await NotifyAccepted(accepter, i.UserId, friendship.Get());
-    return friendship.Get();
+    // The owner still decides: a link only saves searching for their username.
+    var sent = await SendRequest(userId, i.UserId);
+    if (sent.IsFailure()) return sent.FailureOrDefault();
+    return sent.Get();
   }
 
   public async Task<Result<bool>> AreFriends(string userId, string otherUserId)

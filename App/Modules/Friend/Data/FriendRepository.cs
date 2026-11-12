@@ -253,19 +253,27 @@ public class FriendRepository(MainDbContext db, ILogger<FriendRepository> logger
     }
   }
 
-  public async Task<Result<FriendInvitePrincipal>> CreateInvite(string userId, string code, DateTime expiresAtUtc)
+  public async Task<Result<FriendInvitePrincipal>> GetOrCreateInvite(string userId, string code)
   {
     FriendInviteData? data = null;
     try
     {
-      data = new FriendInviteData { Code = code, UserId = userId, ExpiresAtUtc = expiresAtUtc };
+      if (await InviteOf(userId) is { } existing) return existing;
+      data = new FriendInviteData { Code = code, UserId = userId };
       db.FriendInvites.Add(data);
       await db.SaveChangesAsync();
       return data.ToPrincipal();
     }
+    catch (UniqueConstraintException e)
+    {
+      // A concurrent first call created the user's invite: everyone gets that one code.
+      if (await InviteOf(userId) is { } winner) return winner;
+      logger.LogError(e, "GetOrCreateInvite code collision for UserId={UserId}", userId);
+      throw;
+    }
     catch (Exception e)
     {
-      logger.LogError(e, "CreateInvite failed for UserId={UserId}", userId);
+      logger.LogError(e, "GetOrCreateInvite failed for UserId={UserId}", userId);
       throw;
     }
     finally
@@ -273,6 +281,9 @@ public class FriendRepository(MainDbContext db, ILogger<FriendRepository> logger
       if (data != null) db.Entry(data).State = EntityState.Detached;
     }
   }
+
+  private async Task<FriendInvitePrincipal?> InviteOf(string userId) =>
+    (await db.FriendInvites.AsNoTracking().Where(x => x.UserId == userId).FirstOrDefaultAsync())?.ToPrincipal();
 
   public async Task<Result<FriendInvitePrincipal?>> GetInvite(string code)
   {

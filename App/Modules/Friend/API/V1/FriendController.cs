@@ -97,22 +97,25 @@ public class FriendController(
       new EntityNotFound("Friend Request Not Found", typeof(FriendRequestPrincipal), otherUserId));
   }
 
+  // The user's permanent invite: the same code on every call.
   [Authorize, HttpPost("{userId}/invites")]
   public async Task<ActionResult<FriendInviteRes>> CreateInvite(string userId)
   {
     var result = await this.GuardAsync(userId)
-      .ThenAwait(_ => service.CreateInvite(userId))
+      .ThenAwait(_ => service.GetOrCreateInvite(userId))
       .Then(i => i.ToRes(), Errors.MapNone);
 
     return this.ReturnResult(result);
   }
 
+  // Sends the code's owner a friend request, like POST requests: "outgoing", or "friend" when
+  // the owner had already asked you.
   [Authorize, HttpPost("{userId}/invites/{code}/accept")]
-  public async Task<ActionResult<FriendRes>> AcceptInvite(string userId, string code)
+  public async Task<ActionResult<FriendRelationRes>> AcceptInvite(string userId, string code)
   {
     var result = await this.GuardAsync(userId)
       .ThenAwait(_ => service.AcceptInvite(userId, code))
-      .Then(f => f?.ToRes(), Errors.MapNone);
+      .Then(r => r is { } relation ? new FriendRelationRes(relation.ToRes()) : null, Errors.MapNone);
 
     return this.ReturnNullableResult(result,
       new EntityNotFound("Friend Invite Not Found", typeof(FriendInvitePrincipal), code));

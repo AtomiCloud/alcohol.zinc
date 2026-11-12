@@ -37,7 +37,7 @@ public class FriendshipData
   public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }
 
-// An invite link for someone not on LazyTax yet; reusable until it expires.
+// A user's permanent invite link (one per user, unique on UserId); it never expires.
 public class FriendInviteData
 {
   [Key, MaxLength(32)]
@@ -47,6 +47,5 @@ public class FriendInviteData
   public required string UserId { get; set; }
   public virtual UserData? User { get; set; }
 
-  public required DateTime ExpiresAtUtc { get; set; }
   public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }
