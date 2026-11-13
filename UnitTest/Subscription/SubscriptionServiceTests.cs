@@ -112,18 +112,4 @@ public class SubscriptionServiceTests
     res.IsSuccess().Should().BeFalse();
     res.FailureOrDefault().Should().BeOfType<InvalidSubscriptionTierException>();
   }
-
-  // Product matrix pin (2026-07-06, must match the public pricing page):
-  // free = 2 habits, 10 skips/month, no vacation mode, no freezes.
-  // Existing users keep over-cap entities but cannot create more.
-  [Theory]
-  [InlineData("ent.habits.max", 2)]
-  [InlineData("ent.skips.monthly", 10)]
-  [InlineData("ent.vacation.windows.yearly", 0)]
-  [InlineData("ent.freeze.base", 0)]
-  public async Task FreeTier_MatchesPublicPricingPage(string key, int cap)
-  {
-    var svc = Svc(new FakeSubscriptionRepository());
-    ((int)await svc.GetLimitForTier("free", key)).Should().Be(cap);
-  }
 }

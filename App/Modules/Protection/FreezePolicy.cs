@@ -6,9 +6,10 @@ public class FreezePolicy : IFreezePolicy
 {
   // Policy: baseCap plus thresholds at 30, 80, 150 streak days,
   // then +1 for every additional 150 days beyond 150.
+  // A tier with no base freezes (free) gets no freezes at all, streak bonuses included.
   public int ComputeFreezeMax(int baseCap, int userMaxStreak)
   {
-    if (baseCap < 0) baseCap = 0;
+    if (baseCap <= 0) return 0;
     var bonus = 0;
     if (userMaxStreak >= 30) bonus += 1;
     if (userMaxStreak >= 80) bonus += 1;
