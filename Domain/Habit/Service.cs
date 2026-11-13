@@ -25,7 +25,8 @@ public class HabitService(
 
   public Task<Result<HabitVersionPrincipal>> Create(string userId, HabitVersionRecord versionRecord, Guid? routineId)
   {
-    return repo.Create(userId, versionRecord, routineId);
+    return entitlementService.HabitQuota(userId)
+      .ThenAwait(quota => repo.Create(userId, versionRecord, routineId, quota));
   }
 
   public async Task<Result<HabitVersionPrincipal?>> Update(string userId, Guid habitId,
@@ -89,12 +90,16 @@ public class HabitService(
     return execution;
   }
 
-  public async Task<Result<HabitExecutionPrincipal>> SkipHabit(string userId, Guid habitVersionId, string? notes)
+  public async Task<Result<HabitExecutionPrincipal>> SkipHabit(string userId, Guid habitVersionId, string? notes,
+    Allowance.UserMonthWindow month)
   {
     var hv = (HabitVersionPrincipal?)await repo.GetVersion(habitVersionId);
     if (hv == null) return NotCompletable(habitVersionId);
 
-    var skipped = await checkService.Skip(userId, hv.HabitId, notes);
+    var quota = await entitlementService.SkipQuota(userId);
+    if (quota.IsFailure()) return quota.FailureOrDefault();
+    var skipped = await checkService.Skip(userId, hv.HabitId, notes,
+      new SkipQuota(quota.Get(), month.MonthStart, month.MonthEnd));
     if (skipped.IsFailure()) return skipped.FailureOrDefault();
     var execution = skipped.Get();
     if (execution == null) return NotCompletable(habitVersionId);

@@ -488,9 +488,9 @@ public class CheckScenarioTests : IAsyncLifetime
     var svc = Checks.Service(_db);
 
     // No scheduler tick ran: Skip opens the day's check on demand.
-    (await svc.Skip(userId, habitId, "sick", U(2026, 1, 31, 23))).Get()!.Record.Date.Should().Be(new DateOnly(2026, 1, 31));
-    (await svc.Skip(userId, habitId, null, U(2026, 2, 1, 1))).Get()!.Record.Date.Should().Be(new DateOnly(2026, 2, 1));
-    (await svc.Skip(userId, habitId, null, U(2026, 2, 1, 2))).Get().Should().BeNull("the day is already skipped");
+    (await svc.Skip(userId, habitId, "sick", Checks.AnySkips, U(2026, 1, 31, 23))).Get()!.Record.Date.Should().Be(new DateOnly(2026, 1, 31));
+    (await svc.Skip(userId, habitId, null, Checks.AnySkips, U(2026, 2, 1, 1))).Get()!.Record.Date.Should().Be(new DateOnly(2026, 2, 1));
+    (await svc.Skip(userId, habitId, null, Checks.AnySkips, U(2026, 2, 1, 2))).Get().Should().BeNull("the day is already skipped");
     await svc.DispatchEvents(U(2026, 2, 1, 3));
 
     var habits = new HabitRepository(_db, NullLogger<HabitRepository>.Instance);

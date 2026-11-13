@@ -16,6 +16,7 @@ using Domain.Penalty;
 using IntTest.Check;
 using IntTest.Notification;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NodaMoney;
@@ -54,7 +55,8 @@ public class PenaltyIntegrationTests : IAsyncLifetime
     await _db.DisposeAsync();
   }
 
-  internal static MainDbContext NewContext(string conn)
+  // interceptor: a test's EF command interceptor, such as a barrier that forces an interleaving.
+  internal static MainDbContext NewContext(string conn, IInterceptor? interceptor = null)
   {
     var parts = conn.Split(';', StringSplitOptions.RemoveEmptyEntries)
       .Select(p => p.Split('=', 2))
@@ -73,7 +75,19 @@ public class PenaltyIntegrationTests : IAsyncLifetime
     };
     var monitor = new StaticOptionsMonitor<Dictionary<string, DatabaseOption>>(
       new Dictionary<string, DatabaseOption> { [MainDbContext.Key] = opt });
-    return new MainDbContext(monitor, NullLoggerFactory.Instance);
+    return interceptor == null
+      ? new MainDbContext(monitor, NullLoggerFactory.Instance)
+      : new InterceptedContext(monitor, interceptor);
+  }
+
+  private sealed class InterceptedContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> options,
+    IInterceptor interceptor) : MainDbContext(options, NullLoggerFactory.Instance)
+  {
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+      base.OnConfiguring(optionsBuilder);
+      optionsBuilder.AddInterceptors(interceptor);
+    }
   }
 
   private static PenaltyRepository Repo(MainDbContext db)
@@ -151,7 +165,7 @@ public class PenaltyIntegrationTests : IAsyncLifetime
     var service = new HabitService(new HabitRepository(_db, NullLogger<HabitRepository>.Instance),
       null!, null!, null!, NullLogger<HabitService>.Instance);
     var controller = new App.Modules.Habit.API.V1.HabitController(service, null!, null!, null!,
-      null!, null!, null!, null!, new(), new(), new(), new())
+      null!, null!, null!, new(), new(), new(), new())
     {
       ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext
       {
@@ -203,7 +217,7 @@ public class PenaltyIntegrationTests : IAsyncLifetime
     var monday = new DateTime(2026, 1, 5, 2, 0, 0, DateTimeKind.Utc); // 10:00 Monday in Singapore
     (await checks.OpenUpcoming(monday)).IsSuccess().Should().BeTrue();
     (await checks.Report(userId, original.HabitId, Checks.Manual(monday), monday)).Get().Should().BeNull();
-    (await checks.Skip(userId, original.HabitId, null, monday)).Get().Should().BeNull();
+    (await checks.Skip(userId, original.HabitId, null, IntTest.Check.Checks.AnySkips, monday)).Get().Should().BeNull();
     (await checks.CloseDue(monday.AddDays(2))).Get().Should().Be(0);
     (await _db.HabitChecks.AsNoTracking().SingleAsync(x => x.HabitId == original.HabitId))
       .SettledBy.Should().Be("adopted");

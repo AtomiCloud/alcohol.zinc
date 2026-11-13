@@ -88,7 +88,8 @@ public sealed class FakeHabitService : IHabitService
   public Task<Result<HabitExecutionPrincipal>> CompleteHabit(string userId, Guid habitId, string? notes) =>
     throw new NotImplementedException();
 
-  public Task<Result<HabitExecutionPrincipal>> SkipHabit(string userId, Guid habitVersionId, string? notes) =>
+  public Task<Result<HabitExecutionPrincipal>> SkipHabit(string userId, Guid habitVersionId, string? notes,
+    Domain.Allowance.UserMonthWindow month) =>
     throw new NotImplementedException();
 
   public Task<Result<List<HabitExecutionPrincipal>>> SearchHabitExecutions(string userId, HabitExecutionSearch habitExecutionSearch) =>

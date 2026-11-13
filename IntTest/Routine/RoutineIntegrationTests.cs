@@ -97,7 +97,7 @@ public class RoutineIntegrationTests : IAsyncLifetime
 
   private async Task<Guid> CreateHabit(string userId, string task, Guid? routineId)
   {
-    var created = await HabitRepo().Create(userId, await NewVersionRecord(task), routineId);
+    var created = await HabitRepo().Create(userId, await NewVersionRecord(task), routineId, IntTest.Check.Checks.AnyHabits);
     created.IsSuccess().Should().BeTrue();
     return created.Get().HabitId;
   }
@@ -132,7 +132,7 @@ public class RoutineIntegrationTests : IAsyncLifetime
     var strangerHabit = await CreateHabit(stranger, "stranger habit", null);
     var strangerRoutineId = (await Habit(strangerHabit)).RoutineId!.Value;
 
-    var hijack = await HabitRepo().Create(owner, await NewVersionRecord("hijack"), strangerRoutineId);
+    var hijack = await HabitRepo().Create(owner, await NewVersionRecord("hijack"), strangerRoutineId, IntTest.Check.Checks.AnyHabits);
 
     hijack.IsFailure().Should().BeTrue();
     hijack.FailureOrDefault().Should().BeOfType<NotFoundException>();
@@ -143,7 +143,7 @@ public class RoutineIntegrationTests : IAsyncLifetime
     // The owner's own routine, once deleted, is not usable either
     var ownRoutine = (await RoutineRepo().Create(owner, new Domain.Routine.RoutineRecord { Name = "gone" })).Get();
     ((Unit?)await RoutineRepo().Delete(ownRoutine.Id, owner)).Should().NotBeNull();
-    var intoDeleted = await HabitRepo().Create(owner, await NewVersionRecord("late"), ownRoutine.Id);
+    var intoDeleted = await HabitRepo().Create(owner, await NewVersionRecord("late"), ownRoutine.Id, IntTest.Check.Checks.AnyHabits);
     intoDeleted.FailureOrDefault().Should().BeOfType<NotFoundException>();
   }
 
@@ -332,7 +332,7 @@ public class RoutineIntegrationTests : IAsyncLifetime
     Skip.If(_conn == null, SkipReason);
     var (owner, a, b, c) = await OwnerWithThreeHabits();
     var stranger = await SeedUser();
-    var controller = new HabitController(HabitSvc(), null!, null!, null!, null!, null!,
+    var controller = new HabitController(HabitSvc(), null!, null!, null!, null!,
       null!, null!, new(), new(), new(), new())
     {
       ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext

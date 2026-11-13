@@ -17,7 +17,9 @@ namespace Domain.Habit
         Task<Result<HabitVersionPrincipal?>> GetCurrentVersion(string userId, Guid habitId);
         // Creates habit + first version. routineId null => a new one-habit routine is created;
         // otherwise it must be the user's own non-deleted routine (NotFoundException failure).
-        Task<Result<HabitVersionPrincipal>> Create(string userId, HabitVersionRecord versionRecord, Guid? routineId);
+        // Refuses (TierInsufficient) when the user already has the quota's number of habits.
+        Task<Result<HabitVersionPrincipal>> Create(string userId, HabitVersionRecord versionRecord, Guid? routineId,
+            Entitlement.Quota habits);
         // Creates new version + updates enabled status
         Task<Result<HabitVersionPrincipal?>> Update(Guid habitId, string userId, HabitVersionRecord versionRecord, bool enabled);
         Task<Result<Unit?>> Delete(Guid habitId, string userId);                              // Soft delete habit

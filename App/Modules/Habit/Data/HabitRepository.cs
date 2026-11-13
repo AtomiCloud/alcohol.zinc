@@ -1,8 +1,11 @@
+using App.Error.V1;
 using App.Modules.HabitExecution.Data;
 using App.Modules.HabitVersion.Data;
 using App.Modules.Routine.Data;
 using App.StartUp.Database;
+using App.Utility;
 using CSharp_Result;
+using Domain.Entitlement;
 using Domain.Exceptions;
 using Domain.Habit;
 using EntityFramework.Exceptions.Common;
@@ -41,19 +44,22 @@ namespace App.Modules.Habit.Data
             }
         }
 
+        // The user's skips dated in the month; CheckRepository.Settle counts with it too.
+        internal static Task<int> CountSkips(MainDbContext db, string userId, DateOnly monthStart, DateOnly monthEnd) =>
+            (from he in db.HabitExecutions
+             join hv in db.HabitVersions on he.HabitVersionId equals hv.Id
+             join h in db.Habits on hv.HabitId equals h.Id
+             where h.UserId == userId
+                   && he.Date >= monthStart && he.Date <= monthEnd
+                   && he.Status == HabitExecutionStatusData.Skipped
+             select he.Id)
+            .CountAsync();
+
         public async Task<Result<int>> CountUserSkipsForMonth(string userId, DateOnly monthStart, DateOnly monthEnd)
         {
             try
             {
-                var cnt = await (from he in db.HabitExecutions
-                                 join hv in db.HabitVersions on he.HabitVersionId equals hv.Id
-                                 join h in db.Habits on hv.HabitId equals h.Id
-                                 where h.UserId == userId
-                                       && he.Date >= monthStart && he.Date <= monthEnd
-                                       && he.Status == App.Modules.HabitExecution.Data.HabitExecutionStatusData.Skipped
-                                 select he.Id)
-                    .CountAsync();
-                return cnt;
+                return await CountSkips(db, userId, monthStart, monthEnd);
             }
             catch (Exception e)
             {
@@ -207,13 +213,22 @@ namespace App.Modules.Habit.Data
             }
         }
 
-        public async Task<Result<HabitVersionPrincipal>> Create(string userId, HabitVersionRecord versionRecord, Guid? routineId)
+        public async Task<Result<HabitVersionPrincipal>> Create(string userId, HabitVersionRecord versionRecord, Guid? routineId,
+            Quota habits)
         {
             await using var transaction = await db.Database.BeginTransactionAsync();
             try
             {
                 logger.LogInformation("Creating habit for UserId: {UserId}, Task: {Task}, RoutineId: {RoutineId}",
                     userId, versionRecord.Task, routineId);
+
+                // Count and insert under the user's lock, so concurrent creates can't both pass the count.
+                await db.Database.LockUser(userId);
+                if ((await CountHabitsForUser(userId)).Get() >= habits.Limit)
+                {
+                    await transaction.RollbackAsync();
+                    return new TierInsufficient(habits.Tier, habits.Key, habits.Limit).ToException();
+                }
 
                 Guid resolvedRoutineId;
                 if (routineId != null)
@@ -264,6 +279,13 @@ namespace App.Modules.Habit.Data
                 logger.LogInformation("Habit created with Id: {Id}, Version: {Version}", 
                     habitData.Id, habitData.Version);
                 return versionData.ToPrincipal();
+            }
+            catch (Exception e) when (UserLock.IsLockTimeout(e))
+            {
+                logger.LogWarning("Create habit for UserId: {UserId} timed out waiting for the user's lock", userId);
+                await transaction.RollbackAsync();
+                db.ChangeTracker.Clear();
+                return new UserBusyException(userId);
             }
             catch (ReferenceConstraintException e) when (IsUnknownCharity(e))
             {

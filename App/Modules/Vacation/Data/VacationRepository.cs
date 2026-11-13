@@ -1,5 +1,9 @@
+using App.Error.V1;
 using App.StartUp.Database;
+using App.Utility;
 using CSharp_Result;
+using Domain.Entitlement;
+using Domain.Exceptions;
 using Domain.Vacation;
 using Microsoft.EntityFrameworkCore;
 
@@ -37,19 +41,38 @@ public class VacationRepository(MainDbContext db, ILogger<VacationRepository> lo
     }
   }
 
-  public async Task<Result<VacationPrincipal>> Create(string userId, VacationRecord record)
+  public async Task<Result<VacationPrincipal>> Create(string userId, VacationRecord record, Quota windows)
   {
+    await using var tx = await db.Database.BeginTransactionAsync();
     try
     {
       logger.LogInformation("Creating vacation window for UserId={UserId} {@Record}", userId, record);
+      // Count and insert under the user's lock, so concurrent creates can't both pass the count.
+      await db.Database.LockUser(userId);
+      if ((await CountWindowsForYear(userId, record.StartDate.Year)).Get() >= windows.Limit)
+      {
+        await tx.RollbackAsync();
+        return new TierInsufficient(windows.Tier, windows.Key, windows.Limit).ToException();
+      }
+
       var data = record.ToData(userId);
       db.VacationPeriods.Add(data);
       await db.SaveChangesAsync();
+      await tx.CommitAsync();
       return data.ToPrincipal();
+    }
+    catch (Exception e) when (UserLock.IsLockTimeout(e))
+    {
+      logger.LogWarning("Create vacation for UserId={UserId} timed out waiting for the user's lock", userId);
+      await tx.RollbackAsync();
+      db.ChangeTracker.Clear();
+      return new UserBusyException(userId);
     }
     catch (Exception e)
     {
       logger.LogError(e, "Create vacation failed for UserId={UserId}", userId);
+      await tx.RollbackAsync();
+      db.ChangeTracker.Clear();
       throw;
     }
   }
