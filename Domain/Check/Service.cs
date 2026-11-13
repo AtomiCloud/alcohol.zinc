@@ -178,7 +178,7 @@ public class CheckService(
       return (HabitExecutionPrincipal?)null;
 
     var status = evidence.Verdict == EvidenceVerdict.Passed ? CheckStatus.Done : CheckStatus.Missed;
-    var outcome = (SettleOutcome?)await repo.Settle(new SettleCheck
+    var settled = await repo.Settle(new SettleCheck
     {
       CheckId = check.Id,
       HabitVersionId = habit.VersionId,
@@ -190,6 +190,8 @@ public class CheckService(
       Notes = evidence.Notes,
       Evidence = evidence with { OccurredAtUtc = occurred }
     });
+    if (settled.IsFailure()) return settled.FailureOrDefault(); // e.g. the user's lock was busy
+    var outcome = settled.Get();
     return outcome is { Adopted: false } ? outcome.Execution : null;
   }
 
@@ -206,7 +208,7 @@ public class CheckService(
   }
 
   public async Task<Result<HabitExecutionPrincipal?>> Skip(string userId, Guid habitId, string? notes,
-    DateTime? nowUtc = null)
+    SkipQuota quota, DateTime? nowUtc = null)
   {
     var now = nowUtc ?? DateTime.UtcNow;
     var habit = ((List<SchedulableHabit>)await repo.ListSchedulableHabits(userId, [habitId])).FirstOrDefault();
@@ -216,7 +218,7 @@ public class CheckService(
     var check = await OpenCheckAt(habit, now);
     if (check == null) return (HabitExecutionPrincipal?)null;
 
-    var outcome = (SettleOutcome?)await repo.Settle(new SettleCheck
+    var settled = await repo.Settle(new SettleCheck
     {
       CheckId = check.Id,
       HabitVersionId = habit.VersionId,
@@ -224,8 +226,11 @@ public class CheckService(
       Status = CheckStatus.Skipped,
       SettledBy = ManualProof,
       SettledAtUtc = now,
-      Notes = notes
+      Notes = notes,
+      SkipQuota = quota
     });
+    if (settled.IsFailure()) return settled.FailureOrDefault(); // e.g. the month's skips are used up
+    var outcome = settled.Get();
     return outcome is { Adopted: false } ? outcome.Execution : null;
   }
 

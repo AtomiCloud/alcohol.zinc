@@ -6,7 +6,8 @@ public interface IVacationRepository
 {
   Task<Result<VacationPrincipal?>> Get(Guid id);
   Task<Result<VacationPrincipal?>> Get(Guid id, string? userId);
-  Task<Result<VacationPrincipal>> Create(string userId, VacationRecord record);
+  // Refuses (TierInsufficient) when the start year already used every window of the quota.
+  Task<Result<VacationPrincipal>> Create(string userId, VacationRecord record, Entitlement.Quota windows);
   Task<Result<VacationPrincipal?>> Update(Guid id, VacationRecord record);
   Task<Result<Unit?>> Delete(Guid id, string userId);
   Task<Result<List<VacationPrincipal>>> Search(VacationSearch search);

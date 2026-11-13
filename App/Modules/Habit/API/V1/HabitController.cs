@@ -22,7 +22,6 @@ public class HabitController(
     IHabitOverviewService overviewService,
     Domain.Configuration.IConfigurationService configurationService,
     Domain.Allowance.IAllowanceService allowanceService,
-    Domain.Entitlement.IEntitlementService entitlementService,
     IAuthHelper authHelper,
     CreateHabitReqValidator createHabitReqValidator,
     UpdateHabitReqValidator updateHabitReqValidator,
@@ -59,8 +58,7 @@ public class HabitController(
   {
     var result = await this.GuardAsync(userId)
       .ThenAwait(_ => createHabitReqValidator.ValidateAsyncResult(req, "Invalid CreateHabitReq"))
-      .ThenAwait(_ => entitlementService.EnsureHabitsAllowed(userId))
-      .ThenAwait(x => service.Create(userId, req.ToVersionRecord(), req.RoutineId))
+      .ThenAwait(_ => service.Create(userId, req.ToVersionRecord(), req.RoutineId))
       .Then(h => h.ToRes(), Errors.MapNone);
 
     return this.ReturnResult(result);
@@ -116,8 +114,7 @@ public class HabitController(
     var result = await this.GuardAsync(userId)
       // User-local month window via allowance service
       .ThenAwait(_ => allowanceService.GetUserMonthWindow(userId))
-      .ThenAwait(w => entitlementService.EnsureSkipsAllowed(userId, w.MonthStart, w.MonthEnd))
-      .ThenAwait(_ => service.SkipHabit(userId, habitVersionId, req.Notes))
+      .ThenAwait(w => service.SkipHabit(userId, habitVersionId, req.Notes, w))
       .Then(execution => execution.ToRes(), Errors.MapNone);
 
     return this.ReturnResult(result);

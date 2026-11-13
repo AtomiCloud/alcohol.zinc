@@ -2,6 +2,7 @@ using App.Error.V1;
 using App.Utility;
 using CSharp_Result;
 using Domain.Allowance;
+using Domain.Entitlement;
 using Domain.Exceptions;
 using Domain.Vacation;
 
@@ -9,7 +10,8 @@ namespace App.Modules.Vacation;
 
 public class VacationService(
   IVacationRepository repo,
-  IAllowanceService allowanceService
+  IAllowanceService allowanceService,
+  IEntitlementService entitlementService
 ) : IVacationService
 {
   public Task<Result<VacationPrincipal>> Create(string userId, VacationRecord record)
@@ -22,7 +24,8 @@ public class VacationService(
             new Dictionary<string, string[]> { ["Range"] = [ "Vacation window overlaps with an existing one" ] }
           ).ToException()
         : record.ToResult())
-      .ThenAwait(rec => repo.Create(userId, rec));
+      .ThenAwait(rec => entitlementService.VacationWindowQuota(userId)
+        .ThenAwait(windows => repo.Create(userId, rec, windows)));
   }
 
   public Task<Result<List<VacationPrincipal>>> Search(VacationSearch search)

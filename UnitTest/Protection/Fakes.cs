@@ -1,9 +1,11 @@
+using App.StartUp.Registry;
 using CSharp_Result;
 using Domain.Check;
 using Domain.Entitlement;
 using Domain.Habit;
 using Domain.Proof;
 using Domain.Protection;
+using Domain.Subscription;
 using Domain.Vacation;
 
 namespace UnitTest.Protection;
@@ -63,7 +65,8 @@ public sealed class FakeHabitRepository : IHabitRepository
     => throw new NotImplementedException();
   public Task<Result<HabitVersionPrincipal?>> GetCurrentVersion(string userId, Guid habitId)
     => throw new NotImplementedException();
-  public Task<Result<HabitVersionPrincipal>> Create(string userId, HabitVersionRecord versionRecord, Guid? routineId)
+  public Task<Result<HabitVersionPrincipal>> Create(string userId, HabitVersionRecord versionRecord, Guid? routineId,
+    Quota habits)
     => throw new NotImplementedException();
   public Task<Result<Unit?>> Delete(Guid habitId, string userId)
     => throw new NotImplementedException();
@@ -102,7 +105,8 @@ public sealed class FakeCheckService : ICheckService
   public Task<Result<int>> Tick(DateTime nowUtc) => throw new NotImplementedException();
   public Task<Result<HabitExecutionPrincipal?>> Report(string userId, Guid habitId, Evidence evidence, DateTime? nowUtc = null)
     => throw new NotImplementedException();
-  public Task<Result<HabitExecutionPrincipal?>> Skip(string userId, Guid habitId, string? notes, DateTime? nowUtc = null)
+  public Task<Result<HabitExecutionPrincipal?>> Skip(string userId, Guid habitId, string? notes, SkipQuota quota,
+    DateTime? nowUtc = null)
     => throw new NotImplementedException();
   public Task<Result<CheckPrincipal?>> PendingCheckAt(string userId, Guid habitId, DateTime atUtc, DateTime? nowUtc = null)
     => throw new NotImplementedException();
@@ -149,7 +153,7 @@ public sealed class FakeVacationRepository : IVacationRepository
   // ---- members not exercised by MarkDailyFailures ----
   public Task<Result<VacationPrincipal?>> Get(Guid id) => throw new NotImplementedException();
   public Task<Result<VacationPrincipal?>> Get(Guid id, string? userId) => throw new NotImplementedException();
-  public Task<Result<VacationPrincipal>> Create(string userId, VacationRecord record) => throw new NotImplementedException();
+  public Task<Result<VacationPrincipal>> Create(string userId, VacationRecord record, Quota windows) => throw new NotImplementedException();
   public Task<Result<VacationPrincipal?>> Update(Guid id, VacationRecord record) => throw new NotImplementedException();
   public Task<Result<Unit?>> Delete(Guid id, string userId) => throw new NotImplementedException();
   public Task<Result<List<VacationPrincipal>>> Search(VacationSearch search) => throw new NotImplementedException();
@@ -241,33 +245,20 @@ public sealed class FakeProtectionRepository(int freezeBalance = 0) : IProtectio
 // Not exercised by MarkDailyFailures / SkipHabit / CompleteHabit, but the
 // HabitService ctor requires it. Configurable so it can also be reused for
 // skip/vacation/freeze entitlement tests.
-//   EnsureSkipsAllowedResult / EnsureVacationWindowAllowedResult /
-//   EnsureHabitsAllowedResult  -> the Result<Unit> each Ensure* returns.
+//   EnsureHabitsAllowedResult  -> the Result<Unit> EnsureHabitsAllowed returns.
 //   FreezeCap                  -> the int GetFreezeCapForUser returns.
 public sealed class FakeEntitlementService : IEntitlementService
 {
-  public Result<Unit> EnsureSkipsAllowedResult { get; set; } = new Unit();
-  public Result<Unit> EnsureVacationWindowAllowedResult { get; set; } = new Unit();
   public Result<Unit> EnsureHabitsAllowedResult { get; set; } = new Unit();
   public int FreezeCap { get; set; } = 7;
   public Exception? FreezeCapFails { get; set; }
 
-  public List<(string UserId, DateOnly MonthStart, DateOnly MonthEnd)> EnsureSkipsAllowedCalls { get; } = [];
-  public List<(string UserId, DateOnly StartDate)> EnsureVacationWindowAllowedCalls { get; } = [];
   public List<(string UserId, int UserMaxStreak)> GetFreezeCapForUserCalls { get; } = [];
   public List<string> EnsureHabitsAllowedCalls { get; } = [];
 
-  public Task<Result<Unit>> EnsureSkipsAllowed(string userId, DateOnly monthStart, DateOnly monthEnd)
-  {
-    EnsureSkipsAllowedCalls.Add((userId, monthStart, monthEnd));
-    return Task.FromResult(EnsureSkipsAllowedResult);
-  }
-
-  public Task<Result<Unit>> EnsureVacationWindowAllowed(string userId, DateOnly startDate)
-  {
-    EnsureVacationWindowAllowedCalls.Add((userId, startDate));
-    return Task.FromResult(EnsureVacationWindowAllowedResult);
-  }
+  public Task<Result<Quota>> HabitQuota(string userId) => throw new NotImplementedException();
+  public Task<Result<Quota>> SkipQuota(string userId) => throw new NotImplementedException();
+  public Task<Result<Quota>> VacationWindowQuota(string userId) => throw new NotImplementedException();
 
   public Task<Result<int>> GetFreezeCapForUser(string userId, int userMaxStreak)
   {
@@ -318,4 +309,14 @@ public static class HabitFakeFactory
         Timezone = timezone
       }
     };
+}
+
+// A plan with one tier; every limit is 0 except the monthly skips.
+internal sealed class FakeSubscriptionService(string tier, int skipsMonthlyLimit) : ISubscriptionService
+{
+  public Task<Result<string>> GetUserTier(string userId)
+    => Task.FromResult<Result<string>>(tier);
+
+  public Task<Result<int>> GetLimitForTier(string t, string key)
+    => Task.FromResult<Result<int>>(key == EntitlementKeys.SkipsMonthly ? skipsMonthlyLimit : 0);
 }

@@ -9,6 +9,7 @@ using App.StartUp.Database;
 using App.StartUp.Registry;
 using CSharp_Result;
 using Domain.Check;
+using Domain.Entitlement;
 using Domain.Protection;
 using Domain.Subscription;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -42,11 +43,16 @@ public static class Checks
 
   public static FreezeCapService FreezeCap(MainDbContext db, ISubscriptionService plan)
   {
-    var vacations = new VacationRepository(db, NullLogger<VacationRepository>.Instance);
-    var entitlement = new EntitlementService(plan, vacations, null!, new FreezePolicy(), null!);
+    var entitlement = new EntitlementService(plan, null!, new FreezePolicy(), null!);
     return new FreezeCapService(new ProtectionRepository(db, NullLogger<ProtectionRepository>.Instance),
       new StreakRepository(db, NullLogger<StreakRepository>.Instance), entitlement);
   }
+
+  // Limits no test reaches, for tests about something else.
+  public static readonly Quota AnyHabits = new("test", EntitlementKeys.HabitsMax, int.MaxValue);
+
+  public static readonly SkipQuota AnySkips =
+    new(new Quota("test", EntitlementKeys.SkipsMonthly, int.MaxValue), DateOnly.MinValue, DateOnly.MaxValue);
 
   public static Evidence Manual(DateTime occurredAtUtc, string? externalId = null) => new()
   {

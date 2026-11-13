@@ -5,7 +5,6 @@ using App.StartUp.Services.Auth;
 using App.Utility;
 using Asp.Versioning;
 using CSharp_Result;
-using Domain.Entitlement;
 using Domain.Vacation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -19,7 +18,6 @@ namespace App.Modules.Vacation.API.V1;
   public class VacationController(
   IVacationService vacationService,
   IVacationRepository vacationRepository,
-  IEntitlementService entitlementService,
   IAuthHelper authHelper,
   CreateVacationReqValidator createValidator,
   SearchVacationQueryValidator searchValidator
@@ -31,8 +29,6 @@ namespace App.Modules.Vacation.API.V1;
     var result = await this.GuardAsync(userId)
       .ThenAwait(_ => createValidator.ValidateAsyncResult(req, "Invalid CreateVacationReq"))
       .Then(r => r.ToRecord(), Errors.MapNone)
-      .ThenAwait(rec => entitlementService.EnsureVacationWindowAllowed(userId, rec.StartDate)
-        .Then(_ => rec, Errors.MapNone))
       .ThenAwait(rec => vacationService.Create(userId, rec))
       .Then(v => v.ToRes(), Errors.MapNone);
 

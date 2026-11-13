@@ -93,8 +93,9 @@ public class ProofIntegrationTests : IAsyncLifetime
         ? new Unit()
         : new InvalidOperationException($"{plugin.Key} needs {plugin.MinTier}"));
 
-    public Task<Result<Unit>> EnsureVacationWindowAllowed(string userId, DateOnly startDate) => throw new NotImplementedException();
-    public Task<Result<Unit>> EnsureSkipsAllowed(string userId, DateOnly monthStart, DateOnly monthEnd) => throw new NotImplementedException();
+    public Task<Result<Quota>> HabitQuota(string userId) => throw new NotImplementedException();
+    public Task<Result<Quota>> SkipQuota(string userId) => throw new NotImplementedException();
+    public Task<Result<Quota>> VacationWindowQuota(string userId) => throw new NotImplementedException();
     public Task<Result<int>> GetFreezeCapForUser(string userId, int userMaxStreak) => throw new NotImplementedException();
     public Task<Result<Unit>> EnsureHabitsAllowed(string userId) => throw new NotImplementedException();
   }
