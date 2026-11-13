@@ -11,6 +11,7 @@ public class CheckService(
   ICheckRepository repo,
   IVacationRepository vacationRepo,
   IProtectionRepository protectionRepo,
+  IFreezeCapService freezeCap,
   IEnumerable<IStakeBinding> bindings,
   ILogger<CheckService> logger
 ) : ICheckService
@@ -110,6 +111,10 @@ public class CheckService(
   {
     var vacations = (List<VacationPrincipal>)await vacationRepo.ListActiveForUserOnDate(userId, date);
     if (vacations.Count > 0) return CheckStatus.Vacation;
+    // Never spend above the current cap (e.g. after a downgrade). An empty balance skips the
+    // cap, which loads all of the user's executions for the streak bonus.
+    var protection = (UserProtectionPrincipal?)await protectionRepo.GetProtection(userId);
+    if (protection?.Record.FreezeCurrent > 0) _ = (FreezeBalance)await freezeCap.Reconcile(userId);
     // Idempotent per (user, date): later checks of an already-frozen day are frozen too.
     var frozen = (bool)await protectionRepo.TryConsumeFreeze(userId, date);
     return frozen ? CheckStatus.Frozen : CheckStatus.Missed;

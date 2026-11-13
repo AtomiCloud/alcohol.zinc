@@ -5,7 +5,6 @@ using App.StartUp.Services.Auth;
 using App.Utility;
 using Asp.Versioning;
 using CSharp_Result;
-using Domain.Entitlement;
 using Domain.Protection;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -18,22 +17,19 @@ namespace App.Modules.Protection.API.V1;
 [Route("api/v{version:apiVersion}/[controller]")]
 public class ProtectionController(
   IAuthHelper authHelper,
-  IProtectionRepository protectionRepository,
-  IEntitlementService entitlementService,
-  Domain.Habit.IStreakRepository streakRepository,
+  IFreezeCapService freezeCapService,
   Domain.Protection.IProtectionAwardService protectionAwardService
 ) : AtomiControllerBase(authHelper)
 {
   public record ProtectionBalanceRes(string UserId, int Balance, int Cap);
 
+  // Reading the balance cuts it to the current cap first, so Balance is never above Cap.
   [Authorize, HttpGet("{userId}")]
   public async Task<ActionResult<ProtectionBalanceRes>> GetBalance(string userId)
   {
     var result = await this.GuardAsync(userId)
-      .ThenAwait(_ => protectionRepository.UpsertProtection(userId))
-      .ThenAwait(p => streakRepository.GetUserMaxStreakAcrossHabits(userId)
-        .ThenAwait(ms => entitlementService.GetFreezeCapForUser(userId, ms))
-        .Then(c => new ProtectionBalanceRes(userId, p.Record.FreezeCurrent, c), Errors.MapNone));
+      .ThenAwait(_ => freezeCapService.Reconcile(userId))
+      .Then(b => new ProtectionBalanceRes(userId, b.Balance, b.Cap), Errors.MapNone);
 
     return this.ReturnResult(result);
   }

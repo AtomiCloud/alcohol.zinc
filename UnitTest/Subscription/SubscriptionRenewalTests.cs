@@ -15,9 +15,11 @@ public class SubscriptionRenewalTests
   private static SubscriptionManagementService Svc(
     FakeSubscriptionRepository repo,
     FakeSubscriptionPaymentService payment,
-    IEmailNotifier? notifier = null)
+    IEmailNotifier? notifier = null,
+    RecordingFreezeCapService? freezeCap = null)
     => new(repo, FakePlanProvider.Default(), payment,
       notifier ?? new RecordingEmailNotifier(),
+      freezeCap ?? new RecordingFreezeCapService(repo),
       NullLogger<SubscriptionManagementService>.Instance);
 
   private static UserSubscriptionPrincipal DueRow(
@@ -216,13 +218,17 @@ public class SubscriptionRenewalTests
     var repo = new FakeSubscriptionRepository(
       DueRow("u1", "pro", SubscriptionStatus.Grace, periodEnd));
     var payment = FakeSubscriptionPaymentService.Fails(new Exception("still declined"));
+    var freezeCap = new RecordingFreezeCapService(repo);
 
-    var res = await Svc(repo, payment).ProcessRenewals(Now, 100);
+    var res = await Svc(repo, payment, freezeCap: freezeCap).ProcessRenewals(Now, 100);
 
     res.IsSuccess().Should().BeTrue();
     ((int)res).Should().Be(1);
     repo.Row("u1")!.Record.Status.Should().Be(SubscriptionStatus.Cancelled);
     payment.ChargeCalls.Should().BeEmpty("a lapsed grace must not be charged");
+    freezeCap.Calls.Should().ContainSingle().Which.UserId.Should().Be("u1");
+    freezeCap.Calls[0].RowAtCall!.Status.Should().Be(SubscriptionStatus.Cancelled,
+      "freezes are cut against the free cap, after the cancel");
   }
 
   [Fact]
@@ -231,12 +237,15 @@ public class SubscriptionRenewalTests
     var repo = new FakeSubscriptionRepository(
       DueRow("u1", "pro", SubscriptionStatus.Active, Now.AddDays(-1), cancelAtPeriodEnd: true));
     var payment = FakeSubscriptionPaymentService.Succeeds("int_r1");
+    var freezeCap = new RecordingFreezeCapService(repo);
 
-    var res = await Svc(repo, payment).ProcessRenewals(Now, 100);
+    var res = await Svc(repo, payment, freezeCap: freezeCap).ProcessRenewals(Now, 100);
 
     res.IsSuccess().Should().BeTrue();
     repo.Row("u1")!.Record.Status.Should().Be(SubscriptionStatus.Cancelled);
     payment.ChargeCalls.Should().BeEmpty();
+    freezeCap.Calls.Should().ContainSingle().Which.UserId.Should().Be("u1");
+    freezeCap.Calls[0].RowAtCall!.Status.Should().Be(SubscriptionStatus.Cancelled);
   }
 
   [Fact]
@@ -246,8 +255,9 @@ public class SubscriptionRenewalTests
     var repo = new FakeSubscriptionRepository(
       DueRow("u1", "ultimate", SubscriptionStatus.Active, periodEnd, nextTier: "pro"));
     var payment = FakeSubscriptionPaymentService.Succeeds("int_r1");
+    var freezeCap = new RecordingFreezeCapService(repo);
 
-    var res = await Svc(repo, payment).ProcessRenewals(Now, 100);
+    var res = await Svc(repo, payment, freezeCap: freezeCap).ProcessRenewals(Now, 100);
 
     res.IsSuccess().Should().BeTrue();
     var row = repo.Row("u1")!;
@@ -255,6 +265,41 @@ public class SubscriptionRenewalTests
     row.Record.NextTier.Should().BeNull();
     payment.ChargeCalls.Should().ContainSingle();
     payment.ChargeCalls[0].Amount.Amount.Should().Be(4.99m, "the downgraded tier's price is charged");
+    freezeCap.Calls.Should().ContainSingle().Which.UserId.Should().Be("u1");
+    freezeCap.Calls[0].RowAtCall!.Tier.Should().Be("pro", "freezes are cut against the new tier's cap");
+  }
+
+  [Fact]
+  public async Task Renewal_SameTier_DoesNotReconcile()
+  {
+    var repo = new FakeSubscriptionRepository(
+      DueRow("u1", "pro", SubscriptionStatus.Active, Now.AddDays(-1)));
+    var freezeCap = new RecordingFreezeCapService(repo);
+
+    var res = await Svc(repo, FakeSubscriptionPaymentService.Succeeds("int_r1"), freezeCap: freezeCap)
+      .ProcessRenewals(Now, 100);
+
+    ((int)res).Should().Be(1);
+    repo.Row("u1")!.Record.PeriodEnd.Should().BeAfter(Now, "the period rolled");
+    freezeCap.Calls.Should().BeEmpty("the cap did not change");
+  }
+
+  [Fact]
+  public async Task Renewal_ReconcileFails_RenewalStillSucceeds()
+  {
+    var repo = new FakeSubscriptionRepository(
+      DueRow("u1", "pro", SubscriptionStatus.Active, Now.AddDays(-1), cancelAtPeriodEnd: true),
+      DueRow("u2", "ultimate", SubscriptionStatus.Active, Now.AddDays(-1), nextTier: "pro"));
+    var freezeCap = new RecordingFreezeCapService(repo) { Fails = new Exception("streak lookup failed") };
+
+    var res = await Svc(repo, FakeSubscriptionPaymentService.Succeeds("int_r1"), freezeCap: freezeCap)
+      .ProcessRenewals(Now, 100);
+
+    res.IsSuccess().Should().BeTrue();
+    ((int)res).Should().Be(2, "both renewals count although the freeze cut failed");
+    repo.Row("u1")!.Record.Status.Should().Be(SubscriptionStatus.Cancelled);
+    repo.Row("u2")!.Record.Tier.Should().Be("pro");
+    freezeCap.Calls.Select(c => c.UserId).Should().BeEquivalentTo(["u1", "u2"]);
   }
 
   [Fact]
