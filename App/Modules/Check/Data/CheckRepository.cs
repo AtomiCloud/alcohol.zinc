@@ -1,7 +1,11 @@
+using App.Error.V1;
+using App.Modules.Habit.Data;
 using App.Modules.HabitExecution.Data;
 using App.StartUp.Database;
+using App.Utility;
 using CSharp_Result;
 using Domain.Check;
+using Domain.Exceptions;
 using Domain.Habit;
 using EntityFramework.Exceptions.Common;
 using Microsoft.EntityFrameworkCore;
@@ -247,6 +251,9 @@ public class CheckRepository(MainDbContext db, ILogger<CheckRepository> logger) 
     await using var tx = await db.Database.BeginTransactionAsync();
     try
     {
+      // The user's lock first, before the check's row lock, like every other holder of both.
+      await db.Database.LockUser(cmd.UserId);
+
       // Lock the check so concurrent settles serialize; only a Pending check settles.
       var check = (await db.HabitChecks
           .FromSqlRaw(@"SELECT * FROM ""HabitChecks"" WHERE ""Id"" = {0} FOR UPDATE", cmd.CheckId)
@@ -259,6 +266,15 @@ public class CheckRepository(MainDbContext db, ILogger<CheckRepository> logger) 
             x.HabitId == check.HabitId && x.ProofKey == cmd.Evidence.ProofKey &&
             x.ExternalId == cmd.Evidence.ExternalId))
         return await Abort();
+
+      // A user's skip counts against the month's skips, under the user's lock.
+      if (cmd is { Status: CheckStatus.Skipped, SkipQuota: { } skips } &&
+          await HabitRepository.CountSkips(db, cmd.UserId, skips.MonthStart, skips.MonthEnd) >= skips.Quota.Limit)
+      {
+        await tx.RollbackAsync();
+        db.ChangeTracker.Clear();
+        return new TierInsufficient(skips.Quota.Tier, skips.Quota.Key, skips.Quota.Limit).ToException();
+      }
 
       // A day another writer already recorded (an older release, or a legacy execution)
       // stays as it is: the check adopts that execution instead of adding a second one.
@@ -327,6 +343,14 @@ public class CheckRepository(MainDbContext db, ILogger<CheckRepository> logger) 
     {
       // Lost a race to another writer for the same evidence or day: nothing changed.
       return await Abort();
+    }
+    catch (Exception e) when (UserLock.IsLockTimeout(e))
+    {
+      logger.LogWarning("Settle of CheckId={CheckId} timed out waiting for UserId={UserId}'s lock", cmd.CheckId,
+        cmd.UserId);
+      await tx.RollbackAsync();
+      db.ChangeTracker.Clear();
+      return new UserBusyException(cmd.UserId);
     }
     catch (Exception e)
     {

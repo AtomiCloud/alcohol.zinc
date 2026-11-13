@@ -25,8 +25,9 @@ public interface ICheckService
   // Report does. Null when that moment's day is settled, unscheduled, or over (past grace).
   Task<Result<CheckPrincipal?>> PendingCheckAt(string userId, Guid habitId, DateTime atUtc, DateTime? nowUtc = null);
 
-  // Skips the check that is open now. Null when there is none to skip.
-  Task<Result<HabitExecutionPrincipal?>> Skip(string userId, Guid habitId, string? notes, DateTime? nowUtc = null);
+  // Skips the check that is open now, within the user's monthly skips. Null when there is none to skip.
+  Task<Result<HabitExecutionPrincipal?>> Skip(string userId, Guid habitId, string? notes, SkipQuota quota,
+    DateTime? nowUtc = null);
 
   // Re-times Pending checks after a habit change (days, deadline time, enabled). Started
   // checks never get a shorter deadline; checks no longer scheduled are removed.

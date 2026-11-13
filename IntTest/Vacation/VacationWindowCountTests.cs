@@ -1,13 +1,11 @@
 using App.Error;
 using App.Error.V1;
-using App.Modules.Entitlement;
-using App.Modules.Protection;
 using App.Modules.Users.Data;
 using App.Modules.Vacation.Data;
 using App.StartUp.Database;
 using App.StartUp.Registry;
 using CSharp_Result;
-using Domain.Subscription;
+using Domain.Entitlement;
 using Domain.Vacation;
 using IntTest.Penalty;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -41,9 +39,11 @@ public class VacationWindowCountTests : IAsyncLifetime
 
   private VacationRepository Repo() => new(_db, NullLogger<VacationRepository>.Instance);
 
-  // Real EntitlementService over the real VacationRepository; only the tier is stubbed.
-  private EntitlementService Entitlement(int vacationLimit)
-    => new(new VacationLimit(vacationLimit), Repo(), null!, new FreezePolicy(), null!);
+  private static Quota Windows(int limit) => new("plus", EntitlementKeys.VacationWindowsYearly, limit);
+
+  private Task<Result<VacationPrincipal>> Create(string user, DateOnly start, DateOnly end, int limit)
+    => Repo().Create(user, new VacationRecord { StartDate = start, EndDate = end, Timezone = "Asia/Singapore" },
+      Windows(limit));
 
   private async Task<string> SeedUser()
   {
@@ -88,28 +88,27 @@ public class VacationWindowCountTests : IAsyncLifetime
   }
 
   [SkippableFact]
-  public async Task EnsureVacationWindowAllowed_SpanningVacationFromLastYear_DoesNotUseThisYearsWindow()
+  public async Task Create_SpanningVacationFromLastYear_DoesNotUseThisYearsWindow()
   {
     Skip.If(_conn == null, SkipReason);
     var user = await SeedUser();
     await SeedVacation(user, D(2026, 12, 28), D(2027, 1, 3));
 
-    var res = await Entitlement(1).EnsureVacationWindowAllowed(user, D(2027, 3, 1));
+    var res = await Create(user, D(2027, 3, 1), D(2027, 3, 5), 1);
 
     res.IsSuccess().Should().BeTrue("2027's only window is still unused");
   }
 
   [SkippableFact]
-  public async Task EnsureVacationWindowAllowed_StartYearFull_IsRefused()
+  public async Task Create_StartYearFull_IsRefused()
   {
     Skip.If(_conn == null, SkipReason);
     var user = await SeedUser();
     await SeedVacation(user, D(2026, 6, 1), D(2026, 6, 10));
 
-    var svc = Entitlement(1);
-    var inside = await svc.EnsureVacationWindowAllowed(user, D(2026, 9, 1));
+    var inside = await Create(user, D(2026, 9, 1), D(2026, 9, 5), 1);
     // A vacation that starts in 2026 and ends in 2027 still uses a 2026 window.
-    var spanning = await svc.EnsureVacationWindowAllowed(user, D(2026, 12, 30));
+    var spanning = await Create(user, D(2026, 12, 30), D(2027, 1, 2), 1);
 
     foreach (var res in new[] { inside, spanning })
     {
@@ -139,13 +138,4 @@ public class VacationWindowCountTests : IAsyncLifetime
     none.Should().BeEmpty();
   }
 
-  private sealed class VacationLimit(int limit) : ISubscriptionService
-  {
-    public Task<Result<string>> GetUserTier(string userId) => Task.FromResult<Result<string>>("plus");
-
-    public Task<Result<int>> GetLimitForTier(string tier, string key)
-      => Task.FromResult<Result<int>>(key == EntitlementKeys.VacationWindowsYearly
-        ? limit
-        : throw new InvalidOperationException($"unexpected limit {key}"));
-  }
 }

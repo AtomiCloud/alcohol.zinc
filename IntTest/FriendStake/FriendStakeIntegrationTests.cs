@@ -297,7 +297,7 @@ public class FriendStakeIntegrationTests : IAsyncLifetime
     if (outcome == "done")
       (await svc.Report(owner, habitId, Checks.Manual(MondayMorningLa), MondayMorningLa)).Get().Should().NotBeNull();
     if (outcome == "skipped")
-      (await svc.Skip(owner, habitId, null, MondayMorningLa)).Get().Should().NotBeNull();
+      (await svc.Skip(owner, habitId, null, IntTest.Check.Checks.AnySkips, MondayMorningLa)).Get().Should().NotBeNull();
     await svc.CloseDue(AfterMondayLa);
     await svc.DispatchEvents(AfterMondayLa);
 

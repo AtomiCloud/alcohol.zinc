@@ -8,62 +8,26 @@ using Domain.Habit;
 using Domain.Proof;
 using Domain.Protection;
 using Domain.Subscription;
-using Domain.Vacation;
 
 namespace App.Modules.Entitlement;
 
 public class EntitlementService(
   ISubscriptionService subscription,
-  IVacationRepository vacationRepository,
   IHabitRepository habitRepository,
   IFreezePolicy freezePolicy,
   ISubscriptionPlanProvider plans
 ) : IEntitlementService
 {
-  public async Task<Result<Unit>> EnsureVacationWindowAllowed(string userId, DateOnly startDate)
-  {
-    var tierLimitRes = await subscription.GetUserTier(userId)
-      .ThenAwait(tier =>
-        subscription.GetLimitForTier(tier, EntitlementKeys.VacationWindowsYearly)
-          .Then(limit => (tier, limit), Errors.MapNone)
-      );
+  public Task<Result<Quota>> HabitQuota(string userId) => this.Quota(userId, EntitlementKeys.HabitsMax);
+  public Task<Result<Quota>> SkipQuota(string userId) => this.Quota(userId, EntitlementKeys.SkipsMonthly);
 
-    var countRes = await vacationRepository.CountWindowsForYear(userId, startDate.Year);
+  public Task<Result<Quota>> VacationWindowQuota(string userId) =>
+    this.Quota(userId, EntitlementKeys.VacationWindowsYearly);
 
-    var r = from tierLimit in tierLimitRes
-            from count in countRes
-            select (count, tierLimit);
-    return r.Then<Unit>(x =>
-    {
-      var (count, (tier, limit)) = x;
-      if (count >= limit)
-        return new TierInsufficient(tier, EntitlementKeys.VacationWindowsYearly, limit)
-          .ToException();
-      return new Unit();
-    });
-  }
-
-  public async Task<Result<Unit>> EnsureSkipsAllowed(string userId, DateOnly monthStart, DateOnly monthEnd)
-  {
-    var tierLimitRes = await subscription.GetUserTier(userId)
-      .ThenAwait(tier =>
-        subscription.GetLimitForTier(tier, EntitlementKeys.SkipsMonthly)
-          .Then(limit => (tier, limit), Errors.MapNone));
-
-    var usedRes = await habitRepository.CountUserSkipsForMonth(userId, monthStart, monthEnd);
-
-    var r = from tierLimit in tierLimitRes
-            from used in usedRes
-            select (tierLimit, used);
-    return r
-      .Then<Unit>(x =>
-      {
-        var ((tier, limit), used) = x;
-        if (used >= limit)
-          return new DomainProblemException(new TierInsufficient(tier, EntitlementKeys.SkipsMonthly, limit));
-        return new Unit();
-      });
-  }
+  private Task<Result<Quota>> Quota(string userId, string key) =>
+    subscription.GetUserTier(userId)
+      .ThenAwait(tier => subscription.GetLimitForTier(tier, key)
+        .Then(limit => new Quota(tier, key, limit), Errors.MapNone));
 
   public async Task<Result<int>> GetFreezeCapForUser(string userId, int userMaxStreak)
   {
@@ -76,23 +40,14 @@ public class EntitlementService(
 
   public async Task<Result<Unit>> EnsureHabitsAllowed(string userId)
   {
-    var tierLimitRes = await subscription.GetUserTier(userId)
-      .ThenAwait(tier => subscription.GetLimitForTier(tier, EntitlementKeys.HabitsMax)
-        .Then(limit => (tier, limit), Errors.MapNone));
+    var quota = await this.HabitQuota(userId);
+    if (quota.IsFailure()) return quota.FailureOrDefault();
+    var count = await habitRepository.CountHabitsForUser(userId);
+    if (count.IsFailure()) return count.FailureOrDefault();
 
-    var countRes = await habitRepository.CountHabitsForUser(userId);
-
-    var r = from tierLimit in tierLimitRes
-            from count in countRes
-            select (tierLimit, count);
-
-    return r.Then<Unit>(x =>
-    {
-      var ((tier, limit), count) = x;
-      if (count >= limit)
-        return new TierInsufficient(tier, EntitlementKeys.HabitsMax, limit).ToException();
-      return new Unit();
-    });
+    var (tier, key, limit) = quota.Get();
+    if (count.Get() >= limit) return new TierInsufficient(tier, key, limit).ToException();
+    return new Unit();
   }
 
   public async Task<Result<Unit>> EnsureProofPluginAllowed(string userId, PluginManifest plugin)

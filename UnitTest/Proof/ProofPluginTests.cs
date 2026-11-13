@@ -97,7 +97,7 @@ public class ProofPluginTests
   [InlineData("ultimate", true)] // a pricier plan counts as "at least pro"
   public async Task EnsureProofPluginAllowed_ComparesPlansByPrice(string tier, bool allowed)
   {
-    var entitlements = new EntitlementService(new FakeSubscriptionService(tier, 0), null!, null!, null!,
+    var entitlements = new EntitlementService(new FakeSubscriptionService(tier, 0), null!, null!,
       new PricedPlans());
 
     var result = await entitlements.EnsureProofPluginAllowed("u", new RunPlugin().Manifest);
@@ -110,7 +110,7 @@ public class ProofPluginTests
   [Fact]
   public async Task EnsureProofPluginAllowed_WithoutMinTier_AllowsEveryTier()
   {
-    var entitlements = new EntitlementService(new FakeSubscriptionService("free", 0), null!, null!, null!,
+    var entitlements = new EntitlementService(new FakeSubscriptionService("free", 0), null!, null!,
       new PricedPlans());
 
     var result = await entitlements.EnsureProofPluginAllowed("u", new ManualProofPlugin().Manifest);

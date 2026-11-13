@@ -74,7 +74,13 @@ public record SettleCheck
   public DateTime? CompletedAtUtc { get; init; }
   public string? Notes { get; init; }
   public Evidence? Evidence { get; init; }
+
+  // A user's skip: Settle counts the month's skips against this limit before writing one.
+  public SkipQuota? SkipQuota { get; init; }
 }
+
+// The monthly skip limit and the user's local month it counts in.
+public record SkipQuota(Entitlement.Quota Quota, DateOnly MonthStart, DateOnly MonthEnd);
 
 // A check settled by the scheduler or by a timezone change (Missed, Frozen or Vacation).
 public record SettledCheck(Guid HabitId, DateOnly LocalDate, CheckStatus Status);
