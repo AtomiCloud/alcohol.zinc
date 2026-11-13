@@ -133,7 +133,8 @@ public class VacationRepository(MainDbContext db, ILogger<VacationRepository> lo
     try
     {
       var count = await db.VacationPeriods.AsNoTracking()
-        .Where(x => x.UserId == userId && (x.StartDate.Year == year || x.EndDate.Year == year))
+        // A vacation uses one window, in the year it starts, even when it spans New Year.
+        .Where(x => x.UserId == userId && x.StartDate.Year == year)
         .CountAsync();
       return count;
     }
