@@ -14,7 +14,8 @@ public static class HabitMapper
             h.Record.Version,
             h.UserId,
             h.Record.Enabled,
-            h.Record.RoutineId
+            h.Record.RoutineId,
+            h.Record.SortOrder
         );
 
     public static HabitVersionRes ToRes(this HabitVersionPrincipal hv) =>
@@ -98,6 +99,12 @@ public static class HabitMapper
         Limit = query.Limit ?? 20, 
         Skip = query.Skip ?? 0
       };
+
+    public static List<Guid> ToDomain(this ReorderHabitsReq req) =>
+      req.HabitIds.Select(Guid.Parse).ToList();
+
+    public static ReorderHabitsRes ToRes(this List<Guid> order) =>
+      new(order.Select(id => id.ToString()).ToArray());
 
     public static HabitOverviewSearch ToDomain(this OverviewQuery query, string userId) =>
       new(userId, query.Limit ?? 20, query.Skip ?? 0);

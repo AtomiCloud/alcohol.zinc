@@ -102,7 +102,10 @@ namespace App.Modules.Habit.Data
                 if (habitSearch.Enabled != null)
                     query = query.Where(x => x.Habit.Enabled == habitSearch.Enabled);
 
+                // The user's habit order; Id breaks ties so pages never overlap.
                 var data = await query
+                    .OrderBy(x => x.Habit.SortOrder)
+                    .ThenBy(x => x.Habit.Id)
                     .Skip(habitSearch.Skip)
                     .Take(habitSearch.Limit)
                     .ToListAsync();
@@ -219,13 +222,19 @@ namespace App.Modules.Habit.Data
                     resolvedRoutineId = routineData.Id;
                 }
 
+                // A new habit goes to the bottom of the user's list
+                var lastSortOrder = await db.Habits
+                    .Where(h => h.UserId == userId && h.DeletedAt == null)
+                    .MaxAsync(h => (int?)h.SortOrder);
+
                 // Create main habit record with version 1
                 var habitData = new HabitData
                 {
                     UserId = userId,
                     Version = 1,
                     Enabled = true,  // New habits are enabled by default
-                    RoutineId = resolvedRoutineId
+                    RoutineId = resolvedRoutineId,
+                    SortOrder = lastSortOrder + 1 ?? 0
                 };
                 db.Habits.Add(habitData);
                 
@@ -334,6 +343,47 @@ namespace App.Modules.Habit.Data
             catch (Exception e)
             {
                 logger.LogError(e, "Failed to delete habit for HabitId: {HabitId}, UserId: {UserId}", habitId, userId);
+                throw;
+            }
+        }
+
+        public async Task<Result<List<Guid>>> GetOrderedIds(string userId)
+        {
+            try
+            {
+                return await db.Habits
+                    .AsNoTracking()
+                    .Where(h => h.UserId == userId && h.DeletedAt == null)
+                    .OrderBy(h => h.SortOrder)
+                    .ThenBy(h => h.Id)
+                    .Select(h => h.Id)
+                    .ToListAsync();
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Failed to read habit order for UserId: {UserId}", userId);
+                throw;
+            }
+        }
+
+        public async Task<Result<Unit>> SetOrder(string userId, IReadOnlyList<Guid> orderedIds)
+        {
+            try
+            {
+                logger.LogInformation("Setting order of {Count} habits for UserId: {UserId}", orderedIds.Count, userId);
+                var ids = orderedIds.ToArray();
+                // One statement, so the whole order is written or none of it. Ids that are not the
+                // user's live habits match no row.
+                await db.Database.ExecuteSqlAsync($@"
+                    UPDATE ""Habits"" h SET ""SortOrder"" = o.idx - 1
+                    FROM unnest({ids}::uuid[]) WITH ORDINALITY AS o(id, idx)
+                    WHERE h.""Id"" = o.id AND h.""UserId"" = {userId} AND h.""DeletedAt"" IS NULL
+                ");
+                return new Unit();
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Failed to set habit order for UserId: {UserId}", userId);
                 throw;
             }
         }

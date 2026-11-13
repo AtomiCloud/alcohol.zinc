@@ -31,7 +31,8 @@ public static class HabitOverviewMapper
       i.DeadlineTime.ToString("HH:mm", CultureInfo.InvariantCulture),
       i.TodayDeadlineUtc is { } d ? DateTime.SpecifyKind(d, DateTimeKind.Utc) : null,
       i.Proof,
-      i.RoutineId?.ToString()
+      i.RoutineId?.ToString(),
+      i.SortOrder
     );
   }
 

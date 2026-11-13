@@ -8,6 +8,7 @@ namespace Domain.Habit
     public record HabitRecord
     {
         public required ushort Version { get; init; }  // Current version pointer
+        public int SortOrder { get; init; }            // Position in the user's habit list; set by the repository
         public required bool Enabled { get; init; }   // User can enable/disable habit
         public Guid? RoutineId { get; init; }          // Owning routine (null only for rows written before routines existed)
     }

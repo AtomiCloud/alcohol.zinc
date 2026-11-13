@@ -5,18 +5,24 @@ namespace App.Modules.Habit.Data
 {
     public static class HabitMapper
     {
+        public static HabitRecord ToRecord(this HabitData data)
+        {
+            return new HabitRecord
+            {
+                Version = data.Version,
+                SortOrder = data.SortOrder,
+                Enabled = data.Enabled,
+                RoutineId = data.RoutineId
+            };
+        }
+
         public static HabitPrincipal ToPrincipal(this HabitData data)
         {
             return new HabitPrincipal
             {
                 Id = data.Id,
                 UserId = data.UserId,
-                Record = new HabitRecord
-                {
-                    Version = data.Version,
-                    Enabled = data.Enabled,
-                    RoutineId = data.RoutineId
-                }
+                Record = data.ToRecord()
             };
         }
 

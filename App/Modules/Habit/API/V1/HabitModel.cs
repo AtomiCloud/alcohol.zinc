@@ -25,7 +25,16 @@ public record HabitRes(
     ushort Version,          // Current version number
     string UserId,
     bool Enabled,            // Whether habit is enabled
-    Guid? RoutineId          // Owning routine (null for habits created before routines existed)
+    Guid? RoutineId,         // Owning routine (null for habits created before routines existed)
+    int SortOrder            // Position in the user's habit list
+);
+
+public record ReorderHabitsReq(
+    string[] HabitIds        // Habit ids in their new order; habits left out follow in their current order
+);
+
+public record ReorderHabitsRes(
+    string[] HabitIds        // The user's full habit order after the change
 );
 
 public record HabitVersionRes(

@@ -113,7 +113,8 @@ public class HabitOverviewService(
             .ThenAwait(async b =>
             {
               var acc = new List<HabitOverviewItem>().ToAsyncResult();
-              foreach (var hv in ctx.habits.OrderByDescending(x => x.Version))
+              // Items keep the search's order: the user's habit order.
+              foreach (var hv in ctx.habits)
               {
                 acc = acc
                   .ThenAwait(list => BuildItem(hv, search.UserId, ctx.userTz, today,
@@ -170,7 +171,8 @@ public class HabitOverviewService(
                   hv.Record.DeadlineTime,
                   TodayDeadline(hv, userTz, localToday, check),
                   proof,
-                  habitPrincipal.Record.RoutineId
+                  habitPrincipal.Record.RoutineId,
+                  habitPrincipal.Record.SortOrder
                 ), Errors.MapNone);
           }
         })

@@ -103,6 +103,8 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
     var habit = modelBuilder.Entity<HabitData>();
     habit.HasIndex(h => h.Version);
     habit.HasIndex(h => h.UserId);
+    // Lists read a user's habits in this order. Not unique: ties are broken by Id.
+    habit.HasIndex(h => new { h.UserId, h.SortOrder });
     habit.HasMany(h => h.Versions)
          .WithOne(hv => hv.Habit)
          .HasForeignKey(hv => hv.HabitId);
