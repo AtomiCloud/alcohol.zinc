@@ -1,3 +1,10 @@
+## [1.43.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.42.0...v1.43.0) (2026-11-13)
+
+
+### ✨ Features ✨
+
+* reorder habits with a saved per-user order ([fc847cc](https://github.com/AtomiCloud/alcohol.zinc/commit/fc847ccc832249ed893a47c6ab3f02565652ca0e))
+
 ## [1.42.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.41.1...v1.42.0) (2026-11-13)
 
 
