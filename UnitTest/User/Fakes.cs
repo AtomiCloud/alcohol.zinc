@@ -71,5 +71,6 @@ public sealed class FakeStreakRepository : IStreakRepository
   public Task<Result<HashSet<DateOnly>>> GetCompletedInRange(Guid habitId, DateOnly start, DateOnly end) => throw new NotImplementedException();
   public Task<Result<Dictionary<Guid, List<HabitExecutionRecord>>>> GetExecutionsForHabits(IReadOnlyCollection<Guid> habitIds) => throw new NotImplementedException();
   public Task<Result<List<HabitDebtItem>>> GetOpenDebtsForHabit(Guid habitId) => throw new NotImplementedException();
-  public Task<Result<int>> GetUserMaxStreakAcrossHabits(string userId) => throw new NotImplementedException();
+  public int MaxStreak { get; set; }
+  public Task<Result<int>> GetUserMaxStreakAcrossHabits(string userId) => Task.FromResult<Result<int>>(this.MaxStreak);
 }

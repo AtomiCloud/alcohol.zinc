@@ -2,6 +2,7 @@ using CSharp_Result;
 using Domain.Exceptions;
 using Domain.Notification;
 using Domain.Payment;
+using Domain.Protection;
 using Microsoft.Extensions.Logging;
 using NodaMoney;
 
@@ -12,6 +13,7 @@ public class SubscriptionManagementService(
   ISubscriptionPlanProvider plans,
   IPaymentService payment,
   IEmailNotifier notifier,
+  IFreezeCapService freezeCap,
   ILogger<SubscriptionManagementService> logger
 ) : ISubscriptionManagementService
 {
@@ -311,6 +313,7 @@ public class SubscriptionManagementService(
     {
       var cancelled = await repo.MarkCancelled(sub.Id);
       if (!cancelled.IsSuccess()) return cancelled.FailureOrDefault()!;
+      await this.ReconcileFreezes(rec.UserId);
       return 1;
     }
 
@@ -325,6 +328,7 @@ public class SubscriptionManagementService(
     {
       var lapsed = await repo.MarkCancelled(sub.Id);
       if (!lapsed.IsSuccess()) return lapsed.FailureOrDefault()!;
+      await this.ReconcileFreezes(rec.UserId);
       await notifier.NotifySubscriptionEnded(rec.UserId, rec.Tier, nowUtc);
       return 1;
     }
@@ -440,11 +444,24 @@ public class SubscriptionManagementService(
       return 0;
     }
 
+    // A scheduled downgrade was just applied: the freeze cap may have fallen.
+    if (targetTier != sub.Record.Tier) await this.ReconcileFreezes(sub.Record.UserId);
+
     // The rolled guard above is the idempotency point: reconcile and fresh-charge
     // paths both land here, but only the pass that actually rolls emails.
     await notifier.NotifySubscriptionRenewed(
       sub.Record.UserId, targetTier, sub.Record.PeriodEnd.AddMonths(1));
     return 1;
+  }
+
+  // After a tier drop, cut banked freezes to the new cap. Best effort: the renewal stands
+  // either way, and spending or reading freezes reconciles again.
+  private async Task ReconcileFreezes(string userId)
+  {
+    var reconciled = await freezeCap.Reconcile(userId);
+    if (!reconciled.IsSuccess())
+      logger.LogWarning(reconciled.FailureOrDefault(),
+        "Freeze reconcile failed for {UserId} after a tier drop; spend and read reconcile later", userId);
   }
 
 }

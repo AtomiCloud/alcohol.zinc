@@ -155,6 +155,8 @@ public static class DomainServices
       .AutoTrace<IProtectionRepository>();
     s.AddScoped<IFreezePolicy, App.Modules.Protection.FreezePolicy>()
       .AutoTrace<IFreezePolicy>();
+    s.AddScoped<IFreezeCapService, FreezeCapService>()
+      .AutoTrace<IFreezeCapService>();
     s.AddScoped<Domain.Protection.IProtectionAwardService, App.Modules.Protection.ProtectionAwardService>()
       .AutoTrace<Domain.Protection.IProtectionAwardService>();
     s.AddScoped<IVacationRepository, VacationRepository>()
