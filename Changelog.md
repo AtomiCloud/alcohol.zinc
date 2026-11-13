@@ -1,3 +1,15 @@
+## [1.42.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.41.1...v1.42.0) (2026-11-13)
+
+
+### ✨ Features ✨
+
+* cut banked freezes to the current cap on spend, read and downgrade ([32094bf](https://github.com/AtomiCloud/alcohol.zinc/commit/32094bf383f71362106f183d2ba102ca55ed0831))
+
+
+### 🐛 Bug Fixes 🐛
+
+* a vacation spanning New Year uses only its start year's window ([346c1c7](https://github.com/AtomiCloud/alcohol.zinc/commit/346c1c70324bb402ec19468834e72333d5b8d1e1))
+
 ## [1.41.1](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.41.0...v1.41.1) (2026-11-13)
 
 
