@@ -430,4 +430,119 @@ public class SubscriptionManagementServiceTests
     repo.Row("u1")!.Record.Status.Should().Be(SubscriptionStatus.Active);
   }
 
+  [Theory]
+  [InlineData("pro", "pro", 9, false, false, 4.99)]
+  [InlineData("pro", "pro", 1, true, false, 4.99)]
+  [InlineData("pro", "ultimate", 9, false, false, 7.99)]
+  [InlineData("ultimate", "pro", 9, false, false, 4.99)]
+  [InlineData("pro", "pro", 9, true, true, 4.99)]
+  public async Task LapsedSubscription_PurchaseChargesFullPriceForNewPeriod(
+    string oldTier, string requestedTier, int daysLapsed, bool cancelled, bool changeTier, decimal price)
+  {
+    var before = DateTime.UtcNow;
+    var repo = new FakeSubscriptionRepository(Row("u1", oldTier, SubscriptionStatus.Active,
+      periodEnd: before.AddDays(-daysLapsed), cancelAtPeriodEnd: cancelled, nextTier: "pro"));
+    var payment = FakeSubscriptionPaymentService.Succeeds("int_new");
+    var service = Svc(repo, payment);
+
+    var result = changeTier
+      ? await service.ChangeTier("u1", requestedTier)
+      : await service.Subscribe("u1", requestedTier);
+
+    result.IsSuccess().Should().BeTrue();
+    payment.ChargeCalls.Should().ContainSingle().Which.Amount.Amount.Should().Be(price);
+    var rec = repo.Row("u1")!.Record;
+    rec.Tier.Should().Be(requestedTier);
+    rec.Status.Should().Be(SubscriptionStatus.Active);
+    rec.PeriodStart.Should().BeOnOrAfter(before).And.BeOnOrBefore(DateTime.UtcNow);
+    rec.PeriodEnd.Should().Be(rec.PeriodStart.AddMonths(1));
+    rec.CancelAtPeriodEnd.Should().BeFalse();
+    rec.NextTier.Should().BeNull();
+  }
+
+  [Theory]
+  [InlineData(false, "ultimate")]
+  [InlineData(true, "pro")]
+  public async Task UnpaidGrace_CannotSwitchTierOrUndoPendingChange(bool changeTier, string requestedTier)
+  {
+    var row = Row("u1", "pro", SubscriptionStatus.Active,
+      periodEnd: DateTime.UtcNow.AddDays(-3), nextTier: "ultimate");
+    var repo = new FakeSubscriptionRepository(row);
+    var payment = FakeSubscriptionPaymentService.Succeeds("unused");
+    var service = Svc(repo, payment);
+
+    var result = changeTier
+      ? await service.ChangeTier("u1", requestedTier)
+      : await service.Subscribe("u1", requestedTier);
+
+    result.FailureOrDefault().Should().BeOfType<AlreadySubscribedException>();
+    payment.ChargeCalls.Should().BeEmpty();
+    repo.Row("u1").Should().Be(row);
+  }
+
+  [Theory]
+  [InlineData(false)]
+  [InlineData(true)]
+  public async Task LapsedSubscription_CancelHasNoWriteOrEmail(bool changeTier)
+  {
+    var row = Row("u1", "pro", SubscriptionStatus.Active, periodEnd: DateTime.UtcNow.AddDays(-9));
+    var repo = new FakeSubscriptionRepository(row);
+    var notifier = new RecordingEmailNotifier();
+    var service = Svc(repo, FakeSubscriptionPaymentService.Succeeds("unused"), notifier: notifier);
+
+    var result = changeTier ? await service.ChangeTier("u1", "free") : await service.Cancel("u1");
+
+    result.FailureOrDefault().Should().BeOfType<NoActiveSubscriptionException>();
+    repo.Row("u1").Should().Be(row);
+    notifier.SubscriptionChanged.Should().BeEmpty();
+  }
+
+  [Theory]
+  [InlineData(false)]
+  [InlineData(true)]
+  public async Task LapsedSubscriptionWithRenewalLease_IsBusy(bool changeTier)
+  {
+    var row = Row("u1", "pro", SubscriptionStatus.Active,
+      periodEnd: DateTime.UtcNow.AddDays(-9), cancelAtPeriodEnd: true, nextTier: "ultimate",
+      renewingUntil: DateTime.UtcNow.AddMinutes(3));
+    var repo = new FakeSubscriptionRepository(row);
+    var payment = FakeSubscriptionPaymentService.Succeeds("unused");
+    var service = Svc(repo, payment);
+
+    var result = changeTier ? await service.ChangeTier("u1", "pro") : await service.Subscribe("u1", "pro");
+
+    result.FailureOrDefault().Should().BeOfType<SubscriptionBusyException>();
+    payment.ChargeCalls.Should().BeEmpty();
+    repo.Row("u1").Should().Be(row);
+  }
+
+  [Fact]
+  public async Task LapsedSubscription_DeclinedPurchaseDoesNotRestorePaidAccess()
+  {
+    var repo = new FakeSubscriptionRepository(Row("u1", "pro", SubscriptionStatus.Active,
+      periodEnd: DateTime.UtcNow.AddDays(-1), cancelAtPeriodEnd: true));
+    var payment = FakeSubscriptionPaymentService.WithStatus("int_declined", "REQUIRES_PAYMENT_METHOD");
+
+    var result = await Svc(repo, payment).Subscribe("u1", "pro");
+
+    result.FailureOrDefault().Should().BeOfType<SubscriptionChargeFailedException>();
+    ((string)await new SubscriptionService(repo, FakePlanProvider.Default()).GetUserTier("u1"))
+      .Should().Be("free");
+  }
+
+  [Fact]
+  public async Task Subscribe_InPeriodUpgradeProratedToZero_RemainsAllowed()
+  {
+    var now = DateTime.UtcNow;
+    var repo = new FakeSubscriptionRepository(Row("u1", "pro", SubscriptionStatus.Active,
+      periodStart: now.AddDays(-29), periodEnd: now.AddMinutes(10)));
+    var payment = FakeSubscriptionPaymentService.Succeeds("unused");
+
+    var result = await Svc(repo, payment).Subscribe("u1", "ultimate");
+
+    result.IsSuccess().Should().BeTrue();
+    repo.Row("u1")!.Record.Tier.Should().Be("ultimate");
+    payment.ChargeCalls.Should().BeEmpty();
+  }
+
 }

@@ -25,7 +25,8 @@ public class SubscriptionController(
   SubscribeReqValidator subscribeValidator,
   ChangeTierReqValidator changeTierValidator,
   WebHandoffReqValidator webHandoffValidator,
-  Microsoft.Extensions.Options.IOptionsMonitor<SubscriptionOption> subscriptionOptions
+  Microsoft.Extensions.Options.IOptionsMonitor<SubscriptionOption> subscriptionOptions,
+  ISubscriptionPlanProvider plans
 ) : AtomiControllerBase(authHelper)
 {
   // Public plan catalog for the pricing page — the single source of truth for
@@ -58,9 +59,10 @@ public class SubscriptionController(
   [Authorize, HttpGet("{userId}")]
   public async Task<ActionResult<SubscriptionRes>> Get(string userId)
   {
+    var now = DateTime.UtcNow;
     var result = await this.GuardAsync(userId)
       .ThenAwait(_ => subscriptionRepository.GetByUserId(userId))
-      .Then(sub => sub?.ToRes() ?? SubscriptionMapper.ToFreeRes(userId), Errors.MapNone);
+      .Then(sub => EffectiveSubscription.Resolve(sub, plans, now)?.ToRes() ?? SubscriptionMapper.ToFreeRes(userId), Errors.MapNone);
 
     return this.ReturnResult(result);
   }
@@ -68,10 +70,11 @@ public class SubscriptionController(
   [Authorize, HttpPost("{userId}/subscribe")]
   public async Task<ActionResult<SubscriptionRes>> Subscribe(string userId, [FromBody] SubscribeReq req)
   {
+    var now = DateTime.UtcNow;
     var result = await this.GuardAsync(userId)
       .ThenAwait(_ => subscribeValidator.ValidateAsyncResult(req, "Invalid SubscribeReq"))
       .ThenAwait(r => managementService.Subscribe(userId, r.Tier))
-      .Then(sub => sub.ToRes(), Errors.MapNone);
+      .Then(sub => EffectiveSubscription.Resolve(sub, plans, now)?.ToRes() ?? SubscriptionMapper.ToFreeRes(userId), Errors.MapNone);
 
     return this.ReturnResult(result);
   }
@@ -79,9 +82,10 @@ public class SubscriptionController(
   [Authorize, HttpPost("{userId}/cancel")]
   public async Task<ActionResult<SubscriptionRes>> Cancel(string userId)
   {
+    var now = DateTime.UtcNow;
     var result = await this.GuardAsync(userId)
       .ThenAwait(_ => managementService.Cancel(userId))
-      .Then(sub => sub.ToRes(), Errors.MapNone);
+      .Then(sub => EffectiveSubscription.Resolve(sub, plans, now)?.ToRes() ?? SubscriptionMapper.ToFreeRes(userId), Errors.MapNone);
 
     return this.ReturnResult(result);
   }
@@ -89,10 +93,11 @@ public class SubscriptionController(
   [Authorize, HttpPost("{userId}/change-tier")]
   public async Task<ActionResult<SubscriptionRes>> ChangeTier(string userId, [FromBody] ChangeTierReq req)
   {
+    var now = DateTime.UtcNow;
     var result = await this.GuardAsync(userId)
       .ThenAwait(_ => changeTierValidator.ValidateAsyncResult(req, "Invalid ChangeTierReq"))
       .ThenAwait(r => managementService.ChangeTier(userId, r.Tier))
-      .Then(sub => sub.ToRes(), Errors.MapNone);
+      .Then(sub => EffectiveSubscription.Resolve(sub, plans, now)?.ToRes() ?? SubscriptionMapper.ToFreeRes(userId), Errors.MapNone);
 
     return this.ReturnResult(result);
   }
