@@ -151,7 +151,7 @@ public class PenaltyIntegrationTests : IAsyncLifetime
     var service = new HabitService(new HabitRepository(_db, NullLogger<HabitRepository>.Instance),
       null!, null!, null!, NullLogger<HabitService>.Instance);
     var controller = new App.Modules.Habit.API.V1.HabitController(service, null!, null!, null!,
-      null!, null!, new(), new(), new(), new(), new())
+      null!, null!, null!, null!, new(), new(), new(), new())
     {
       ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext
       {

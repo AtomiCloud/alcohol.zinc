@@ -1,10 +1,14 @@
 using System.Text.Json;
 using App.Modules.Strava;
 using App.Modules.Strava.API.V1;
+using App.StartUp.Options;
 using CSharp_Result;
 using Domain.Check;
 using Domain.Proof;
 using Domain.Strava;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace UnitTest.Strava;
 
@@ -130,6 +134,83 @@ public class StravaTests
   public void Webhook_IgnoresOtherSubscriptionsAndMalformedEvents(string body)
   {
     Parse(body, 120475).Should().BeNull();
+  }
+
+  // Strava counts failed deliveries against the subscription, so POST /Strava/webhook answers 200
+  // to an event it can't read, logs a warning and queues nothing.
+  [Theory]
+  [InlineData("""{"aspect_type":"create","event_time":9223372036854775807,"object_id":1,"object_type":"activity","owner_id":1,"subscription_id":120475}""")]
+  [InlineData("""{"aspect_type":"create","event_time":-9223372036854775808,"object_id":1,"object_type":"activity","owner_id":1,"subscription_id":120475}""")]
+  [InlineData("""{"aspect_type":"create","event_time":1767600000,"object_id":"oops","object_type":"activity","owner_id":1,"subscription_id":120475}""")]
+  [InlineData("""{"aspect_type":"create","event_time":1767600000,"object_id":1,"object_type":"activity","owner_id":"1","subscription_id":120475}""")]
+  [InlineData("""{"aspect_type":"create","event_time":"1767600000","object_id":1,"object_type":"activity","owner_id":1,"subscription_id":120475}""")]
+  [InlineData("""{"aspect_type":"create","event_time":1767600000,"object_id":1,"object_type":"activity","owner_id":1,"subscription_id":"120475"}""")]
+  public async Task WebhookEndpoint_MalformedEvent_Is200_LoggedAndNotQueued(string body)
+  {
+    var (controller, inbox, logger) = WebhookController();
+
+    var res = await controller.Webhook(JsonDocument.Parse(body).RootElement);
+
+    res.Should().BeOfType<OkResult>();
+    inbox.Queued.Should().BeEmpty();
+    logger.Warnings.Should().ContainSingle();
+  }
+
+  [Fact]
+  public async Task WebhookEndpoint_ValidEvent_IsQueued()
+  {
+    var (controller, inbox, logger) = WebhookController();
+
+    var res = await controller.Webhook(JsonDocument.Parse("""
+      {"aspect_type":"create","event_time":1767600000,"object_id":1360128428,"object_type":"activity",
+       "owner_id":134815,"subscription_id":120475,"updates":{}}
+      """).RootElement);
+
+    res.Should().BeOfType<OkResult>();
+    inbox.Queued.Should().ContainSingle().Which.ObjectId.Should().Be(1360128428);
+    logger.Warnings.Should().BeEmpty();
+  }
+
+  private static (StravaController, RecordingInbox, WarningLogger) WebhookController()
+  {
+    var inbox = new RecordingInbox();
+    var logger = new WarningLogger();
+    var options = new StravaOptions(new StravaOption { Enabled = true, SubscriptionId = 120475 });
+    return (new StravaController(null!, inbox, options, null!, logger), inbox, logger);
+  }
+
+  private sealed class RecordingInbox : IStravaInboxRepository
+  {
+    public List<StravaWebhookEvent> Queued { get; } = [];
+
+    public Task<Result<Unit>> Enqueue(StravaWebhookEvent e)
+    {
+      this.Queued.Add(e);
+      return Task.FromResult<Result<Unit>>(new Unit());
+    }
+
+    public Task<Result<List<StravaInboxItem>>> Claim(int batchSize, TimeSpan lease) => throw new NotImplementedException();
+    public Task<Result<Unit>> Delete(Guid id) => throw new NotImplementedException();
+  }
+
+  private sealed class WarningLogger : ILogger<StravaController>
+  {
+    public List<string> Warnings { get; } = [];
+    public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+    public bool IsEnabled(LogLevel logLevel) => true;
+
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+      Func<TState, Exception?, string> formatter)
+    {
+      if (logLevel == LogLevel.Warning) this.Warnings.Add(formatter(state, exception));
+    }
+  }
+
+  private sealed class StravaOptions(StravaOption value) : IOptionsMonitor<StravaOption>
+  {
+    public StravaOption CurrentValue => value;
+    public StravaOption Get(string? name) => value;
+    public IDisposable? OnChange(Action<StravaOption, string?> listener) => null;
   }
 
   private static StravaWebhookEvent? Parse(string body, long subscriptionId)

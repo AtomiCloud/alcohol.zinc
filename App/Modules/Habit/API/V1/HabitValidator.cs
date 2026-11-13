@@ -1,12 +1,14 @@
 using System.Globalization;
+using App.StartUp.Options;
 using App.Utility;
 using FluentValidation;
+using Microsoft.Extensions.Options;
 
 namespace App.Modules.Habit.API.V1;
 
 public class CreateHabitReqValidator : AbstractValidator<CreateHabitReq>
 {
-    public CreateHabitReqValidator()
+    public CreateHabitReqValidator(IOptionsMonitor<HabitOption> options)
     {
         RuleFor(x => x.Task)
             .NotEmpty()
@@ -14,24 +16,18 @@ public class CreateHabitReqValidator : AbstractValidator<CreateHabitReq>
 
         RuleFor(x => x.DaysOfWeek)
             .NotEmpty()
-            .Must(BeValidDaysOfWeek)
-            .WithMessage("DaysOfWeek must contain valid day names (e.g., Monday, Tuesday).");
+            .DaysOfWeekValid();
 
         RuleFor(x => x.NotificationTime)
             .NotNull()
             .TimeValid();
 
         RuleFor(x => x.Stake)
-            .NotEmpty()
-            .Must(BeAValidDecimal)
-            .WithMessage("Stake must be a valid decimal number.")
-            .Must(BeNonNegativeDecimal)
-            .WithMessage("Stake must be non-negative.");
-
+            .StakeValid(options);
 
         RuleFor(x => x.CharityId)
             .Must(id => id is { } g && g != Guid.Empty)
-            .When(x => HasMoneyStake(x.Stake))
+            .When(x => HabitReqRules.HasMoneyStake(x.Stake))
             .WithMessage("A habit with a stake needs a charity.");
 
         RuleFor(x => x.Timezone)
@@ -42,30 +38,11 @@ public class CreateHabitReqValidator : AbstractValidator<CreateHabitReq>
             .TimeValid()
             .When(x => x.DeadlineTime != null);
     }
-
-    private static bool BeValidDaysOfWeek(string[] days)
-    {
-        return days.All(day => Enum.TryParse(typeof(DayOfWeek), day, true, out _));
-    }
-
-    private static bool BeAValidDecimal(string value)
-    {
-        return decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out _);
-    }
-
-    private static bool BeNonNegativeDecimal(string value)
-    {
-        return decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var d) && d >= 0;
-    }
-
-    // An unparsable stake fails the Stake rules; it isn't also reported as a missing charity.
-    internal static bool HasMoneyStake(string? stake) =>
-        decimal.TryParse(stake, NumberStyles.Number, CultureInfo.InvariantCulture, out var d) && d > 0;
 }
 
 public class UpdateHabitReqValidator : AbstractValidator<UpdateHabitReq>
 {
-    public UpdateHabitReqValidator()
+    public UpdateHabitReqValidator(IOptionsMonitor<HabitOption> options)
     {
         RuleFor(x => x.Task)
             .NotEmpty()
@@ -73,24 +50,18 @@ public class UpdateHabitReqValidator : AbstractValidator<UpdateHabitReq>
 
         RuleFor(x => x.DaysOfWeek)
             .NotEmpty()
-            .Must(BeValidDaysOfWeek)
-            .WithMessage("DaysOfWeek must contain valid day names (e.g., Monday, Tuesday).");
+            .DaysOfWeekValid();
 
         RuleFor(x => x.NotificationTime)
             .NotNull()
             .TimeValid();
 
         RuleFor(x => x.Stake)
-            .NotEmpty()
-            .Must(BeAValidDecimal)
-            .WithMessage("Stake must be a valid decimal number.")
-            .Must(BeNonNegativeDecimal)
-            .WithMessage("Stake must be non-negative.");
-
+            .StakeValid(options);
 
         RuleFor(x => x.CharityId)
             .Must(id => id is { } g && g != Guid.Empty)
-            .When(x => CreateHabitReqValidator.HasMoneyStake(x.Stake))
+            .When(x => HabitReqRules.HasMoneyStake(x.Stake))
             .WithMessage("A habit with a stake needs a charity.");
 
         RuleFor(x => x.Timezone)
@@ -101,22 +72,44 @@ public class UpdateHabitReqValidator : AbstractValidator<UpdateHabitReq>
             .TimeValid()
             .When(x => x.DeadlineTime != null);
     }
+}
 
-    private static bool BeValidDaysOfWeek(string[] days)
+// Rules shared by the create and update requests.
+public static class HabitReqRules
+{
+    // A weekday name in any case ("Friday", "friday"). Numbers ("1", "999") and lists
+    // ("Monday,Tuesday") are not names, although Enum.TryParse accepts them.
+    public static bool TryParseDay(string? day, out DayOfWeek value)
     {
-        return days.All(day => Enum.TryParse(typeof(DayOfWeek), day, false, out _));
+        value = default;
+        return !string.IsNullOrEmpty(day) && day.All(char.IsLetter) && Enum.TryParse(day, true, out value);
     }
 
-    private static bool BeAValidDecimal(string value)
-    {
-        return decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out _);
-    }
+    // The stored form of a valid day name, e.g. "friday" -> "Friday".
+    public static string CanonicalDay(string day) => TryParseDay(day, out var d) ? d.ToString() : day;
 
-    private static bool BeNonNegativeDecimal(string value)
-    {
-        return decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var d) && d >= 0;
-    }
+    public static IRuleBuilderOptions<T, string[]> DaysOfWeekValid<T>(this IRuleBuilder<T, string[]> rule) =>
+        rule.Must(days => days.All(d => TryParseDay(d, out _)))
+            .WithMessage("DaysOfWeek must contain valid day names (e.g., Monday, Tuesday).");
 
+    // Stakes are whole cents up to the configured maximum (stored as int cents).
+    public static IRuleBuilderOptions<T, string> StakeValid<T>(this IRuleBuilder<T, string> rule,
+        IOptionsMonitor<HabitOption> options) =>
+        rule.NotEmpty()
+            .Must(s => TryParseStake(s, out _))
+            .WithMessage("Stake must be a valid decimal number.")
+            .Must(s => !TryParseStake(s, out var d) || d >= 0)
+            .WithMessage("Stake must be non-negative.")
+            .Must(s => !TryParseStake(s, out var d) || decimal.Round(d, 2) == d)
+            .WithMessage("Stake can have at most 2 decimal places.")
+            .Must(s => !TryParseStake(s, out var d) || d <= options.CurrentValue.MaxStakeCents / 100m)
+            .WithMessage(_ => $"Stake must be at most {options.CurrentValue.MaxStakeCents / 100m:F2}.");
+
+    // An unparsable stake fails the Stake rules; it isn't also reported as a missing charity.
+    public static bool HasMoneyStake(string? stake) => TryParseStake(stake, out var d) && d > 0;
+
+    private static bool TryParseStake(string? s, out decimal d) =>
+        decimal.TryParse(s, NumberStyles.Number, CultureInfo.InvariantCulture, out d);
 }
 
 public class SearchHabitQueryValidator : AbstractValidator<SearchHabitQuery>

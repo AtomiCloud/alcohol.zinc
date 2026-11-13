@@ -150,6 +150,9 @@ public static class OptionsExtensions
     // Register Strava (proof plugin) Options
     services.RegisterOption<StravaOption>(StravaOption.Key);
 
+    // Register Habit Options
+    services.RegisterOption<HabitOption>(HabitOption.Key);
+
     // Register Subscription (tier catalog + renewal) Options.
     // Note: the free tier deliberately sits below the pre-subscription stub
     // defaults (product decision 2026-07-06: free = 2 habits, no vacation/

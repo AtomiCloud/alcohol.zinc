@@ -244,6 +244,9 @@ Disbursement:
   DonorFirstName: LazyTax
   DonorLastName: Donations
   DonorEmail: donations@lazytax.club
+# Habit requests. Stakes are stored as int cents; 1000000 is 10000.00.
+Habit:
+  MaxStakeCents: 1000000
 # Strava proof plugin. One Strava API app per landscape (www.strava.com/settings/api);
 # landscapes with an app enable it in their override file. ClientSecret and VerifyToken
 # come from the environment (Atomi_Strava__ClientSecret, Atomi_Strava__VerifyToken).

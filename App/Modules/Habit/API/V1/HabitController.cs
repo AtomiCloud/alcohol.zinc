@@ -27,6 +27,7 @@ public class HabitController(
     CreateHabitReqValidator createHabitReqValidator,
     UpdateHabitReqValidator updateHabitReqValidator,
     SearchHabitQueryValidator searchHabitQueryValidator,
+    SearchHabitExecutionQueryValidator searchHabitExecutionQueryValidator,
     SearchOverviewQueryValidator searchOverviewQueryValidator,
     ReorderHabitsReqValidator reorderHabitsReqValidator
 ) : AtomiControllerBase(authHelper)
@@ -127,7 +128,9 @@ public class HabitController(
     [FromQuery] SearchHabitExecutionQuery searchHabitExecutionQuery)
   {
     var result = await this.GuardAsync(userId)
-      .ThenAwait(_ => service.SearchHabitExecutions(userId, searchHabitExecutionQuery.ToDomain()))
+      .ThenAwait(_ => searchHabitExecutionQueryValidator.ValidateAsyncResult(searchHabitExecutionQuery,
+        "Invalid SearchHabitExecutionQuery"))
+      .ThenAwait(q => service.SearchHabitExecutions(userId, q.ToDomain()))
       .Then(executions => executions.Select(e => e.ToRes()).ToList(),
         Errors.MapNone);
     return this.ReturnResult(result);

@@ -91,26 +91,13 @@ public static class ValidationUtility
       .WithMessage($"TimeOnly must be in the format of {Utils.StandardTimeFormat}");
   }
 
+  // The same lookup the check settlement uses (CheckWindow.Resolve), so a saved timezone is one
+  // settlement can find instead of silently falling back to UTC.
   public static IRuleBuilderOptions<T, string> TimezoneValid<T>(
     this IRuleBuilder<T, string> ruleBuilder)
   {
     return ruleBuilder
-      .Must(x =>
-      {
-        try
-        {
-          TimeZoneInfo.FindSystemTimeZoneById(x);
-          return true;
-        }
-        catch (TimeZoneNotFoundException)
-        {
-          return false;
-        }
-        catch (InvalidTimeZoneException)
-        {
-          return false;
-        }
-      })
+      .Must(x => !string.IsNullOrWhiteSpace(x) && TimeZoneInfo.TryFindSystemTimeZoneById(x, out _))
       .WithMessage("Timezone must be a valid timezone identifier (e.g. 'Asia/Singapore', 'America/New_York')");
   }
 

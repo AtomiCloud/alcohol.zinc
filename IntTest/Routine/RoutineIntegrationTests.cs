@@ -333,7 +333,7 @@ public class RoutineIntegrationTests : IAsyncLifetime
     var (owner, a, b, c) = await OwnerWithThreeHabits();
     var stranger = await SeedUser();
     var controller = new HabitController(HabitSvc(), null!, null!, null!, null!, null!,
-      new(), new(), new(), new(), new())
+      null!, null!, new(), new(), new(), new())
     {
       ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext
       {
