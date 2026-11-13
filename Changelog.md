@@ -1,3 +1,14 @@
+## [1.43.1](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.43.0...v1.43.1) (2026-11-13)
+
+
+### 🐛 Bug Fixes 🐛
+
+* 409 on a second configuration create, dedupe weekdays, cap Strava warning log ([912f52c](https://github.com/AtomiCloud/alcohol.zinc/commit/912f52cb3f8aef4ac3963712378de5f17e3088fa))
+* count habits, skips and vacation windows atomically per user ([ae47456](https://github.com/AtomiCloud/alcohol.zinc/commit/ae47456f095c2e339f1c516e5768471e1c5f5893)), closes [#98](https://github.com/AtomiCloud/alcohol.zinc/issues/98)
+* reconcile expired subscription state and purchases ([aceaddc](https://github.com/AtomiCloud/alcohol.zinc/commit/aceaddc299b5d193d032d61758ddd9039e0af463))
+* reconcile validation fixture entitlement constructor ([8802892](https://github.com/AtomiCloud/alcohol.zinc/commit/8802892d663eb3bd5f6945a2494e117d8bc54000))
+* reject malformed habit, configuration, executions and Strava webhook input ([5b092c9](https://github.com/AtomiCloud/alcohol.zinc/commit/5b092c9b8efb81ec3c0baa74ca7177d25db91ba4))
+
 ## [1.43.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.42.0...v1.43.0) (2026-11-13)
 
 
