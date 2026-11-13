@@ -1,6 +1,7 @@
 using App.Modules.Subscription.API.V1;
 using App.StartUp.Options;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Configuration;
 
 namespace UnitTest.Subscription;
 
@@ -44,6 +45,32 @@ public class PlansEndpointTests
       }
     }
   };
+
+  // Product decision (2026-11-13): free = 2 habits, 3 skips a month, no vacation
+  // mode, no freezes. Reads the shipped App/Config/settings.yaml, so a config
+  // edit that changes what free users get fails here.
+  [Fact]
+  public void ShippedConfig_FreeTier_IsTwoHabitsThreeSkipsNoVacationNoFreezes()
+  {
+    var dir = new DirectoryInfo(AppContext.BaseDirectory);
+    while (dir != null && !File.Exists(Path.Combine(dir.FullName, "App", "Config", "settings.yaml")))
+      dir = dir.Parent;
+    dir.Should().NotBeNull("the test must find the repository's App/Config/settings.yaml");
+
+    var shipped = new SubscriptionOption();
+    new ConfigurationBuilder()
+      .AddYamlFile(Path.Combine(dir!.FullName, "App", "Config", "settings.yaml"), optional: false)
+      .Build()
+      .GetSection("Subscription")
+      .Bind(shipped);
+
+    var free = shipped.ToPlansRes().Single(p => p.Key == "free");
+    free.PriceCents.Should().Be(0);
+    free.HabitsMax.Should().Be(2);
+    free.SkipsMonthly.Should().Be(3);
+    free.VacationWindowsYearly.Should().Be(0);
+    free.FreezeBase.Should().Be(0);
+  }
 
   [Fact]
   public void Plans_OrderedCheapestFirst()

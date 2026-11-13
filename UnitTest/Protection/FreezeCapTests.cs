@@ -92,4 +92,27 @@ public class FreezeCapTests
     prot.RecordFreezeAwardIfAbsentCalls.Should().HaveCount(2);
     prot.AwardLedger.Should().ContainSingle().Which.Should().Be((habitId, weekStart));
   }
+
+  // ---------------------------------------------------------------------------
+  // CAP — FreezePolicy: free (base 0) earns nothing, not even streak bonuses
+  // ---------------------------------------------------------------------------
+
+  [Theory]
+  [InlineData(0, 0)]
+  [InlineData(0, 30)]  // first streak milestone
+  [InlineData(0, 450)] // far past every milestone
+  public void FreezeMax_TierWithoutFreezes_IsZeroAtAnyStreak(int baseCap, int maxStreak)
+  {
+    new App.Modules.Protection.FreezePolicy().ComputeFreezeMax(baseCap, maxStreak).Should().Be(0);
+  }
+
+  [Theory]
+  [InlineData(14, 29, 14)] // just under the first milestone
+  [InlineData(14, 30, 15)]
+  [InlineData(14, 80, 16)]
+  [InlineData(30, 300, 34)] // 30 + 3 milestones + 1 per extra 150 days
+  public void FreezeMax_PaidTier_KeepsStreakBonuses(int baseCap, int maxStreak, int expected)
+  {
+    new App.Modules.Protection.FreezePolicy().ComputeFreezeMax(baseCap, maxStreak).Should().Be(expected);
+  }
 }

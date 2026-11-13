@@ -259,7 +259,7 @@ Strava:
 # Subscription tier catalog + renewal worker. Single source of truth for tiers,
 # caps and prices. MUST match the public pricing page (alcohol.argon
 # src/lib/billing/pricing.ts + components/landing/Pricing.tsx):
-#   free: 2 habits, 10 skips/mo, no vacation mode, no freezes
+#   free: 2 habits, 3 skips/mo, no vacation mode, no freezes (not even streak bonuses)
 #   pro $4.99: 10 habits, 20 skips/mo, 6 vacations/yr, freeze base 14
 #   ultimate $7.99: unlimited habits, 60 skips/mo, 12 vacations/yr, freeze base 30
 Subscription:
@@ -270,7 +270,7 @@ Subscription:
       PriceCents: 0
       Currency: USD
       HabitsMax: 2
-      SkipsMonthly: 10
+      SkipsMonthly: 3
       VacationWindowsYearly: 0
       FreezeBase: 0
     pro:
