@@ -156,6 +156,21 @@ public class StravaTests
     logger.Warnings.Should().ContainSingle();
   }
 
+  // The endpoint is public and unsigned: a huge unreadable body is ignored like any other,
+  // and only its start reaches the log.
+  [Fact]
+  public async Task WebhookEndpoint_HugeMalformedEvent_LogsOnlyItsStart()
+  {
+    var (controller, inbox, logger) = WebhookController();
+    var junk = new string('x', 100_000);
+
+    var res = await controller.Webhook(JsonDocument.Parse($$"""{"object_id":"{{junk}}"}""").RootElement);
+
+    res.Should().BeOfType<OkResult>();
+    inbox.Queued.Should().BeEmpty();
+    logger.Warnings.Should().ContainSingle().Which.Length.Should().BeLessThan(2_000);
+  }
+
   [Fact]
   public async Task WebhookEndpoint_ValidEvent_IsQueued()
   {

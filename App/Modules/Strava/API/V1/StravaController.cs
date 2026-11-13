@@ -26,6 +26,9 @@ public class StravaController(
 {
   private static readonly TimeSpan StateLifetime = TimeSpan.FromMinutes(15);
 
+  // How much of an unreadable webhook body the warning log keeps.
+  private const int MaxLoggedBody = 1024;
+
   // "read" is Strava's default profile scope; activity:read_all also sees "Only You" activities.
   private const string RequestedScope = "read," + StravaScopes.Required;
 
@@ -122,7 +125,10 @@ public class StravaController(
     var e = StravaWebhookParser.Parse(body, Opt.SubscriptionId);
     if (e == null)
     {
-      logger.LogWarning("Ignoring Strava webhook event: {Body}", body.GetRawText());
+      // The endpoint is public and unsigned, so only the start of an unreadable body is logged.
+      var raw = body.GetRawText();
+      logger.LogWarning("Ignoring Strava webhook event ({Length} chars): {Body}", raw.Length,
+        raw.Length <= MaxLoggedBody ? raw : raw[..MaxLoggedBody]);
       return this.Ok();
     }
 

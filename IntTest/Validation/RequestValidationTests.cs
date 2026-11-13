@@ -6,10 +6,12 @@ using App.Modules.Entitlement;
 using App.Modules.Habit.API.V1;
 using App.Modules.Habit.Data;
 using App.Modules.Protection;
+using App.Modules.System;
 using App.Modules.Users.Data;
 using App.Modules.Vacation.Data;
 using App.StartUp.Database;
 using App.StartUp.Options;
+using App.StartUp.Services.Auth;
 using CSharp_Result;
 using Domain.Configuration;
 using Domain.Habit;
@@ -49,6 +51,14 @@ public class RequestValidationTests : IAsyncLifetime
     await _db.DisposeAsync();
   }
 
+  private async Task<string> SeedUserWithoutConfiguration()
+  {
+    var userId = $"user-{Guid.NewGuid():N}";
+    _db.Users.Add(new UserData { Id = userId, Username = userId, Email = $"{userId}@test.local" });
+    await _db.SaveChangesAsync();
+    return userId;
+  }
+
   private async Task<(string UserId, Guid CharityId, Guid ConfigId)> SeedUser()
   {
     var userId = $"user-{Guid.NewGuid():N}";
@@ -83,12 +93,15 @@ public class RequestValidationTests : IAsyncLifetime
     };
   }
 
-  private ConfigurationController Configurations(string userId)
+  private ConfigurationController Configurations(string userId, ClaimRecorder? claims = null)
   {
     var service = new ConfigurationService(
       new ConfigurationRepository(_db, NullLogger<ConfigurationRepository>.Instance), Checks.Service(_db),
-      new NoTransaction());
-    return new ConfigurationController(service, new(), new(), null!, null!) { ControllerContext = SignedIn(userId) };
+      new TransactionManager(NullLogger<TransactionManager>.Instance));
+    return new ConfigurationController(service, new(), new(), claims ?? new ClaimRecorder(), null!)
+    {
+      ControllerContext = SignedIn(userId)
+    };
   }
 
   private static int? Status<T>(ActionResult<T> r) => (r.Result as IStatusCodeActionResult)?.StatusCode;
@@ -173,6 +186,25 @@ public class RequestValidationTests : IAsyncLifetime
     (await StoredDays(userId)).Should().AllSatisfy(d => d.Should().Equal("Friday", "Monday"));
   }
 
+  [SkippableFact]
+  public async Task RepeatedDay_InAnyCase_IsStoredOnce()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (userId, _, _) = await SeedUser();
+    var controller = Habits(userId);
+
+    var created = await controller.Create(userId, Habit(["Monday", "monday"]));
+    (await StoredDays(userId)).Should().ContainSingle().Which.Should().Equal("Monday");
+    var habitId = created.Result.Should().BeOfType<OkObjectResult>().Subject.Value
+      .Should().BeOfType<HabitVersionRes>().Subject.HabitId;
+    var updated = await controller.Update(userId, habitId,
+      new UpdateHabitReq("Run 5 km", ["FRIDAY", "Monday", "friday"], "19:00:00", "0", null, true, Tz));
+
+    updated.Result.Should().BeOfType<OkObjectResult>();
+    (await StoredDays(userId)).Should().ContainEquivalentOf(new[] { "Friday", "Monday" })
+      .And.AllSatisfy(d => d.Should().OnlyHaveUniqueItems());
+  }
+
   // ---- POST Habit: stake ----
 
   [SkippableTheory]
@@ -251,18 +283,48 @@ public class RequestValidationTests : IAsyncLifetime
     (await _db.Configurations.AsNoTracking().SingleAsync(c => c.Id == configId)).Timezone.Should().Be(Tz);
   }
 
-  [SkippableFact]
-  public async Task UpdateConfiguration_RealTimezone_IsStored()
+  [SkippableTheory]
+  [InlineData("America/New_York")]
+  [InlineData("UTC")]           // neon's fallback on first sign-in
+  [InlineData("Asia/Calcutta")] // a legacy link name, still sent by older phones
+  public async Task UpdateConfiguration_RealTimezone_IsStored(string timezone)
   {
     Skip.If(_conn == null, SkipReason);
     var (userId, _, configId) = await SeedUser();
 
-    var res = await Configurations(userId).UpdateForUser(userId, configId,
-      new UpdateConfigurationReq("America/New_York"));
+    var res = await Configurations(userId).UpdateForUser(userId, configId, new UpdateConfigurationReq(timezone));
 
     res.Result.Should().BeOfType<OkObjectResult>();
-    (await _db.Configurations.AsNoTracking().SingleAsync(c => c.Id == configId)).Timezone
-      .Should().Be("America/New_York");
+    (await _db.Configurations.AsNoTracking().SingleAsync(c => c.Id == configId)).Timezone.Should().Be(timezone);
+  }
+
+  // ---- POST Configuration and POST Configuration/{userId}: one configuration per user ----
+
+  [SkippableTheory]
+  [InlineData(false)]
+  [InlineData(true)]
+  public async Task CreateConfiguration_Twice_Is409_KeepsTheFirstAndSyncsItsClaimOnly(bool forUser)
+  {
+    Skip.If(_conn == null, SkipReason);
+    var userId = await SeedUserWithoutConfiguration();
+    var claims = new ClaimRecorder();
+
+    Task<ActionResult<ConfigurationPrincipalRes>> Create(string timezone)
+    {
+      var controller = Configurations(userId, claims);
+      var req = new CreateConfigurationReq(timezone);
+      return forUser ? controller.CreateForUser(userId, req) : controller.Create(req);
+    }
+
+    var first = await Create("UTC");
+    var second = await Create("Europe/London");
+
+    var created = first.Result.Should().BeOfType<OkObjectResult>().Subject.Value
+      .Should().BeOfType<ConfigurationPrincipalRes>().Subject;
+    Status(second).Should().Be(409);
+    (await _db.Configurations.AsNoTracking().Where(c => c.UserId == userId).ToListAsync())
+      .Should().ContainSingle().Which.Timezone.Should().Be("UTC");
+    claims.Set.Should().Equal((userId, created.Id));
   }
 
   private sealed class AnyPlan : ISubscriptionService
@@ -271,8 +333,21 @@ public class RequestValidationTests : IAsyncLifetime
     public Task<Result<int>> GetLimitForTier(string tier, string key) => Task.FromResult<Result<int>>(100);
   }
 
-  private sealed class NoTransaction : Domain.ITransactionManager
+  // Records the configuration claims synced to Logto.
+  private sealed class ClaimRecorder : IAuthManagement
   {
-    public Task<Result<T>> Start<T>(Func<Task<Result<T>>> func) => func();
+    public List<(string UserId, string ConfigurationId)> Set { get; } = [];
+
+    public Task<Result<Unit>> SetClaim(string userId, string claimKey, string claimValue)
+    {
+      this.Set.Add((userId, claimValue));
+      return Task.FromResult<Result<Unit>>(new Unit());
+    }
+
+    public Task<Result<Unit>> AssignRole(string userId, string roleId) => throw new NotImplementedException();
+    public Task<Result<Unit>> RemoveRole(string userId, string roleId) => throw new NotImplementedException();
+    public Task<Result<Unit>> RemoveClaim(string userId, string claimKey) => throw new NotImplementedException();
+    public Task<Result<Unit>> DeleteUser(string userId) => throw new NotImplementedException();
+    public Task<Result<string>> CreateOneTimeToken(string email, int expiresInSeconds) => throw new NotImplementedException();
   }
 }
