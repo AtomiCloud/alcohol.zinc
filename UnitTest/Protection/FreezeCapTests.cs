@@ -60,18 +60,6 @@ public class FreezeCapTests
     prot.ClampFreezeToCapCalls.Should().ContainSingle().Which.Should().Be((UserId, cap));
   }
 
-  [Fact]
-  public async Task Cap_ClampOnDowngrade_TrimsExistingBalanceToLowerCap()
-  {
-    // Simulate a subscription downgrade: balance was accumulated under a higher
-    // tier, the new (lower) cap must trim it.
-    var prot = new FakeProtectionRepository(freezeBalance: 10);
-
-    await prot.ClampFreezeToCap(UserId, cap: 3);
-
-    prot.BalanceFor(UserId).Should().Be(3);
-  }
-
   // ---------------------------------------------------------------------------
   // CAP — award ledger idempotency (one freeze per habit/week, enforced by the
   // RecordFreezeAwardIfAbsent ledger the award flow gates IncrementFreeze on)

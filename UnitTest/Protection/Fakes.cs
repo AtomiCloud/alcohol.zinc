@@ -250,6 +250,7 @@ public sealed class FakeEntitlementService : IEntitlementService
   public Result<Unit> EnsureVacationWindowAllowedResult { get; set; } = new Unit();
   public Result<Unit> EnsureHabitsAllowedResult { get; set; } = new Unit();
   public int FreezeCap { get; set; } = 7;
+  public Exception? FreezeCapFails { get; set; }
 
   public List<(string UserId, DateOnly MonthStart, DateOnly MonthEnd)> EnsureSkipsAllowedCalls { get; } = [];
   public List<(string UserId, DateOnly StartDate)> EnsureVacationWindowAllowedCalls { get; } = [];
@@ -271,6 +272,7 @@ public sealed class FakeEntitlementService : IEntitlementService
   public Task<Result<int>> GetFreezeCapForUser(string userId, int userMaxStreak)
   {
     GetFreezeCapForUserCalls.Add((userId, userMaxStreak));
+    if (FreezeCapFails is not null) return Task.FromResult<Result<int>>(FreezeCapFails);
     return Task.FromResult<Result<int>>(FreezeCap);
   }
 

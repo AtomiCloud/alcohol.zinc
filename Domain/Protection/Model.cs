@@ -11,3 +11,6 @@ public record UserProtectionPrincipal
   public required UserProtectionRecord Record { get; init; }
 }
 
+// A user's freeze balance after it was cut to their current cap.
+public record FreezeBalance(int Balance, int Cap);
+

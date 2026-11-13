@@ -1,5 +1,6 @@
 using CSharp_Result;
 using Domain.Payment;
+using Domain.Protection;
 using Domain.Subscription;
 using NodaMoney;
 
@@ -222,6 +223,21 @@ public sealed class FakePlanProvider(Dictionary<string, SubscriptionPlan> plans)
     => plans.TryGetValue(tier, out var p) ? p : new InvalidSubscriptionTierException(tier);
 }
 
+
+// Records each Reconcile with the user's subscription row as it was at that moment, so a
+// test can tell the freeze cut ran after the tier dropped, not before.
+public sealed class RecordingFreezeCapService(FakeSubscriptionRepository repo) : IFreezeCapService
+{
+  public List<(string UserId, UserSubscriptionRecord? RowAtCall)> Calls { get; } = [];
+  public Exception? Fails { get; set; }
+
+  public Task<Result<FreezeBalance>> Reconcile(string userId)
+  {
+    this.Calls.Add((userId, repo.Row(userId)?.Record));
+    if (this.Fails is not null) return Task.FromResult<Result<FreezeBalance>>(this.Fails);
+    return Task.FromResult<Result<FreezeBalance>>(new FreezeBalance(0, 0));
+  }
+}
 
 // Payment fake tailored to the subscription flows: implements
 // HasPaymentConsentAsync + ChargeStoredConsentAsync (the penalty fake throws on

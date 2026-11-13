@@ -62,14 +62,16 @@ public class CheckScenarioTests : IAsyncLifetime
     return (userId, charityId);
   }
 
-  private async Task<Guid> SeedHabit(string userId, Guid charityId, string[] days, string versionTimezone)
+  private async Task<Guid> SeedHabit(string userId, Guid charityId, string[] days, string versionTimezone,
+    TimeOnly? deadline = null)
   {
     var habitId = Guid.NewGuid();
     _db.Habits.Add(new HabitData { Id = habitId, UserId = userId, Version = 1, Enabled = true });
     _db.HabitVersions.Add(new HabitVersionData
     {
       HabitId = habitId, CharityId = charityId, Version = 1, Task = "Run 5 km", DaysOfWeek = days,
-      NotificationTime = new TimeOnly(19, 0), Timezone = versionTimezone,
+      NotificationTime = new TimeOnly(19, 0), DeadlineTime = deadline ?? new TimeOnly(23, 59),
+      Timezone = versionTimezone,
       StakeCents = 1000, StakeCurrency = "USD", RatioBasisPoints = 10000
     });
     await _db.SaveChangesAsync();
@@ -276,6 +278,107 @@ public class CheckScenarioTests : IAsyncLifetime
     (await ExecutionsOf(habitId)).Should().ContainSingle();
     (await _db.UserProtections.AsNoTracking().SingleAsync(x => x.UserId == userId)).FreezeCurrent.Should().Be(2);
     (await PenaltiesOf(userId)).Should().Be(0);
+  }
+
+  private Task<int> FreezesOf(string userId)
+    => _db.UserProtections.AsNoTracking().Where(x => x.UserId == userId).Select(x => x.FreezeCurrent).SingleAsync();
+
+  // A UTC user with `freezes` banked, on a plan with base cap `freezeBase` (no streak), misses Monday.
+  private async Task<(HabitCheckData Monday, int Freezes)> MissMonday(int freezes, int freezeBase)
+  {
+    var (userId, charityId) = await SeedUser("UTC", freezes);
+    var habitId = await SeedHabit(userId, charityId, ["Monday"], "UTC");
+    var svc = Checks.Service(_db, new Checks.FreezeBase(freezeBase));
+
+    await svc.OpenUpcoming(U(2026, 1, 5, 1));
+    (await svc.CloseDue(U(2026, 1, 6, 1))).Get().Should().Be(1);
+    return ((await ChecksOf(habitId)).Single(), await FreezesOf(userId));
+  }
+
+  // Freezes banked on a paid plan are cut to the free cap (0) before one would be spent.
+  [SkippableFact]
+  public async Task MissedDay_BalanceAboveZeroCap_IsMissedAndBalanceCut()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (monday, freezes) = await MissMonday(freezes: 5, freezeBase: 0);
+
+    monday.Status.Should().Be(HabitCheckStatusData.Missed, "a cap of 0 leaves no freeze to spend");
+    freezes.Should().Be(0);
+  }
+
+  [SkippableFact]
+  public async Task MissedDay_BalanceAboveCap_FreezesAndSpendsFromCutBalance()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (monday, freezes) = await MissMonday(freezes: 5, freezeBase: 2);
+
+    monday.Status.Should().Be(HabitCheckStatusData.Frozen);
+    freezes.Should().Be(1, "cut to 2, then 1 spent");
+  }
+
+  [SkippableFact]
+  public async Task MissedDay_BalanceUnderCap_Unchanged()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (monday, freezes) = await MissMonday(freezes: 2, freezeBase: 3);
+
+    monday.Status.Should().Be(HabitCheckStatusData.Frozen);
+    freezes.Should().Be(1);
+  }
+
+  // Two checks of one day settle in separate ticks. The second finds the balance at 0 and the
+  // day already frozen: it stays frozen, and skips the cap (whose streak query loads every
+  // execution of the user). The cap lookup is down for that tick, so a reconcile would fail
+  // and leave the check pending.
+  [SkippableFact]
+  public async Task SecondCheckOfFrozenDay_StaysFrozen()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (userId, charityId) = await SeedUser("UTC", freezes: 1);
+    var noon = await SeedHabit(userId, charityId, ["Monday"], "UTC", deadline: new TimeOnly(12, 0));
+    var midnight = await SeedHabit(userId, charityId, ["Monday"], "UTC");
+    var svc = Checks.Service(_db, new Checks.FreezeBase(3));
+
+    await svc.OpenUpcoming(U(2026, 1, 5, 1));
+    (await svc.CloseDue(U(2026, 1, 5, 13))).Get().Should().Be(1, "only the noon check is due");
+    (await FreezesOf(userId)).Should().Be(0);
+
+    (await Checks.Service(_db, new PlanLookupDown()).CloseDue(U(2026, 1, 6, 1))).Get().Should().Be(1);
+
+    (await ChecksOf(noon)).Single().Status.Should().Be(HabitCheckStatusData.Frozen);
+    (await ChecksOf(midnight)).Single().Status.Should().Be(HabitCheckStatusData.Frozen);
+    (await _db.FreezeConsumptions.CountAsync(x => x.UserId == userId)).Should().Be(1);
+  }
+
+  // Reading the balance cuts it to the cap: GET Protection/{userId} never shows more than the
+  // cap, and what it shows is what is stored.
+  [SkippableTheory]
+  [InlineData(5, 2, 2)]
+  [InlineData(5, 0, 0)]
+  [InlineData(1, 3, 1)]
+  public async Task GetBalance_ReturnsBalanceCutToCap_AndStoresIt(int freezes, int freezeBase, int expected)
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (userId, _) = await SeedUser("UTC", freezes);
+    var controller = new App.Modules.Protection.API.V1.ProtectionController(null!,
+      Checks.FreezeCap(_db, new Checks.FreezeBase(freezeBase)), null!)
+    {
+      ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext
+      {
+        HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext
+        {
+          User = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(
+            [new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Name, userId)], "test"))
+        }
+      }
+    };
+
+    var response = await controller.GetBalance(userId);
+
+    var ok = response.Result.Should().BeOfType<Microsoft.AspNetCore.Mvc.OkObjectResult>().Subject;
+    ok.Value.Should().Be(new App.Modules.Protection.API.V1.ProtectionController.ProtectionBalanceRes(
+      userId, expected, freezeBase));
+    (await FreezesOf(userId)).Should().Be(expected);
   }
 
   // Vacation protects every scheduled habit of the day before any freeze is considered.
@@ -691,6 +794,14 @@ public class CheckScenarioTests : IAsyncLifetime
 
     public Task<Result<(string Timezone, DateOnly Today)>> GetUserToday(string userId, DateTime? utcNow = null)
       => throw new NotImplementedException();
+  }
+
+  private sealed class PlanLookupDown : ISubscriptionService
+  {
+    public Task<Result<string>> GetUserTier(string userId)
+      => Task.FromResult<Result<string>>(new InvalidOperationException("subscription lookup down"));
+
+    public Task<Result<int>> GetLimitForTier(string tier, string key) => throw new NotImplementedException();
   }
 
   private sealed class FreeTier : ISubscriptionService

@@ -16,6 +16,7 @@ public class SubscriptionManagementServiceTests
     IEmailNotifier? notifier = null)
     => new(repo, plans ?? FakePlanProvider.Default(), payment,
       notifier ?? new RecordingEmailNotifier(),
+      new RecordingFreezeCapService(repo),
       NullLogger<SubscriptionManagementService>.Instance);
 
   private static UserSubscriptionPrincipal Row(
