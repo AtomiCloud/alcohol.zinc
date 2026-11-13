@@ -82,8 +82,7 @@ public class RequestValidationTests : IAsyncLifetime
   private HabitController Habits(string userId)
   {
     var repo = new HabitRepository(_db, NullLogger<HabitRepository>.Instance);
-    var entitlement = new EntitlementService(new AnyPlan(), new VacationRepository(_db,
-      NullLogger<VacationRepository>.Instance), repo, new FreezePolicy(), null!);
+    var entitlement = new EntitlementService(new AnyPlan(), repo, new FreezePolicy(), null!);
     var service = new HabitService(repo, entitlement, Checks.Service(_db), null!, NullLogger<HabitService>.Instance);
     var options = new StaticOptionsMonitor<HabitOption>(new HabitOption());
     return new HabitController(service, null!, null!, null!, null!,
