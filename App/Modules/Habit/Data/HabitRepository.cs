@@ -5,12 +5,28 @@ using App.StartUp.Database;
 using CSharp_Result;
 using Domain.Exceptions;
 using Domain.Habit;
+using EntityFramework.Exceptions.Common;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace App.Modules.Habit.Data
 {
     public class HabitRepository(MainDbContext db, ILogger<HabitRepository> logger) : IHabitRepository
     {
+        // A habit version's charity is the one reference the client chooses, so a missing charity
+        // is a bad request, not a server error.
+        private const string CharityForeignKey = "FK_HabitVersions_Charities_CharityId";
+
+        private static bool IsUnknownCharity(ReferenceConstraintException e) =>
+            e.InnerException is PostgresException { ConstraintName: CharityForeignKey };
+
+        private InvalidRequestException UnknownCharity(Guid? charityId)
+        {
+            // The failed inserts would otherwise be retried by the next SaveChanges on this context.
+            db.ChangeTracker.Clear();
+            return new InvalidRequestException("CharityId", $"Charity {charityId} does not exist");
+        }
+
         public async Task<Result<int>> CountHabitsForUser(string userId)
         {
             try
@@ -249,6 +265,13 @@ namespace App.Modules.Habit.Data
                     habitData.Id, habitData.Version);
                 return versionData.ToPrincipal();
             }
+            catch (ReferenceConstraintException e) when (IsUnknownCharity(e))
+            {
+                logger.LogWarning("Create habit refused for UserId: {UserId}: unknown CharityId {CharityId}",
+                    userId, versionRecord.CharityId);
+                await transaction.RollbackAsync();
+                return UnknownCharity(versionRecord.CharityId);
+            }
             catch (Exception e)
             {
                 logger.LogError(e, "Failed to create habit for UserId: {UserId}", userId);
@@ -295,6 +318,13 @@ namespace App.Modules.Habit.Data
                 logger.LogInformation("Habit version updated to {Version} for HabitId: {HabitId}",
                     currentVersion, habitId);
                 return versionData.ToPrincipal();
+            }
+            catch (ReferenceConstraintException e) when (IsUnknownCharity(e))
+            {
+                logger.LogWarning("Update habit refused for HabitId: {HabitId}: unknown CharityId {CharityId}",
+                    habitId, versionRecord.CharityId);
+                await transaction.RollbackAsync();
+                return UnknownCharity(versionRecord.CharityId);
             }
             catch (Exception e)
             {

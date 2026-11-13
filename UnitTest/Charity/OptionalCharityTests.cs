@@ -1,8 +1,10 @@
 using System.Text.Json;
 using App.Modules.Configurations.API.V1;
 using App.Modules.Habit.API.V1;
+using App.StartUp.Options;
 using App.StartUp.Services.Swagger;
 using FluentValidation;
+using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
@@ -13,6 +15,14 @@ namespace UnitTest.Charity;
 public class OptionalCharityTests
 {
   private static readonly Guid Charity = Guid.Parse("10000000-0000-0000-0000-000000000001");
+  private static readonly IOptionsMonitor<HabitOption> HabitOptions = new StaticHabitOptions();
+
+  private sealed class StaticHabitOptions : IOptionsMonitor<HabitOption>
+  {
+    public HabitOption CurrentValue { get; } = new();
+    public HabitOption Get(string? name) => this.CurrentValue;
+    public IDisposable? OnChange(Action<HabitOption, string?> listener) => null;
+  }
 
   [Theory]
   [InlineData("0", null, true)]
@@ -24,9 +34,9 @@ public class OptionalCharityTests
   public void Habit_NeedsACharity_OnlyWithAStake(string stake, string? charityId, bool valid)
   {
     Guid? charity = charityId == null ? null : Guid.Parse(charityId);
-    var create = new CreateHabitReqValidator().Validate(
+    var create = new CreateHabitReqValidator(HabitOptions).Validate(
       new CreateHabitReq("Run 5 km", ["Monday"], "19:00:00", stake, charity, "Asia/Singapore"));
-    var update = new UpdateHabitReqValidator().Validate(
+    var update = new UpdateHabitReqValidator(HabitOptions).Validate(
       new UpdateHabitReq("Run 5 km", ["Monday"], "19:00:00", stake, charity, true, "Asia/Singapore"));
 
     foreach (var result in new[] { create, update })
@@ -40,7 +50,7 @@ public class OptionalCharityTests
   [Fact]
   public void Habit_BadStake_IsNotReportedAsAMissingCharity()
   {
-    new CreateHabitReqValidator().Validate(
+    new CreateHabitReqValidator(HabitOptions).Validate(
         new CreateHabitReq("Run 5 km", ["Monday"], "19:00:00", "abc", null, "Asia/Singapore"))
       .Errors.Select(e => e.PropertyName).Should().OnlyContain(p => p == nameof(CreateHabitReq.Stake));
   }

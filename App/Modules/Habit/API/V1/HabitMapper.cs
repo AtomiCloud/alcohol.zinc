@@ -38,7 +38,7 @@ public static class HabitMapper
         {
             CharityId = req.CharityId == Guid.Empty ? null : req.CharityId,
             Task = req.Task,
-            DaysOfWeek = req.DaysOfWeek,
+            DaysOfWeek = req.DaysOfWeek.Select(HabitReqRules.CanonicalDay).Distinct().ToArray(),
             NotificationTime = req.NotificationTime.ToTime(),
             Stake = new Money(decimal.Parse(req.Stake, CultureInfo.InvariantCulture), Currency.FromCode("USD")),
             Ratio = 1.0m,  // Fixed at 100% - all stake goes to charity
@@ -51,7 +51,7 @@ public static class HabitMapper
         {
             CharityId = req.CharityId == Guid.Empty ? null : req.CharityId,
             Task = req.Task,
-            DaysOfWeek = req.DaysOfWeek,
+            DaysOfWeek = req.DaysOfWeek.Select(HabitReqRules.CanonicalDay).Distinct().ToArray(),
             NotificationTime = req.NotificationTime.ToTime(),
             Stake = new Money(decimal.Parse(req.Stake, CultureInfo.InvariantCulture), Currency.FromCode("USD")),
             Ratio = 1.0m,  // Fixed at 100% - all stake goes to charity

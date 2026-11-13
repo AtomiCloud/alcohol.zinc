@@ -1,6 +1,9 @@
+using App.Error.V1;
 using App.StartUp.Database;
+using App.Utility;
 using CSharp_Result;
 using Domain.Configuration;
+using EntityFramework.Exceptions.Common;
 using Microsoft.EntityFrameworkCore;
 
 namespace App.Modules.Configurations.Data
@@ -100,6 +103,14 @@ namespace App.Modules.Configurations.Data
                 logger.LogInformation("Configuration added with Id: {Id}", data.Id);
 
                 return r.Entity.ToPrincipal();
+            }
+            catch (UniqueConstraintException)
+            {
+                // One configuration per user: a second create (e.g. two first sign-ins at once) conflicts.
+                logger.LogWarning("Configuration already exists for UserId: {UserId}", userId);
+                db.ChangeTracker.Clear();
+                return new EntityConflict("Configuration already exists for this user", typeof(ConfigurationPrincipal))
+                    .ToException();
             }
             catch (Exception e)
             {

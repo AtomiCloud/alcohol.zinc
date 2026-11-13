@@ -26,6 +26,9 @@ public class StravaController(
 {
   private static readonly TimeSpan StateLifetime = TimeSpan.FromMinutes(15);
 
+  // How much of an unreadable webhook body the warning log keeps.
+  private const int MaxLoggedBody = 1024;
+
   // "read" is Strava's default profile scope; activity:read_all also sees "Only You" activities.
   private const string RequestedScope = "read," + StravaScopes.Required;
 
@@ -122,7 +125,10 @@ public class StravaController(
     var e = StravaWebhookParser.Parse(body, Opt.SubscriptionId);
     if (e == null)
     {
-      logger.LogWarning("Ignoring Strava webhook event: {Body}", body.GetRawText());
+      // The endpoint is public and unsigned, so only the start of an unreadable body is logged.
+      var raw = body.GetRawText();
+      logger.LogWarning("Ignoring Strava webhook event ({Length} chars): {Body}", raw.Length,
+        raw.Length <= MaxLoggedBody ? raw : raw[..MaxLoggedBody]);
       return this.Ok();
     }
 
@@ -146,11 +152,11 @@ public static class StravaWebhookParser
     if (body.ValueKind != JsonValueKind.Object) return null;
     if (!body.TryGetProperty("object_type", out var objectType) || objectType.ValueKind != JsonValueKind.String) return null;
     if (!body.TryGetProperty("aspect_type", out var aspectType) || aspectType.ValueKind != JsonValueKind.String) return null;
-    if (!body.TryGetProperty("object_id", out var objectId) || !objectId.TryGetInt64(out var oid)) return null;
-    if (!body.TryGetProperty("owner_id", out var ownerId) || !ownerId.TryGetInt64(out var owner)) return null;
-    if (!body.TryGetProperty("event_time", out var eventTime) || !eventTime.TryGetInt64(out var at)) return null;
-    if (subscriptionId != 0 && (!body.TryGetProperty("subscription_id", out var sub) ||
-                                !sub.TryGetInt64(out var sid) || sid != subscriptionId)) return null;
+    if (!TryGetInt64(body, "object_id", out var oid)) return null;
+    if (!TryGetInt64(body, "owner_id", out var owner)) return null;
+    if (!TryGetInt64(body, "event_time", out var at) || at < MinUnixSeconds || at > MaxUnixSeconds) return null;
+    if (subscriptionId != 0 && (!TryGetInt64(body, "subscription_id", out var sid) || sid != subscriptionId))
+      return null;
 
     var deauthorized = body.TryGetProperty("updates", out var updates) && updates.ValueKind == JsonValueKind.Object &&
                        updates.TryGetProperty("authorized", out var authorized) &&
@@ -168,5 +174,15 @@ public static class StravaWebhookParser
       EventTimeUtc = DateTimeOffset.FromUnixTimeSeconds(at).UtcDateTime,
       Deauthorized = type == "athlete" && deauthorized
     };
+  }
+
+  private static readonly long MinUnixSeconds = DateTimeOffset.MinValue.ToUnixTimeSeconds();
+  private static readonly long MaxUnixSeconds = DateTimeOffset.MaxValue.ToUnixTimeSeconds();
+
+  // A JSON number that fits a long; TryGetInt64 throws on any other kind, such as a string.
+  private static bool TryGetInt64(JsonElement body, string name, out long value)
+  {
+    value = 0;
+    return body.TryGetProperty(name, out var e) && e.ValueKind == JsonValueKind.Number && e.TryGetInt64(out value);
   }
 }
