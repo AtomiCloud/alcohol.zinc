@@ -112,4 +112,31 @@ public class SubscriptionServiceTests
     res.IsSuccess().Should().BeFalse();
     res.FailureOrDefault().Should().BeOfType<InvalidSubscriptionTierException>();
   }
+
+  [Theory]
+  [InlineData(0, 0, true, null, "pro")]
+  [InlineData(0, 1, true, null, "free")]
+  [InlineData(0, 1, false, null, "pro")]
+  [InlineData(7, 0, false, null, "pro")]
+  [InlineData(7, 1, false, null, "free")]
+  [InlineData(2, 0, false, "short", "pro")]
+  [InlineData(2, 1, false, "short", "free")]
+  [InlineData(0, 0, false, "removed", "pro")]
+  [InlineData(0, 1, false, "removed", "free")]
+  public void EffectiveState_FixedTimeBoundaries_UseRenewalTargetsGrace(
+    int daysAfterEnd, int ticksAfterEnd, bool cancelled, string? nextTier, string expectedTier)
+  {
+    var end = new DateTime(2030, 5, 10, 12, 0, 0, DateTimeKind.Utc);
+    var row = Row("u1", "pro", SubscriptionStatus.Active, end, cancelled);
+    row = row with { Record = row.Record with { NextTier = nextTier } };
+    var plans = new FakePlanProvider(new()
+    {
+      ["pro"] = FakePlanProvider.Plan("pro", 4.99m, graceDays: 7),
+      ["short"] = FakePlanProvider.Plan("short", 7.99m, graceDays: 2)
+    });
+
+    var resolved = EffectiveSubscription.Resolve(row, plans, end.AddDays(daysAfterEnd).AddTicks(ticksAfterEnd));
+
+    (resolved?.Record.Tier ?? "free").Should().Be(expectedTier);
+  }
 }

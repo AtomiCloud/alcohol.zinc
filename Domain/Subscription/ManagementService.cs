@@ -17,7 +17,10 @@ public class SubscriptionManagementService(
   ILogger<SubscriptionManagementService> logger
 ) : ISubscriptionManagementService
 {
-  public async Task<Result<UserSubscriptionPrincipal>> Subscribe(string userId, string tier)
+  public Task<Result<UserSubscriptionPrincipal>> Subscribe(string userId, string tier)
+    => this.Subscribe(userId, tier, DateTime.UtcNow);
+
+  private async Task<Result<UserSubscriptionPrincipal>> Subscribe(string userId, string tier, DateTime now)
   {
     if (tier == SubscriptionService.FreeTier)
       return new InvalidSubscriptionTierException(tier);
@@ -30,24 +33,33 @@ public class SubscriptionManagementService(
     if (!existingRes.IsSuccess()) return existingRes.FailureOrDefault()!;
     var existing = existingRes.Get();
 
-    if (existing?.Record.Status is SubscriptionStatus.Active or SubscriptionStatus.Grace
-        && existing.Record.Tier == tier)
+    // The renewal owns any in-flight charge, even if the stored period has lapsed.
+    if (existing?.Record.RenewingUntil is { } lease && lease > now)
+      return new SubscriptionBusyException(userId);
+
+    var effective = EffectiveSubscription.Resolve(existing, plans, now);
+
+    // Unpaid grace retains entitlements, not a paid remainder to switch or undo.
+    if (effective != null && now > effective.Record.PeriodEnd)
+      return new AlreadySubscribedException(effective.Record.Tier, tier);
+
+    if (effective != null && effective.Record.Tier == tier)
     {
       // Re-subscribing the same tier after a pending cancel = un-cancel, free of charge.
-      if (existing.Record.CancelAtPeriodEnd)
-        return await repo.SetCancelAtPeriodEnd(existing.Id, false)
+      if (effective.Record.CancelAtPeriodEnd)
+        return await repo.SetCancelAtPeriodEnd(effective.Id, false)
           .ThenAwait(_ => repo.GetByUserId(userId))
           .Then(s => s!, Errors.MapNone);
 
-      return new AlreadySubscribedException(existing.Record.Tier, tier);
+      return new AlreadySubscribedException(effective.Record.Tier, tier);
     }
 
     // A Grace user must settle their current tier via the daily renewal retry
     // (or cancel) before switching; switching would bypass the unpaid period.
-    if (existing?.Record.Status is SubscriptionStatus.Grace)
-      return new AlreadySubscribedException(existing.Record.Tier, tier);
+    if (effective?.Record.Status is SubscriptionStatus.Grace)
+      return new AlreadySubscribedException(effective.Record.Tier, tier);
 
-    var isTierSwitch = existing?.Record.Status is SubscriptionStatus.Active;
+    var isTierSwitch = effective?.Record.Status is SubscriptionStatus.Active;
     SubscriptionPlan? currentPlan = null;
     if (isTierSwitch)
     {
@@ -60,12 +72,6 @@ public class SubscriptionManagementService(
       // instead of charging now and destroying the paid remainder.
       if (plan.Price.Amount <= currentPlan.Price.Amount)
         return await this.ScheduleDowngrade(userId, existing, tier);
-
-      // The renewal worker holds this row's charge lease: an upgrade Activate
-      // now would strand the renewal charge it may be settling. Reject and let
-      // the client retry once the (short) lease lapses.
-      if (existing.Record.RenewingUntil is { } lease && lease > DateTime.UtcNow)
-        return new SubscriptionBusyException(userId);
     }
 
     // Subscriptions charge against the RECURRING consent — a user who only has
@@ -74,7 +80,6 @@ public class SubscriptionManagementService(
     if (!hasConsentRes.IsSuccess()) return hasConsentRes.FailureOrDefault()!;
     if (!hasConsentRes.Get()) return new NoPaymentConsentException(userId);
 
-    var now = DateTime.UtcNow;
     var periodStart = now;
     var periodEnd = now.AddMonths(1);
     var chargeAmount = plan.Price;
@@ -171,7 +176,7 @@ public class SubscriptionManagementService(
     if (intent.Status != "SUCCEEDED")
       return new SubscriptionChargeFailedException(intent.Status);
 
-    var activated = await repo.Activate(rowId, tier, periodStart, periodEnd, DateTime.UtcNow);
+    var activated = await repo.Activate(rowId, tier, periodStart, periodEnd, now);
     if (!activated.IsSuccess()) return activated.FailureOrDefault()!;
 
     if (!activated.Get())
@@ -193,11 +198,12 @@ public class SubscriptionManagementService(
 
   public async Task<Result<UserSubscriptionPrincipal>> Cancel(string userId)
   {
+    var now = DateTime.UtcNow;
     var existingRes = await repo.GetByUserId(userId);
     if (!existingRes.IsSuccess()) return existingRes.FailureOrDefault()!;
-    var existing = existingRes.Get();
+    var existing = EffectiveSubscription.Resolve(existingRes.Get(), plans, now);
 
-    if (existing?.Record.Status is not (SubscriptionStatus.Active or SubscriptionStatus.Grace))
+    if (existing == null)
       return new NoActiveSubscriptionException(userId);
 
     var cancelled = await repo.SetCancelAtPeriodEnd(existing.Id, true)
@@ -214,12 +220,19 @@ public class SubscriptionManagementService(
     if (tier == SubscriptionService.FreeTier)
       return await this.Cancel(userId);
 
+    var now = DateTime.UtcNow;
     var existingRes = await repo.GetByUserId(userId);
     if (!existingRes.IsSuccess()) return existingRes.FailureOrDefault()!;
     var existing = existingRes.Get();
 
+    if (existing?.Record.RenewingUntil is { } lease && lease > now)
+      return new SubscriptionBusyException(userId);
+
+    existing = EffectiveSubscription.Resolve(existing, plans, now);
+
     // Same active tier: the only meaning left is undoing a scheduled change.
     if (existing?.Record.Status is SubscriptionStatus.Active && existing.Record.Tier == tier
+        && now <= existing.Record.PeriodEnd
         && (existing.Record.CancelAtPeriodEnd || existing.Record.NextTier is not null))
     {
       var undoNext = await repo.SetNextTier(existing.Id, null);
@@ -235,7 +248,7 @@ public class SubscriptionManagementService(
 
     // Everything else (new subscribe, upgrade, scheduled downgrade, same-tier
     // no-op rejection) shares Subscribe's decision table.
-    return await this.Subscribe(userId, tier);
+    return await this.Subscribe(userId, tier, now);
   }
 
   private async Task<Result<UserSubscriptionPrincipal>> ScheduleDowngrade(

@@ -40,9 +40,6 @@ public static class SubscriptionMapper
   public static SubscriptionRes ToRes(this UserSubscriptionPrincipal p)
   {
     var rec = p.Record;
-    if (rec.Status is SubscriptionStatus.Cancelled or SubscriptionStatus.PendingActivation)
-      return ToFreeRes(rec.UserId);
-
     return new SubscriptionRes(
       rec.UserId,
       rec.Tier,
