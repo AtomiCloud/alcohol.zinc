@@ -151,7 +151,7 @@ public class PenaltyIntegrationTests : IAsyncLifetime
     var service = new HabitService(new HabitRepository(_db, NullLogger<HabitRepository>.Instance),
       null!, null!, null!, NullLogger<HabitService>.Instance);
     var controller = new App.Modules.Habit.API.V1.HabitController(service, null!, null!, null!,
-      null!, null!, new(), new(), new(), new())
+      null!, null!, new(), new(), new(), new(), new())
     {
       ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext
       {
@@ -278,7 +278,7 @@ public class PenaltyIntegrationTests : IAsyncLifetime
         {
           Id = charityId, Record = new Domain.Charity.CharityRecord { Name = "Charity" }
         }, status, status.TimeLeftToEodMinutes, new HabitVersionMeta(version.Id, 1, true), 0m,
-        new TimeOnly(23, 59), null, "manual", null)],
+        new TimeOnly(23, 59), null, "manual", null, 0)],
       0m, 0, 3));
 
     response.Habits.Single().Status.Today.Should().Be("04-01-2026");

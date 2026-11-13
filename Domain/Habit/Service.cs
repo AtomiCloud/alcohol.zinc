@@ -61,6 +61,13 @@ public class HabitService(
     return repo.Delete(habitId, userId);
   }
 
+  public Task<Result<List<Guid>>> Reorder(string userId, List<Guid> habitIds)
+  {
+    return repo.GetOrderedIds(userId)
+      .Then(current => HabitOrder.Merge(current, habitIds))
+      .ThenAwait(order => repo.SetOrder(userId, order).Then(_ => order, Errors.MapNone));
+  }
+
   public async Task<Result<HabitExecutionPrincipal>> CompleteHabit(string userId, Guid habitVersionId, string? notes)
   {
     var hv = (HabitVersionPrincipal?)await repo.GetVersion(habitVersionId);

@@ -25,7 +25,8 @@ public record HabitOverviewItem
   DateTime? TodayDeadlineUtc,
   // How the habit is proven: "nfc" when a tag is linked, otherwise "manual".
   string Proof,
-  Guid? RoutineId
+  Guid? RoutineId,
+  int SortOrder     // position in the user's habit list; items come in this order
 );
 
 public record HabitOverviewSearch(string UserId, int Limit, int Skip);

@@ -25,7 +25,8 @@ public record HabitOverviewHabitRes(
   string DeadlineTime,            // "HH:mm" in the user's timezone
   DateTime? TodayDeadlineUtc,     // end of today's check (UTC); null when not scheduled today
   string Proof,                   // "manual" | "nfc" | a bound plugin key ("strava")
-  string? RoutineId
+  string? RoutineId,
+  int SortOrder                   // position in the user's habit list; habits come in this order
 );
 
 public record StakeRes(decimal Amount, string Currency);

@@ -668,6 +668,29 @@ public class CheckScenarioTests : IAsyncLifetime
     cleared.Charity.Should().BeNull();
   }
 
+  // Today lists habits in the user's order, with each one's position. Editing a habit (a new
+  // version) does not move it.
+  [SkippableFact]
+  public async Task Overview_ReturnsHabitsInSortOrder_WithSortOrderField()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (userId, charityId) = await SeedUser(LosAngeles);
+    var a = await SeedHabit(userId, charityId, ["Monday"], LosAngeles);
+    var b = await SeedHabit(userId, charityId, ["Monday"], LosAngeles);
+    var c = await SeedHabit(userId, charityId, ["Monday"], LosAngeles);
+    var repo = new HabitRepository(_db, NullLogger<HabitRepository>.Instance);
+    (await repo.SetOrder(userId, [c, a, b])).IsSuccess().Should().BeTrue();
+    var record = ((HabitVersionPrincipal?)await repo.GetCurrentVersion(userId, b))!.Record;
+    ((HabitVersionPrincipal?)await repo.Update(b, userId, record with { Task = "Edited" }, true)).Should().NotBeNull();
+
+    var now = U(2026, 1, 5, 18); // Mon 10:00 in Los Angeles
+    var res = App.Modules.Habit.API.V1.HabitOverviewMapper.ToRes(
+      (await Overview(Checks.Service(_db)).GetOverview(new HabitOverviewSearch(userId, 10, 0), "skips", now)).Get());
+
+    res.Habits.Select(h => h.Id).Should().Equal(c.ToString(), a.ToString(), b.ToString());
+    res.Habits.Select(h => h.SortOrder).Should().Equal(0, 1, 2);
+  }
+
   private HabitOverviewService Overview(CheckService checks) => new(
     new HabitService(new HabitRepository(_db, NullLogger<HabitRepository>.Instance), null!, checks,
       null!, NullLogger<HabitService>.Instance),

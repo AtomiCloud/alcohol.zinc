@@ -1,4 +1,5 @@
 using App.Modules.Charities.Data;
+using App.Modules.Habit.API.V1;
 using App.Modules.Habit.Data;
 using App.Modules.NfcTag.Data;
 using App.Modules.Routine.Data;
@@ -18,7 +19,8 @@ namespace IntTest.Routine;
 // DB-backed integration tests for routines against a REAL Postgres MainDbContext:
 // habit create auto-creates a one-habit routine, cross-user routine ids are rejected,
 // deleting the last habit soft deletes its routine, and deleting a routine soft
-// deletes its habits (releasing their NFC tags).
+// deletes its habits (releasing their NFC tags). Also the user's habit order (SortOrder):
+// new habits go last, reorder, stable search paging, and the reorder endpoint.
 //
 // Connection comes from the ROUTINE_TEST_DB env var (same format as PENALTY_TEST_DB).
 // Unset -> tests Skip, so the suite stays green without a database.
@@ -189,5 +191,171 @@ public class RoutineIntegrationTests : IAsyncLifetime
     (await _db.NfcTags.AsNoTracking().AnyAsync(x => x.Id == tagId))
       .Should().BeFalse("tags of the soft-deleted habits are released");
     ((Unit?)await RoutineRepo().Delete(routineId, owner)).Should().BeNull("a deleted routine is gone");
+  }
+
+  // ---------------------------------------------------------------------------
+  // Habit order
+  // ---------------------------------------------------------------------------
+
+  private HabitService HabitSvc() => new(HabitRepo(), null!, null!, null!, NullLogger<HabitService>.Instance);
+
+  private async Task<List<Guid>> SearchIds(string userId, int limit = 100, int skip = 0)
+    => (await HabitRepo().SearchHabits(new HabitSearch { UserId = userId, Limit = limit, Skip = skip }))
+      .Get().Select(x => x.HabitId).ToList();
+
+  private Task<int> SortOrderOf(Guid id) => _db.Habits.AsNoTracking().Where(x => x.Id == id).Select(x => x.SortOrder).SingleAsync();
+
+  // Names sort Z, A, M: creation order, not the name, decides where a new habit goes.
+  private async Task<(string Owner, Guid A, Guid B, Guid C)> OwnerWithThreeHabits()
+  {
+    var owner = await SeedUser();
+    var a = await CreateHabit(owner, "Zeta", null);
+    var b = await CreateHabit(owner, "Alpha", null);
+    var c = await CreateHabit(owner, "Mid", null);
+    return (owner, a, b, c);
+  }
+
+  [SkippableFact]
+  public async Task Create_NewHabits_GetIncreasingSortOrder()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (owner, a, b, c) = await OwnerWithThreeHabits();
+
+    (await SortOrderOf(a)).Should().Be(0);
+    (await SortOrderOf(b)).Should().Be(1);
+    (await SortOrderOf(c)).Should().Be(2);
+    (await SearchIds(owner)).Should().Equal(a, b, c);
+  }
+
+  [SkippableFact]
+  public async Task SetOrder_ThenSearch_ReturnsNewOrderAcrossPages()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (owner, a, b, c) = await OwnerWithThreeHabits();
+
+    (await HabitRepo().SetOrder(owner, [c, a, b])).IsSuccess().Should().BeTrue();
+
+    (await SearchIds(owner)).Should().Equal(c, a, b);
+    (await SearchIds(owner, limit: 2)).Should().Equal(c, a);
+    (await SearchIds(owner, limit: 2, skip: 2)).Should().Equal(b);
+    (await HabitRepo().GetOrderedIds(owner)).Get().Should().Equal(c, a, b);
+  }
+
+  [SkippableFact]
+  public async Task Create_AfterReorder_GoesToBottom()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (owner, a, b, c) = await OwnerWithThreeHabits();
+    (await HabitSvc().Reorder(owner, [c, a])).Get().Should().Equal(c, a, b);
+
+    var d = await CreateHabit(owner, "Aardvark", null);
+
+    (await SearchIds(owner)).Should().Equal(c, a, b, d);
+  }
+
+  [SkippableFact]
+  public async Task Update_KeepsSortOrder()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (owner, a, b, c) = await OwnerWithThreeHabits();
+    await HabitRepo().SetOrder(owner, [c, a, b]);
+    var record = await NewVersionRecord("Renamed");
+
+    // A new version and disabling, then enabling again.
+    ((HabitVersionPrincipal?)await HabitRepo().Update(a, owner, record, false)).Should().NotBeNull();
+    ((HabitVersionPrincipal?)await HabitRepo().Update(a, owner, record with { Task = "Again" }, true)).Should().NotBeNull();
+
+    (await SearchIds(owner)).Should().Equal(c, a, b);
+    var habit = ((HabitPrincipal?)await HabitRepo().GetHabit(a))!;
+    habit.Record.Version.Should().Be(3);
+    habit.ToRes().SortOrder.Should().Be(1);
+  }
+
+  [SkippableFact]
+  public async Task Delete_ThenCreate_NewHabitStillLast()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (owner, a, b, c) = await OwnerWithThreeHabits();
+    ((Unit?)await HabitRepo().Delete(b, owner)).Should().NotBeNull();
+
+    var d = await CreateHabit(owner, "Aardvark", null);
+
+    // The gap stays: D comes after C (2), not at the habit count (2).
+    (await SortOrderOf(d)).Should().Be(3);
+    (await SearchIds(owner)).Should().Equal(a, c, d);
+  }
+
+  [SkippableFact]
+  public async Task SetOrder_WithOtherUsersHabitId_LeavesThatRowUnchanged()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (owner, a, b, _) = await OwnerWithThreeHabits();
+    var stranger = await SeedUser();
+    var s1 = await CreateHabit(stranger, "stranger first", null);
+    var s2 = await CreateHabit(stranger, "stranger second", null);
+
+    await HabitRepo().SetOrder(owner, [s2, b, a, s1]);
+
+    (await SortOrderOf(s1)).Should().Be(0);
+    (await SortOrderOf(s2)).Should().Be(1);
+    (await SearchIds(stranger)).Should().Equal(s1, s2);
+    (await SortOrderOf(b)).Should().Be(1);
+    (await SortOrderOf(a)).Should().Be(2);
+  }
+
+  // A duplicate, another user's, a deleted and an unknown id: refused, nothing written.
+  [SkippableFact]
+  public async Task Reorder_WithInvalidIds_FailsAndChangesNothing()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (owner, a, b, c) = await OwnerWithThreeHabits();
+    var deleted = await CreateHabit(owner, "gone", null);
+    ((Unit?)await HabitRepo().Delete(deleted, owner)).Should().NotBeNull();
+    var stranger = await SeedUser();
+    var foreign = await CreateHabit(stranger, "stranger", null);
+
+    foreach (var ids in new List<Guid>[] { [c, c], [c, foreign], [c, deleted], [c, Guid.NewGuid()] })
+    {
+      var result = await HabitSvc().Reorder(owner, ids);
+      result.FailureOrDefault().Should().BeOfType<InvalidRequestException>()
+        .Which.Errors.Should().ContainKey("habitIds");
+    }
+
+    (await SearchIds(owner)).Should().Equal(a, b, c);
+    (await SortOrderOf(c)).Should().Be(2);
+    (await SortOrderOf(foreign)).Should().Be(0);
+  }
+
+  [SkippableFact]
+  public async Task ReorderEndpoint_SavesOrder_RefusesOtherUser_AndRejectsBadIds()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (owner, a, b, c) = await OwnerWithThreeHabits();
+    var stranger = await SeedUser();
+    var controller = new HabitController(HabitSvc(), null!, null!, null!, null!, null!,
+      new(), new(), new(), new(), new())
+    {
+      ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext
+      {
+        HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext
+        {
+          User = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(
+            [new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Name, owner)], "test"))
+        }
+      }
+    };
+    static int? Status(Microsoft.AspNetCore.Mvc.ActionResult<ReorderHabitsRes> r) =>
+      (r.Result as Microsoft.AspNetCore.Mvc.Infrastructure.IStatusCodeActionResult)?.StatusCode;
+
+    var ok = await controller.Reorder(owner, new ReorderHabitsReq([b.ToString(), c.ToString()]));
+    ok.Result.Should().BeOfType<Microsoft.AspNetCore.Mvc.OkObjectResult>()
+      .Which.Value.Should().BeOfType<ReorderHabitsRes>()
+      .Which.HabitIds.Should().Equal(b.ToString(), c.ToString(), a.ToString());
+
+    Status(await controller.Reorder(stranger, new ReorderHabitsReq([a.ToString()]))).Should().Be(403);
+    Status(await controller.Reorder(owner, new ReorderHabitsReq(["not-a-guid"]))).Should().Be(400);
+    Status(await controller.Reorder(owner, new ReorderHabitsReq([a.ToString(), a.ToString()]))).Should().Be(400);
+
+    (await SearchIds(owner)).Should().Equal(b, c, a);
   }
 }

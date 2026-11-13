@@ -22,6 +22,11 @@ namespace Domain.Habit
         Task<Result<HabitVersionPrincipal?>> Update(Guid habitId, string userId, HabitVersionRecord versionRecord, bool enabled);
         Task<Result<Unit?>> Delete(Guid habitId, string userId);                              // Soft delete habit
 
+        // Habit order: the user's non-deleted habit ids by SortOrder, then Id.
+        Task<Result<List<Guid>>> GetOrderedIds(string userId);
+        // Sets each listed habit's SortOrder to its index; only the user's non-deleted habits change.
+        Task<Result<Unit>> SetOrder(string userId, IReadOnlyList<Guid> orderedIds);
+
         // Habit Execution Methods
         // Habit task name for an execution (penalty emails); null when the execution is gone.
         Task<Result<string?>> GetTaskNameByExecutionId(Guid executionId);

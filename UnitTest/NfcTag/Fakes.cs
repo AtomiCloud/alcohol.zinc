@@ -83,6 +83,8 @@ public sealed class FakeHabitService : IHabitService
 
   public Task<Result<Unit?>> Delete(Guid habitId, string userId) => throw new NotImplementedException();
 
+  public Task<Result<List<Guid>>> Reorder(string userId, List<Guid> habitIds) => throw new NotImplementedException();
+
   public Task<Result<HabitExecutionPrincipal>> CompleteHabit(string userId, Guid habitId, string? notes) =>
     throw new NotImplementedException();
 

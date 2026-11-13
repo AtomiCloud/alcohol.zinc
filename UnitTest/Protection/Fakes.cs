@@ -13,11 +13,31 @@ namespace UnitTest.Protection;
 // is DB-backed and covered in IntTest/Check/CheckScenarioTests.cs.
 
 // ---------------------------------------------------------------------------
-// IHabitRepository: only GetHabit / Update are backed (HabitService.Update).
+// IHabitRepository: only GetHabit / Update (HabitService.Update) and
+// GetOrderedIds / SetOrder (HabitService.Reorder) are backed.
+// Inspectable: SetOrderCalls.
 // ---------------------------------------------------------------------------
 public sealed class FakeHabitRepository : IHabitRepository
 {
   public List<HabitPrincipal> Habits { get; } = [];
+  public List<(string UserId, List<Guid> OrderedIds)> SetOrderCalls { get; } = [];
+
+  public Task<Result<List<Guid>>> GetOrderedIds(string userId)
+    => Task.FromResult<Result<List<Guid>>>(Habits.Where(h => h.UserId == userId)
+      .OrderBy(h => h.Record.SortOrder).Select(h => h.Id).ToList());
+
+  public Task<Result<Unit>> SetOrder(string userId, IReadOnlyList<Guid> orderedIds)
+  {
+    var ids = orderedIds.ToList();
+    SetOrderCalls.Add((userId, ids));
+    for (var i = 0; i < Habits.Count; i++)
+    {
+      var index = ids.IndexOf(Habits[i].Id);
+      if (index >= 0 && Habits[i].UserId == userId)
+        Habits[i] = Habits[i] with { Record = Habits[i].Record with { SortOrder = index } };
+    }
+    return Task.FromResult<Result<Unit>>(new Unit());
+  }
 
   public Task<Result<HabitPrincipal?>> GetHabit(Guid habitId)
     => Task.FromResult<Result<HabitPrincipal?>>(Habits.FirstOrDefault(h => h.Id == habitId));
@@ -271,12 +291,13 @@ public sealed class FakeEntitlementService : IEntitlementService
 // ---------------------------------------------------------------------------
 public static class HabitFakeFactory
 {
-  public static HabitPrincipal Habit(Guid id, string userId, ushort version = 1, bool enabled = true)
+  public static HabitPrincipal Habit(Guid id, string userId, ushort version = 1, bool enabled = true,
+    int sortOrder = 0)
     => new()
     {
       Id = id,
       UserId = userId,
-      Record = new HabitRecord { Version = version, Enabled = enabled }
+      Record = new HabitRecord { Version = version, Enabled = enabled, SortOrder = sortOrder }
     };
 
   public static HabitVersionPrincipal Version(Guid id, Guid habitId, ushort version = 1,

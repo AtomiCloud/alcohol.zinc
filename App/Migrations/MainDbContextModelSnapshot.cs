@@ -538,6 +538,9 @@ namespace App.Migrations
                     b.Property<Guid?>("RoutineId")
                         .HasColumnType("uuid");
 
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
                     b.Property<string>("UserId")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -553,6 +556,8 @@ namespace App.Migrations
                     b.HasIndex("UserId");
 
                     b.HasIndex("Version");
+
+                    b.HasIndex("UserId", "SortOrder");
 
                     b.ToTable("Habits");
                 });

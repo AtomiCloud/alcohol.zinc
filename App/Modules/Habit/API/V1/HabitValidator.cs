@@ -184,3 +184,16 @@ public class SearchOverviewQueryValidator : AbstractValidator<OverviewQuery>
     });
   }
 }
+
+public class ReorderHabitsReqValidator : AbstractValidator<ReorderHabitsReq>
+{
+  public ReorderHabitsReqValidator()
+  {
+    RuleFor(x => x.HabitIds)
+      .NotNull();
+
+    RuleForEach(x => x.HabitIds)
+      .Must(id => Guid.TryParse(id, out _))
+      .WithMessage("Each habit id must be a GUID.");
+  }
+}

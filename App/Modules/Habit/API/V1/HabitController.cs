@@ -27,7 +27,8 @@ public class HabitController(
     CreateHabitReqValidator createHabitReqValidator,
     UpdateHabitReqValidator updateHabitReqValidator,
     SearchHabitQueryValidator searchHabitQueryValidator,
-    SearchOverviewQueryValidator searchOverviewQueryValidator
+    SearchOverviewQueryValidator searchOverviewQueryValidator,
+    ReorderHabitsReqValidator reorderHabitsReqValidator
 ) : AtomiControllerBase(authHelper)
 {
   [Authorize, HttpGet("{userId}")]
@@ -74,6 +75,18 @@ public class HabitController(
 
     return this.ReturnNullableResult(result, new EntityNotFound(
         "Habit Not Found", typeof(HabitVersionPrincipal), id.ToString()));
+  }
+
+  // Saves the user's habit order: the listed habits first, then the rest in their current order.
+  [Authorize, HttpPut("{userId}/order")]
+  public async Task<ActionResult<ReorderHabitsRes>> Reorder(string userId, [FromBody] ReorderHabitsReq req)
+  {
+    var result = await this.GuardAsync(userId)
+      .ThenAwait(_ => reorderHabitsReqValidator.ValidateAsyncResult(req, "Invalid ReorderHabitsReq"))
+      .ThenAwait(validReq => service.Reorder(userId, validReq.ToDomain()))
+      .Then(order => order.ToRes(), Errors.MapNone);
+
+    return this.ReturnResult(result);
   }
 
   [Authorize, HttpDelete("{userId}/{id:guid}")]
