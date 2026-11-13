@@ -1,0 +1,17 @@
+name: Chart Test
+
+on:
+  workflow_call:
+
+jobs:
+  render:
+    name: Render API chart
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: AtomiCloud/actions.setup-nix@v2
+        with:
+          namespacelabs: 'false'
+
+      # Fails if a deploy would recreate the API or drop it below one ready pod.
+      - name: Chart render test
+        run: nix develop -c pls helm:render-test
