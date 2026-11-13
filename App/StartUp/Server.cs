@@ -92,6 +92,7 @@ public class Server(
     services.AddProblemDetailsService(errorPortal.CurrentValue, app.CurrentValue)
       .AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());
     services.AddControllers();
+    services.AddHealthService();
 
     services.AddEndpointsApiExplorer();
     services.AddApiVersioning(options =>
@@ -246,6 +247,7 @@ public class Server(
 
     if (auth.CurrentValue.Enabled) webapp.UseAuthService();
     webapp.MapControllers();
+    webapp.MapHealthService();
     webapp.Run();
   }
 }

@@ -135,6 +135,26 @@ These financial storage patterns are used throughout:
 
 This ensures all financial calculations are precise and audit-compliant.
 
+## Deploys (rolling update)
+
+The API rolls out one pod at a time: the old pod keeps serving until the new one passes
+`GET /health/ready` (it can reach the database), and keeps serving indefinitely if the new
+one never gets there. The migration Job (an Argo CD `Sync` hook, wave 3) still finishes
+before the API (wave 4) is applied. `pls helm:render-test` checks the chart for this.
+
+- **Migrations must work with the previous release's code.** The previous release keeps
+  serving after the migration has run. Add first (nullable or defaulted columns, new
+  tables), and remove or tighten in a later release once no running code needs the old shape.
+- **Background jobs run on both pods for up to a minute.** Anything a hosted service does
+  must be safe when two pods do it at once (row claims such as `FOR UPDATE SKIP LOCKED`,
+  or the renewal lease in `TryClaimRenewal`).
+- **A rotated secret needs a restart.** The pod only reads the `zinc` Secret when it starts,
+  and a deploy no longer recreates it: run `kubectl -n alcohol rollout restart deploy/zinc-api`.
+  A change to `appSettings` rolls the pod by itself (the `checksum/config` annotation).
+- **Health endpoints**: `GET /health/live` (the process is serving, no dependency checks)
+  and `GET /health/ready` (the database is reachable). Both are anonymous and not in the
+  OpenAPI document. `GET /` reports the deployed version.
+
 ## Charity payout (disbursement)
 
 How a failed habit's money actually reaches the charity, end to end:
