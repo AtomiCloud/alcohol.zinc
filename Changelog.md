@@ -1,3 +1,10 @@
+## [1.41.1](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.41.0...v1.41.1) (2026-11-13)
+
+
+### 🐛 Bug Fixes 🐛
+
+* free plan gets 3 skips a month and no freezes ([cb7a944](https://github.com/AtomiCloud/alcohol.zinc/commit/cb7a94494e0d9275748d1f406cf41953550edca5))
+
 ## [1.41.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.40.0...v1.41.0) (2026-11-12)
 
 
