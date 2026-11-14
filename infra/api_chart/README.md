@@ -25,10 +25,14 @@ A Chart to deploy .NET Microservice
 | ingress.hosts[0].paths[0].path | string | `"/"` |  |
 | ingress.hosts[0].paths[0].pathType | string | `"ImplementationSpecific"` |  |
 | ingress.tls | list | `[]` |  |
+| lifecycle.preStop.exec.command[0] | string | `"sleep"` |  |
+| lifecycle.preStop.exec.command[1] | string | `"10"` |  |
 | livenessProbe | object | `{}` |  |
+| minReadySeconds | int | `5` |  |
 | nameOverride | string | `""` |  |
 | nodeSelector | object | `{}` |  |
 | podAnnotations | object | `{}` |  |
+| podDisruptionBudget.maxUnavailable | int | `1` |  |
 | podSecurityContext | object | `{}` |  |
 | readinessProbe | object | `{}` |  |
 | replicaCount | int | `1` |  |
@@ -44,6 +48,11 @@ A Chart to deploy .NET Microservice
 | serviceTree.module | string | `"api"` |  |
 | serviceTree.platform | string | `"alcohol"` |  |
 | serviceTree.service | string | `"dotnet"` |  |
+| startupProbe | object | `{}` |  |
+| strategy.rollingUpdate.maxSurge | int | `1` |  |
+| strategy.rollingUpdate.maxUnavailable | int | `0` |  |
+| strategy.type | string | `"RollingUpdate"` |  |
+| terminationGracePeriodSeconds | int | `60` |  |
 | tolerations | list | `[]` |  |
 | topologySpreadConstraints | object | `{}` |  |
 

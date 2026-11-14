@@ -57,6 +57,30 @@ resources: {}
 
 autoscaling: {}
 
+# Keep the old pod serving until the new one is ready.
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+
+minReadySeconds: 5
+
+# Covers the preStop sleep plus the .NET host's 30 s shutdown timeout.
+terminationGracePeriodSeconds: 60
+
+# Lets the ingress drop the pod from its upstreams before Kestrel gets SIGTERM.
+lifecycle:
+  preStop:
+    exec:
+      command: ['sleep', '10']
+
+# Rendered only when replicaCount > 1 or autoscaling is on.
+podDisruptionBudget:
+  maxUnavailable: 1
+
+startupProbe: {}
+
 readinessProbe: {}
 
 livenessProbe: {}

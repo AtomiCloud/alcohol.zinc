@@ -1,0 +1,13 @@
+{{- if or .Values.autoscaling.enabled (gt (int .Values.replicaCount) 1) }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "dotnet-chart.fullname" . }}
+  labels: {{- include "dotnet-chart.labels" . | nindent 4 }}
+  annotations: {{- include "dotnet-chart.annotations" . | nindent 4 }}
+spec:
+  maxUnavailable: {{ .Values.podDisruptionBudget.maxUnavailable }}
+  selector:
+    matchLabels:
+      {{- include "dotnet-chart.selectorLabels" . | nindent 6 }}
+{{- end }}
