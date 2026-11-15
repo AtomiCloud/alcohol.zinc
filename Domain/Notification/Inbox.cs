@@ -6,6 +6,7 @@ namespace Domain.Notification;
 public static class InboxKinds
 {
   public const string FriendRequest = "friend_request"; // Actor asked to be your friend
+  public const string FriendRequestResolved = "friend_request_resolved";
   public const string FriendAccepted = "friend_accepted"; // Actor accepted your request or invite
   public const string FriendMissed = "friend_missed"; // Actor missed a habit you watch
   public const string CharityDecommissioned = "charity_decommissioned"; // A charity your habits give to no longer takes donations
@@ -25,7 +26,10 @@ public record InboxNotificationRecord
 
   // Posting the same key to the same user twice records it once (outbox retries).
   public string? DedupeKey { get; init; }
+  public Guid? FriendRequestId { get; init; }
 }
+
+public record InboxFriendRequest(Guid? RequestId, string Status, DateTime? ResolvedAtUtc);
 
 public record InboxNotificationPrincipal
 {
@@ -34,6 +38,7 @@ public record InboxNotificationPrincipal
   public required DateTime CreatedAtUtc { get; init; }
   public DateTime? ReadAtUtc { get; init; }
   public required InboxNotificationRecord Record { get; init; }
+  public InboxFriendRequest? FriendRequest { get; init; }
 }
 
 public record InboxSearch

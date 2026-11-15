@@ -15,7 +15,19 @@ public enum FriendRelation
 
 public record FriendCandidate(FriendUser User, FriendRelation Relation);
 
-public record FriendRequestPrincipal(FriendUser From, FriendUser To, DateTime CreatedAtUtc);
+public enum FriendRequestStatus
+{
+  Pending = 0,
+  Accepted = 1,
+  Declined = 2,
+  Cancelled = 3,
+}
+
+public record FriendRequestPrincipal(Guid Id, FriendUser From, FriendUser To, DateTime CreatedAtUtc,
+  FriendRequestStatus Status, DateTime? ResolvedAtUtc);
+
+// Changed distinguishes the transaction that made the transition from an idempotent retry.
+public record FriendRequestChange(FriendRequestPrincipal? Request, FriendRelation Relation, bool Changed);
 
 public record FriendRequests(List<FriendRequestPrincipal> Incoming, List<FriendRequestPrincipal> Outgoing);
 
@@ -36,10 +48,12 @@ public interface IFriendService
 
   Task<Result<FriendRequests>> ListRequests(string userId);
 
-  // Accepts fromUserId's request and notifies them. Null when there is no such request.
+  Task<Result<FriendRequestPrincipal>> GetRequest(string userId, Guid requestId);
+  Task<Result<FriendRequestPrincipal>> ResolveRequest(string userId, Guid requestId, string decision);
+
+  // Legacy pair-only mutations require an app update and never write.
   Task<Result<FriendshipPrincipal?>> Accept(string userId, string fromUserId);
 
-  // Declines an incoming request or cancels an outgoing one, silently. Null when none.
   Task<Result<Unit?>> DeleteRequest(string userId, string otherUserId);
 
   Task<Result<List<FriendshipPrincipal>>> ListFriends(string userId);
@@ -64,14 +78,11 @@ public interface IFriendRepository
   Task<Result<List<FriendCandidate>>> Search(string userId, string query, int limit);
   Task<Result<FriendRelation>> Relation(string userId, string otherUserId);
 
-  Task<Result<Unit>> CreateRequest(string fromUserId, string toUserId);
+  // Re-reads the pair under ordered user row locks. Asking back accepts the pending occurrence.
+  Task<Result<FriendRequestChange>> CreateRequest(string fromUserId, string toUserId);
   Task<Result<FriendRequests>> ListRequests(string userId);
-
-  // Deletes the request either way (from -> to or to -> from). False when there was none.
-  Task<Result<bool>> DeleteRequest(string userId, string otherUserId);
-
-  // Creates both directions and deletes any request between them, in one transaction. Idempotent.
-  Task<Result<FriendshipPrincipal>> CreateFriendship(string userId, string friendUserId);
+  Task<Result<FriendRequestPrincipal>> GetRequest(string userId, Guid requestId);
+  Task<Result<FriendRequestChange>> ResolveRequest(string userId, Guid requestId, FriendRequestStatus status);
 
   Task<Result<List<FriendshipPrincipal>>> ListFriends(string userId);
 
