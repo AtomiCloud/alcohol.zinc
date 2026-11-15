@@ -253,6 +253,46 @@ public class FriendIntegrationTests : IAsyncLifetime
   }
 
   [SkippableFact]
+  public async Task Accept_WhileInboxForeignKeyLocksAreHeld_PersistsOutcomeFriendshipAndNotice()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var sender = await SeedUser("alice");
+    var recipient = await SeedUser("bob");
+    await Service(_db).SendRequest(sender, recipient);
+    var request = (await Service(_db).ListRequests(recipient)).Get().Incoming.Single();
+
+    await using var posting = PenaltyIntegrationTests.NewContext(_conn!);
+    await using var notification = await posting.Database.BeginTransactionAsync();
+    // The real INSERT must complete both Users FK KEY SHARE checks before acceptance starts.
+    // Keep its transaction open as a barrier: those locks remain held throughout acceptance.
+    (await new InboxService(new InboxRepository(posting, NullLogger<InboxRepository>.Instance))
+      .Post(sender, new InboxNotificationRecord
+      {
+        Kind = InboxKinds.FriendMissed, Title = "Concurrent notice", Body = "Another in-flight delivery",
+        ActorUserId = recipient
+      })).IsSuccess().Should().BeTrue();
+    await using (var resolving = PenaltyIntegrationTests.NewContext(_conn!))
+    {
+      var result = await Service(resolving).ResolveRequest(recipient, request.Id, "accept");
+      result.IsSuccess().Should().BeTrue("completed foreign-key checks must not block a pair decision; failure was {0}",
+        result.FailureOrDefault()?.GetType().Name);
+      result.Get().Status.Should().Be(FriendRequestStatus.Accepted);
+    }
+    await notification.CommitAsync();
+
+    await using var fresh = PenaltyIntegrationTests.NewContext(_conn!);
+    (await new InboxService(new InboxRepository(fresh, NullLogger<InboxRepository>.Instance))
+      .Search(new InboxSearch { UserId = sender })).Get().Where(x => x.Record.Kind == InboxKinds.FriendAccepted)
+      .Should().ContainSingle().Which.Record.ActorUserId.Should().Be(recipient);
+    var retained = (await Service(fresh).GetRequest(recipient, request.Id)).Get();
+    retained.Status.Should().Be(FriendRequestStatus.Accepted);
+    retained.CreatedAtUtc.Should().Be(request.CreatedAtUtc);
+    retained.ResolvedAtUtc.Should().NotBeNull();
+    (await Service(fresh).ListFriends(sender)).Get().Select(x => x.Friend.UserId).Should().Equal(recipient);
+    (await Service(fresh).ListFriends(recipient)).Get().Select(x => x.Friend.UserId).Should().Equal(sender);
+  }
+
+  [SkippableFact]
   public async Task ConcurrentAcceptDecline_OneRetainedWinner_OneConflict()
   {
     Skip.If(_conn == null, SkipReason);
