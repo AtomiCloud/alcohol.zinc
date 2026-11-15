@@ -15,5 +15,6 @@ public static class InboxMapper
 
   public static InboxNotificationRes ToRes(this InboxNotificationPrincipal p) =>
     new(p.Id, p.Record.Kind, p.Record.Title, p.Record.Body, p.Record.ActorUserId, p.Record.Data,
-      p.CreatedAtUtc, p.ReadAtUtc);
+      p.CreatedAtUtc, p.ReadAtUtc, p.FriendRequest is { } r
+        ? new InboxFriendRequestRes(r.RequestId, r.Status, r.ResolvedAtUtc) : null);
 }

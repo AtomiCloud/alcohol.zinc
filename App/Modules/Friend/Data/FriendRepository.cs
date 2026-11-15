@@ -1,5 +1,6 @@
 using App.StartUp.Database;
 using CSharp_Result;
+using Domain.Exceptions;
 using Domain.Friend;
 using EntityFramework.Exceptions.Common;
 using Microsoft.EntityFrameworkCore;
@@ -43,10 +44,10 @@ public class FriendRepository(MainDbContext db, ILogger<FriendRepository> logger
         .Where(x => x.UserId == userId && ids.Contains(x.FriendUserId))
         .Select(x => x.FriendUserId).ToListAsync()).ToHashSet();
       var incoming = (await db.FriendRequests.AsNoTracking()
-        .Where(x => x.ToUserId == userId && ids.Contains(x.FromUserId))
+        .Where(x => x.Status == FriendRequestStatus.Pending && x.ToUserId == userId && ids.Contains(x.FromUserId))
         .Select(x => x.FromUserId).ToListAsync()).ToHashSet();
       var outgoing = (await db.FriendRequests.AsNoTracking()
-        .Where(x => x.FromUserId == userId && ids.Contains(x.ToUserId))
+        .Where(x => x.Status == FriendRequestStatus.Pending && x.FromUserId == userId && ids.Contains(x.ToUserId))
         .Select(x => x.ToUserId).ToListAsync()).ToHashSet();
 
       return users
@@ -68,9 +69,9 @@ public class FriendRepository(MainDbContext db, ILogger<FriendRepository> logger
       var friend = await db.Friendships.AsNoTracking()
         .AnyAsync(x => x.UserId == userId && x.FriendUserId == otherUserId);
       var incoming = await db.FriendRequests.AsNoTracking()
-        .AnyAsync(x => x.FromUserId == otherUserId && x.ToUserId == userId);
+        .AnyAsync(x => x.Status == FriendRequestStatus.Pending && x.FromUserId == otherUserId && x.ToUserId == userId);
       var outgoing = await db.FriendRequests.AsNoTracking()
-        .AnyAsync(x => x.FromUserId == userId && x.ToUserId == otherUserId);
+        .AnyAsync(x => x.Status == FriendRequestStatus.Pending && x.FromUserId == userId && x.ToUserId == otherUserId);
       return RelationOf(friend, incoming, outgoing);
     }
     catch (Exception e)
@@ -80,22 +81,44 @@ public class FriendRepository(MainDbContext db, ILogger<FriendRepository> logger
     }
   }
 
-  public async Task<Result<Unit>> CreateRequest(string fromUserId, string toUserId)
+  public async Task<Result<FriendRequestChange>> CreateRequest(string fromUserId, string toUserId)
   {
     FriendRequestData? data = null;
     try
     {
-      data = new FriendRequestData { FromUserId = fromUserId, ToUserId = toUserId };
-      db.FriendRequests.Add(data);
+      await using var tx = await db.Database.BeginTransactionAsync();
+      await LockPair(fromUserId, toUserId);
+      if (await db.Friendships.AnyAsync(x => x.UserId == fromUserId && x.FriendUserId == toUserId))
+        return new FriendRequestChange(null, FriendRelation.Friend, false);
+
+      // Existing opposite Pending rows from the old writer retain both IDs. Incoming wins,
+      // matching asking-back-is-accepting; acceptance reconciles the sender's outgoing row.
+      data = await Requests().Where(x => x.Status == FriendRequestStatus.Pending &&
+          ((x.FromUserId == fromUserId && x.ToUserId == toUserId) ||
+           (x.FromUserId == toUserId && x.ToUserId == fromUserId)))
+        .OrderBy(x => x.ToUserId == fromUserId ? 0 : 1).FirstOrDefaultAsync();
+      if (data?.FromUserId == fromUserId)
+        return new FriendRequestChange(data.ToPrincipal(), FriendRelation.Outgoing, false);
+      var relation = FriendRelation.Outgoing;
+      if (data != null)
+      {
+        await AcceptOccurrence(data);
+        relation = FriendRelation.Friend;
+      }
+      else
+      {
+        data = new FriendRequestData { FromUserId = fromUserId, ToUserId = toUserId };
+        db.FriendRequests.Add(data);
+      }
       await db.SaveChangesAsync();
-      return new Unit();
+      // Load the database-generated identity and participant names for the caller/notification.
+      var principal = await Requests().Where(x => x.Id == data.Id).SingleAsync();
+      await tx.CommitAsync();
+      return new FriendRequestChange(principal.ToPrincipal(), relation, true);
     }
-    catch (UniqueConstraintException)
+    catch (Exception e) when (UserLock.IsLockTimeout(e))
     {
-      // A concurrent send of the same request won: it is already there.
-      logger.LogInformation("Friend request FromUserId={FromUserId} ToUserId={ToUserId} already exists",
-        fromUserId, toUserId);
-      return new Unit();
+      return new UserBusyException(fromUserId);
     }
     catch (Exception e)
     {
@@ -105,7 +128,6 @@ public class FriendRepository(MainDbContext db, ILogger<FriendRepository> logger
     }
     finally
     {
-      // Never leave the row tracked: a failed Added entity would be re-inserted by the next SaveChanges.
       if (data != null) db.Entry(data).State = EntityState.Detached;
     }
   }
@@ -114,8 +136,9 @@ public class FriendRepository(MainDbContext db, ILogger<FriendRepository> logger
   {
     try
     {
-      var incoming = await RequestPrincipals(db.FriendRequests.Where(x => x.ToUserId == userId));
-      var outgoing = await RequestPrincipals(db.FriendRequests.Where(x => x.FromUserId == userId));
+      var pending = db.FriendRequests.Where(x => x.Status == FriendRequestStatus.Pending);
+      var incoming = await RequestPrincipals(pending.Where(x => x.ToUserId == userId));
+      var outgoing = await RequestPrincipals(pending.Where(x => x.FromUserId == userId));
       return new FriendRequests(incoming, outgoing);
     }
     catch (Exception e)
@@ -125,83 +148,93 @@ public class FriendRepository(MainDbContext db, ILogger<FriendRepository> logger
     }
   }
 
-  public async Task<Result<bool>> DeleteRequest(string userId, string otherUserId)
+  public async Task<Result<FriendRequestPrincipal>> GetRequest(string userId, Guid requestId)
   {
     try
     {
-      var affected = await db.FriendRequests
-        .Where(x => (x.FromUserId == userId && x.ToUserId == otherUserId) ||
-                    (x.FromUserId == otherUserId && x.ToUserId == userId))
-        .ExecuteDeleteAsync();
-      return affected > 0;
+      var data = await Requests().SingleOrDefaultAsync(x => x.Id == requestId &&
+        (x.FromUserId == userId || x.ToUserId == userId));
+      if (data == null) return MissingRequest(requestId);
+      return data.ToPrincipal();
     }
     catch (Exception e)
     {
-      logger.LogError(e, "DeleteRequest failed for UserId={UserId} OtherUserId={OtherUserId}", userId, otherUserId);
+      logger.LogError(e, "GetRequest failed for UserId={UserId} RequestId={RequestId}", userId, requestId);
       throw;
     }
   }
 
-  public async Task<Result<FriendshipPrincipal>> CreateFriendship(string userId, string friendUserId)
+  public async Task<Result<FriendRequestChange>> ResolveRequest(string userId, Guid requestId, FriendRequestStatus status)
   {
     try
     {
-      try
-      {
-        return await CreateFriendshipOnce(userId, friendUserId);
-      }
-      catch (UniqueConstraintException)
-      {
-        // A concurrent accept of the same pair committed its rows first; this pass sees them
-        // and only clears any requests left over.
-        logger.LogInformation("Friendship UserId={UserId} FriendUserId={FriendUserId} created concurrently",
-          userId, friendUserId);
-        return await CreateFriendshipOnce(userId, friendUserId);
-      }
-    }
-    catch (Exception e)
-    {
-      logger.LogError(e, "CreateFriendship failed for UserId={UserId} FriendUserId={FriendUserId}", userId,
-        friendUserId);
-      throw;
-    }
-  }
-
-  private async Task<FriendshipPrincipal> CreateFriendshipOnce(string userId, string friendUserId)
-  {
-    var added = new List<FriendshipData>();
-    try
-    {
+      // Read only to locate the immutable participants. All mutable state is re-read after locking.
+      var located = await Requests().SingleOrDefaultAsync(x => x.Id == requestId &&
+        (x.FromUserId == userId || x.ToUserId == userId));
+      if (located == null) return MissingRequest(requestId);
       await using var tx = await db.Database.BeginTransactionAsync();
-      var existing = await db.Friendships.AsNoTracking()
-        .Where(x => (x.UserId == userId && x.FriendUserId == friendUserId) ||
-                    (x.UserId == friendUserId && x.FriendUserId == userId))
-        .Select(x => x.UserId)
-        .ToListAsync();
+      await LockPair(located.FromUserId, located.ToUserId);
+      var data = await Requests().SingleOrDefaultAsync(x => x.Id == requestId);
+      if (data == null) return MissingRequest(requestId);
+      var allowed = status == FriendRequestStatus.Cancelled ? data.FromUserId == userId : data.ToUserId == userId;
+      if (!allowed) return new FriendRequestException(FriendRequestError.WrongRole);
+      if (data.Status != FriendRequestStatus.Pending)
+      {
+        if (data.Status != status) return new FriendRequestException(FriendRequestError.Resolved);
+        return new FriendRequestChange(data.ToPrincipal(), FriendRelation.None, false);
+      }
 
-      var now = DateTime.UtcNow;
-      if (!existing.Contains(userId))
-        added.Add(new FriendshipData { UserId = userId, FriendUserId = friendUserId, CreatedAtUtc = now });
-      if (!existing.Contains(friendUserId))
-        added.Add(new FriendshipData { UserId = friendUserId, FriendUserId = userId, CreatedAtUtc = now });
-      db.Friendships.AddRange(added);
-      await db.SaveChangesAsync();
-
-      await db.FriendRequests
-        .Where(x => (x.FromUserId == userId && x.ToUserId == friendUserId) ||
-                    (x.FromUserId == friendUserId && x.ToUserId == userId))
-        .ExecuteDeleteAsync();
+      if (status == FriendRequestStatus.Accepted) await AcceptOccurrence(data);
+      else
+        await db.FriendRequests.Where(x => x.Id == requestId).ExecuteUpdateAsync(s => s
+          .SetProperty(x => x.Status, status).SetProperty(x => x.ResolvedAtUtc, DateTime.UtcNow));
+      var resolved = await Requests().SingleAsync(x => x.Id == requestId);
       await tx.CommitAsync();
+      return new FriendRequestChange(resolved.ToPrincipal(),
+        status == FriendRequestStatus.Accepted ? FriendRelation.Friend : FriendRelation.None, true);
     }
-    finally
+    catch (Exception e) when (UserLock.IsLockTimeout(e))
     {
-      foreach (var data in added) db.Entry(data).State = EntityState.Detached;
+      return new UserBusyException(userId);
     }
+    catch (Exception e)
+    {
+      logger.LogError(e, "ResolveRequest failed for UserId={UserId} RequestId={RequestId}", userId, requestId);
+      throw;
+    }
+  }
 
-    return await db.Friendships.AsNoTracking()
-      .Where(x => x.UserId == userId && x.FriendUserId == friendUserId)
-      .Select(x => new FriendshipPrincipal(new FriendUser(x.FriendUserId, x.FriendUser!.Username), x.CreatedAtUtc))
-      .SingleAsync();
+  private async Task AcceptOccurrence(FriendRequestData request)
+  {
+    // Pair locks are already held. Both directions and the outcome are in the same transaction.
+    var now = DateTime.UtcNow;
+    await db.Database.ExecuteSqlAsync($"""
+      INSERT INTO "Friendships" ("Id", "UserId", "FriendUserId", "CreatedAtUtc") VALUES
+        (gen_random_uuid(), {request.FromUserId}, {request.ToUserId}, {now}),
+        (gen_random_uuid(), {request.ToUserId}, {request.FromUserId}, {now})
+      ON CONFLICT ("UserId", "FriendUserId") DO NOTHING
+      """);
+    await db.FriendRequests.Where(x => x.Id == request.Id).ExecuteUpdateAsync(s => s
+      .SetProperty(x => x.Status, FriendRequestStatus.Accepted).SetProperty(x => x.ResolvedAtUtc, now));
+    // Only a new acceptance may supersede the acceptor's own outgoing Pending occurrence.
+    // This is a decision now, never a guessed/backdated historical outcome.
+    await db.FriendRequests.Where(x => x.Status == FriendRequestStatus.Pending &&
+        x.FromUserId == request.ToUserId && x.ToUserId == request.FromUserId)
+      .ExecuteUpdateAsync(s => s.SetProperty(x => x.Status, FriendRequestStatus.Cancelled)
+        .SetProperty(x => x.ResolvedAtUtc, now));
+  }
+
+  private IQueryable<FriendRequestData> Requests() =>
+    db.FriendRequests.AsNoTracking().Include(x => x.From).Include(x => x.To);
+
+  private static NotFoundException MissingRequest(Guid id) =>
+    new("Friend request not found", typeof(FriendRequestPrincipal), id.ToString());
+
+  private async Task LockPair(string first, string second)
+  {
+    await db.Database.ExecuteSqlRawAsync("SET LOCAL lock_timeout = '5s'");
+    foreach (var id in new[] { first, second }.Order(StringComparer.Ordinal))
+      await db.Database.ExecuteSqlAsync($"SELECT 1 FROM \"Users\" WHERE \"Id\" = {id} FOR UPDATE");
   }
 
   public async Task<Result<List<FriendshipPrincipal>>> ListFriends(string userId)
@@ -226,6 +259,7 @@ public class FriendRepository(MainDbContext db, ILogger<FriendRepository> logger
     try
     {
       await using var tx = await db.Database.BeginTransactionAsync();
+      await LockPair(userId, friendUserId);
       var removed = await db.Friendships
         .Where(x => (x.UserId == userId && x.FriendUserId == friendUserId) ||
                     (x.UserId == friendUserId && x.FriendUserId == userId))
@@ -244,6 +278,10 @@ public class FriendRepository(MainDbContext db, ILogger<FriendRepository> logger
         "Deleted friendship UserId={UserId} FriendUserId={FriendUserId}: {Rows} rows, {Watchers} watchers",
         userId, friendUserId, removed, watchers);
       return removed > 0;
+    }
+    catch (Exception e) when (UserLock.IsLockTimeout(e))
+    {
+      return new UserBusyException(userId);
     }
     catch (Exception e)
     {
@@ -314,8 +352,9 @@ public class FriendRepository(MainDbContext db, ILogger<FriendRepository> logger
     requests.AsNoTracking()
       .OrderByDescending(x => x.CreatedAtUtc)
       .Select(x => new FriendRequestPrincipal(
+        x.Id,
         new FriendUser(x.FromUserId, x.From!.Username),
         new FriendUser(x.ToUserId, x.To!.Username),
-        x.CreatedAtUtc))
+        x.CreatedAtUtc, x.Status, x.ResolvedAtUtc))
       .ToListAsync();
 }

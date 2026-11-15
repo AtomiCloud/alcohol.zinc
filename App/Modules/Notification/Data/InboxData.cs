@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using App.Modules.Friend.Data;
 using App.Modules.Users.Data;
 
 namespace App.Modules.Notification.Data;
@@ -31,6 +32,9 @@ public class InboxNotificationData
 
   [MaxLength(128)]
   public string? DedupeKey { get; set; }
+
+  public Guid? FriendRequestId { get; set; }
+  public virtual FriendRequestData? FriendRequest { get; set; }
 
   public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
   public DateTime? ReadAtUtc { get; set; }
