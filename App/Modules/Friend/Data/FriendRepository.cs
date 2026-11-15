@@ -233,8 +233,9 @@ public class FriendRepository(MainDbContext db, ILogger<FriendRepository> logger
   private async Task LockPair(string first, string second)
   {
     await db.Database.ExecuteSqlRawAsync("SET LOCAL lock_timeout = '5s'");
+    // Serialize pair mutations without blocking Inbox's Users FK KEY SHARE checks.
     foreach (var id in new[] { first, second }.Order(StringComparer.Ordinal))
-      await db.Database.ExecuteSqlAsync($"SELECT 1 FROM \"Users\" WHERE \"Id\" = {id} FOR UPDATE");
+      await db.Database.ExecuteSqlAsync($"SELECT 1 FROM \"Users\" WHERE \"Id\" = {id} FOR NO KEY UPDATE");
   }
 
   public async Task<Result<List<FriendshipPrincipal>>> ListFriends(string userId)
