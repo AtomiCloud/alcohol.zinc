@@ -1,0 +1,176 @@
+{
+  "AllowedHosts": "localhost",
+  "Kestrel": { "Endpoints": { "Http": { "Url": "http://127.0.0.1:9003" } } },
+  "Logging": { "LogLevel": { "Default": "Warning" } },
+  "App": {
+    "Landscape": "qa-ci",
+    "Platform": "alcohol",
+    "Service": "zinc",
+    "Module": "migrator",
+    "Mode": "Migration",
+    "DefaultCors": "AllowAll",
+    "Version": "0.0.103",
+    "EnableSwagger": false,
+    "GenerateConfig": false,
+    "BlockAccountDeletionOnDebt": true
+  },
+  "Swagger": {
+    "Title": "Synthetic migrator fixture",
+    "Description": "Disposable migration acceptance",
+    "OpenApiContact": { "Name": "QA", "Email": "qa@qa.invalid" }
+  },
+  "ErrorPortal": { "Enabled": false, "Scheme": "http", "Host": "127.0.0.1:9", "EnableExceptionResponse": false },
+  "WebPortal": {
+    "Scheme": "http",
+    "Host": "127.0.0.1:9",
+    "HandoffPath": "/unused",
+    "RedirectPath": "/unused",
+    "OttExpirySeconds": 300,
+    "Cta": {}
+  },
+  "Cors": [{ "Name": "AllowAll", "PreflightMaxAge": 600 }],
+  "Logs": {
+    "Exporter": {
+      "Console": { "Enabled": false },
+      "Otlp": { "Enabled": false, "Endpoint": "http://127.0.0.1:9", "Headers": "" }
+    }
+  },
+  "Trace": {
+    "Exporter": {
+      "Console": { "Enabled": false },
+      "Otlp": { "Enabled": false, "Endpoint": "http://127.0.0.1:9", "Headers": "" }
+    }
+  },
+  "Metrics": {
+    "Exporter": {
+      "Console": { "Enabled": false },
+      "Otlp": { "Enabled": false, "Endpoint": "http://127.0.0.1:9", "Headers": "" }
+    }
+  },
+  "Database": {
+    "MAIN": {
+      "Host": "pg",
+      "Port": 5432,
+      "Database": "SET_AT_RUNTIME",
+      "User": "qa103_migrator",
+      "Password": "SET_AT_RUNTIME",
+      "Timeout": 30,
+      "AutoMigrate": false
+    }
+  },
+  "Cache": {
+    "MAIN": {
+      "Endpoints": ["127.0.0.1:9"],
+      "Password": "synthetic-unused",
+      "ConnectTimeout": 1000,
+      "AbortConnect": false,
+      "AllowAdmin": false,
+      "ConnectRetry": 0,
+      "SSL": false,
+      "SyncTimeout": 1000
+    }
+  },
+  "BlockStorage": {
+    "MAIN": {
+      "AccessKey": "synthetic-unused",
+      "SecretKey": "synthetic-unused",
+      "Bucket": "synthetic-unused",
+      "Read": { "Host": "127.0.0.1", "Port": 9, "Scheme": "http" },
+      "Write": { "Host": "127.0.0.1", "Port": 9, "Scheme": "http" },
+      "Policy": "Private",
+      "UseSSL": false,
+      "EnsureBucketCreation": false
+    }
+  },
+  "Smtp": {
+    "TRANSACTIONAL": {
+      "Host": "127.0.0.1",
+      "Port": 9,
+      "Username": "synthetic-unused",
+      "Password": "synthetic-unused",
+      "FromEmail": "qa@qa.invalid",
+      "FromName": "QA",
+      "EnableSsl": false,
+      "UseDefaultCredentials": false,
+      "Timeout": 1000
+    }
+  },
+  "HttpClient": {
+    "LOGTO": { "BaseAddress": "http://127.0.0.1:9", "Timeout": 1 },
+    "PLEDGE": { "BaseAddress": "http://127.0.0.1:9", "Timeout": 1, "BearerAuth": "synthetic-unused" },
+    "AIRWALLEX": { "BaseAddress": "http://127.0.0.1:9", "Timeout": 1 },
+    "STRAVA": { "BaseAddress": "http://127.0.0.1:9", "Timeout": 1 }
+  },
+  "Auth": {
+    "Enabled": true,
+    "Management": {
+      "Id": "synthetic-unused",
+      "Secret": "synthetic-unused",
+      "Resource": "http://127.0.0.1:9/api",
+      "Scope": "synthetic-unused"
+    },
+    "Settings": {
+      "Policies": {},
+      "Issuer": "http://127.0.0.1:9/oidc",
+      "Audience": "qa-migrator",
+      "Domain": "127.0.0.1:9/oidc",
+      "TokenValidation": {
+        "ValidateAudience": true,
+        "ValidateIssuer": true,
+        "ClockSkew": 0,
+        "ValidateLifetime": true,
+        "ValidateIssuerSigningKey": true
+      }
+    }
+  },
+  "Encryption": { "Secret": "synthetic-only-unused-000000000000" },
+  "Payment": { "Airwallex": { "Id": "synthetic-unused", "Key": "synthetic-unused", "Webhook": "synthetic-unused" } },
+  "Disbursement": {
+    "Enabled": false,
+    "MinPayoutCents": 0,
+    "MaxGroupsPerRun": 100,
+    "DonorFirstName": "QA",
+    "DonorLastName": "Synthetic",
+    "DonorEmail": "qa@qa.invalid"
+  },
+  "Strava": {
+    "Enabled": false,
+    "ClientId": "synthetic-unused",
+    "ClientSecret": "synthetic-unused",
+    "VerifyToken": "synthetic-unused",
+    "SubscriptionId": 0,
+    "CallbackUrl": "http://127.0.0.1:9/unused",
+    "AppRedirectUri": "qa-ci://unused",
+    "MaxAttempts": 1
+  },
+  "Subscription": {
+    "RenewalEnabled": false,
+    "GracePeriodDays": 7,
+    "Tiers": {
+      "free": {
+        "PriceCents": 0,
+        "Currency": "USD",
+        "HabitsMax": 2,
+        "SkipsMonthly": 3,
+        "VacationWindowsYearly": 0,
+        "FreezeBase": 0
+      },
+      "pro": {
+        "PriceCents": 499,
+        "Currency": "USD",
+        "HabitsMax": 10,
+        "SkipsMonthly": 20,
+        "VacationWindowsYearly": 6,
+        "FreezeBase": 14
+      },
+      "ultimate": {
+        "PriceCents": 799,
+        "Currency": "USD",
+        "HabitsMax": 2147483647,
+        "SkipsMonthly": 60,
+        "VacationWindowsYearly": 12,
+        "FreezeBase": 30
+      }
+    }
+  }
+}

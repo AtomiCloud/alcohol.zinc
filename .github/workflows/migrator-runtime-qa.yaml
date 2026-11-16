@@ -1,0 +1,139 @@
+name: Migrator runtime QA
+
+# Manual only. Publishing this workflow does not authorize running it.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  migrator:
+    name: Migrator ${{ matrix.platform }} (${{ matrix.execution }})
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - platform: amd64
+            execution: native
+            member: sha256:a1d8e5bbacae725261708464e4403537b63e1ee401daa6f1c0a03c27ee1ae4d7
+            config: sha256:b536bc937d29cf22c21b92f0261141af5a8530a165dcb380182540e24a233011
+          - platform: arm64
+            execution: QEMU-user emulated
+            member: sha256:ec075373bed91b5ac88e7ea524ae605e42590a5f99356518037f98006f9c48a1
+            config: sha256:19b1ba31f6e07cf508d2638e8eb4b75faf6d2cf56807f60602e77ab0e4e7d0b3
+    env:
+      CANDIDATE_SOURCE: b2e55c82392e88aff3cf99221c1ad52e9ac9de12
+      MIGRATOR_IMAGE: ghcr.io/atomicloud/alcohol.zinc/migrate@${{ matrix.member }}
+      EXPECTED_CONFIG: ${{ matrix.config }}
+      MIGRATOR_PLATFORM: ${{ matrix.platform }}
+      MIGRATOR_QA_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.platform }}
+      POSTGRES_IMAGE: docker.io/library/postgres@sha256:6f7593c161689b6b02c78668b314af7da8811b592c5519108c57a49d0b6ad788
+      POSTGRES_CONFIG: sha256:140936e8665d5274aa58df31b722693b4b451c541bb0f1a263a345d424bfacb4
+    steps:
+      - name: Check out reviewed test source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Initialize private runner directories and evidence
+        env:
+          DOCKER_CONFIG: ${{ runner.temp }}/migrator-docker-empty
+          QA_EVIDENCE: ${{ runner.temp }}/migrator-evidence
+          TEST_SOURCE: ${{ github.sha }}
+          TEST_WORKFLOW: ${{ github.workflow_ref }}
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -- "$DOCKER_CONFIG" "$QA_EVIDENCE"
+          printf 'DOCKER_CONFIG=%s\nQA_EVIDENCE=%s\n' "$DOCKER_CONFIG" "$QA_EVIDENCE" >> "$GITHUB_ENV"
+          python3 - <<'PY'
+          import json, os, pathlib
+          fields = ("CANDIDATE_SOURCE", "TEST_SOURCE", "TEST_WORKFLOW", "MIGRATOR_PLATFORM",
+                    "MIGRATOR_QA_RUN_ID", "MIGRATOR_IMAGE", "EXPECTED_CONFIG",
+                    "POSTGRES_IMAGE", "POSTGRES_CONFIG")
+          metadata = {key: os.environ[key] for key in fields}
+          metadata["runtime"] = "NOT_RUN"
+          pathlib.Path(os.environ["QA_EVIDENCE"], "workflow.json").write_text(
+              json.dumps(metadata, indent=2) + "\n")
+          PY
+
+      # This action runs privileged binfmt registration on this disposable runner.
+      # No buildx, builder, login, OIDC, cache or publishing action is inherited.
+      - name: Register ARM64 QEMU on the ephemeral runner
+        if: matrix.platform == 'arm64'
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+        with:
+          image: docker.io/tonistiigi/binfmt@sha256:465d3fdd28d0f2b871ba4b4ec98bd183292e96167f00d9fd40bd249f8632d705
+          platforms: arm64
+          cache-image: false
+
+      # Both exact published manifests were retrievable anonymously at preparation.
+      # A future pull denial is a blocker, not permission to add credentials.
+      - name: Fetch exact public images without registry credentials
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          docker --config "$DOCKER_CONFIG" pull --platform "linux/$MIGRATOR_PLATFORM" "$MIGRATOR_IMAGE"
+          docker --config "$DOCKER_CONFIG" pull --platform linux/amd64 "$POSTGRES_IMAGE"
+          test "$(docker image inspect --format '{{.Id}}' "$MIGRATOR_IMAGE")" = "$EXPECTED_CONFIG"
+          test "$(docker image inspect --format '{{.Id}}' "$POSTGRES_IMAGE")" = "$POSTGRES_CONFIG"
+
+      - name: Run QA-frozen disposable migration assertions
+        id: runtime
+        run: |
+          set -euo pipefail
+          test ! -e "$DOCKER_CONFIG/config.json"
+          timeout --signal=TERM --kill-after=20s 15m \
+            python3 .github/qa/migrator-runtime/run.py \
+              --platform "$MIGRATOR_PLATFORM" \
+              --image "$MIGRATOR_IMAGE" \
+              --expected-config "$EXPECTED_CONFIG" \
+              --postgres-image "$POSTGRES_IMAGE" \
+              --output "$QA_EVIDENCE/runtime"
+
+      - name: Always attempt owned resource cleanup
+        id: cleanup
+        if: always()
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          label="lazytax.migrator-qa.run=$MIGRATOR_QA_RUN_ID"
+          containers="$(docker ps --all --quiet --filter "label=$label")"
+          if [ -n "$containers" ]; then
+            printf '%s\n' "$containers" | xargs --no-run-if-empty docker rm --force --volumes
+          fi
+          networks="$(docker network ls --quiet --filter "label=$label")"
+          if [ -n "$networks" ]; then
+            printf '%s\n' "$networks" | xargs --no-run-if-empty docker network rm
+          fi
+
+      - name: Record workflow outcomes without raw logs or environment
+        if: always()
+        env:
+          RUNTIME_OUTCOME: ${{ steps.runtime.outcome }}
+          CLEANUP_OUTCOME: ${{ steps.cleanup.outcome }}
+        run: |
+          if [ -d "$QA_EVIDENCE" ]; then
+            python3 - <<'PY'
+          import json, os, pathlib
+          pathlib.Path(os.environ["QA_EVIDENCE"], "outcome.json").write_text(
+              json.dumps({"runtimeStepOutcome": os.environ["RUNTIME_OUTCOME"],
+                          "cleanupStepOutcome": os.environ["CLEANUP_OUTCOME"],
+                          "cancellationOrMissingEvidence": "INCOMPLETE, never acceptance"}, indent=2) + "\n")
+          PY
+          fi
+
+      - name: Always attempt sanitized evidence upload
+        if: always()
+        timeout-minutes: 1
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: migrator-runtime-${{ matrix.platform }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/migrator-evidence/
+          if-no-files-found: error
+          retention-days: 7
