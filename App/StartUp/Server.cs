@@ -81,6 +81,7 @@ public class Server(
 
     services.AddStartupOptions();
     services.AddHttpContextAccessor();
+    services.AddCompressionService();
 
     // Allow for ContentInspector to be available.
     services.AddMimeDetectionService()
@@ -234,6 +235,11 @@ public class Server(
     webapp.UseExceptionHandler();
 
     if (errorPortal.CurrentValue.EnableExceptionResponse) webapp.UseDeveloperExceptionPage();
+
+    // After both exception handlers on purpose: the developer exception page echoes request headers
+    // (including Authorization), so it must never be compressed. Everything after it (swagger.json,
+    // controller replies, problem+json) is.
+    webapp.UseCompressionService();
 
 
     if (app.CurrentValue.EnableSwagger) webapp.UseSwaggerService();
