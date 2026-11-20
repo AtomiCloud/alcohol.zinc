@@ -64,6 +64,15 @@ atomi.cloud/chart: {{ include "dotnet-chart.chart" . }}
 {{- end }}
 
 {{/*
+Settings that always win: GET / reports the deployed version (the chart appVersion,
+which scripts/ci/helm.sh sets to the release version).
+*/}}
+{{- define "dotnet-chart.versionSettings" -}}
+App:
+  Version: {{ .Chart.AppVersion | quote }}
+{{- end }}
+
+{{/*
 Selector labels
 */}}
 {{- define "dotnet-chart.selectorLabels" -}}

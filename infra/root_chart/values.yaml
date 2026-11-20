@@ -30,9 +30,10 @@ bromine:
 
 api:
   enabled: true
+  # Not an Argo CD hook: Argo CD deletes and recreates hooks on every sync, which took the
+  # API down on each deploy. Wave 4 still applies it after the migration Job (wave 3).
   annotations:
     argocd.argoproj.io/sync-wave: '4'
-    argocd.argoproj.io/hook: Sync
     drop_log: 'true'
   nameOverride: 'zinc-api'
 
@@ -97,16 +98,32 @@ api:
       memory: 128Mi
 
   autoscaling: {}
-  readinessProbe:
-    periodSeconds: 30
+
+  # Up to 3 minutes to start; liveness and readiness only begin after it passes.
+  startupProbe:
+    periodSeconds: 2
+    timeoutSeconds: 2
+    failureThreshold: 90
     httpGet:
-      path: /
+      path: /health/live
       port: http
 
-  livenessProbe:
-    periodSeconds: 30
+  # Traffic only reaches a pod that can reach the database.
+  readinessProbe:
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
     httpGet:
-      path: /
+      path: /health/ready
+      port: http
+
+  # No dependency checks, so a database blip never restarts pods.
+  livenessProbe:
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 6
+    httpGet:
+      path: /health/live
       port: http
 
   nodeSelector: {}

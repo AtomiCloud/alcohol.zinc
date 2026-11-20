@@ -46,3 +46,89 @@ tasks:
       - >-
         echo "dragonfly: $(skopeo list-tags docker://ghcr.io/dragonflydb/dragonfly/helm/dragonfly 
         | jq -r '.Tags[]' | sort -V | tail -n 1)"
+  render-test:
+    desc: >-
+      Checks that the API chart rolls out without downtime on pichu, pikachu and raichu
+      (CI runs this on every push). Kept in the Taskfile, not scripts/ci/*.sh: commits are
+      signed through the GitHub API, which cannot set a new file's executable bit.
+    silent: true
+    cmds:
+      - |
+        set -euo pipefail
+        work="$(mktemp -d)"
+        trap 'rm -rf "$work"' EXIT
+        cp -r infra "$work/infra"
+        chart="$work/infra/root_chart"
+        # Like scripts/ci/helm.sh, every Chart.yaml carries the release version.
+        ver=v0.0.0-render-test
+        find "$work/infra" -name Chart.yaml -exec yq -i ".appVersion = \"$ver\"" {} \;
+        helm dependency build "$chart" >/dev/null
+
+        fails=0
+        fail() { echo "FAIL [$1] $2"; fails=$((fails + 1)); }
+        render() { out="$1"; shift; helm template zinc "$chart" -n alcohol -f "$chart/values.yaml" "$@" >"$out"; }
+        api='select(.metadata.labels."atomi.cloud/module" == "api")'
+        dep='select(.kind == "Deployment" and .metadata.labels."atomi.cloud/module" == "api")'
+        c='.spec.template.spec.containers[0]'
+
+        for l in pichu pikachu raichu; do
+          f="$work/$l.yaml"
+          render "$f" -f "$chart/values.$l.yaml"
+
+          # Argo CD deletes and recreates hook resources on every sync: the API must not be one.
+          hooked="$(yq -N "$api | select(.metadata.annotations.\"argocd.argoproj.io/hook\" != null) | .kind + \"/\" + .metadata.name" "$f" | xargs)"
+          [ -z "$hooked" ] || fail "$l" "API resources are Argo CD hooks: $hooked"
+          [ "$(yq -N "$dep | .spec.template.metadata.annotations.\"argocd.argoproj.io/hook\" // \"\"" "$f")" = "" ] \
+            || fail "$l" "API pod template is an Argo CD hook"
+          job="$(yq -N 'select(.kind == "Job" and .metadata.labels."atomi.cloud/module" == "migration") | .metadata.annotations."argocd.argoproj.io/hook" + " " + .metadata.annotations."argocd.argoproj.io/sync-wave"' "$f")"
+          [ "$job" = "Sync 3" ] || fail "$l" "migration Job must be a Sync hook in wave 3, got '$job'"
+          wave="$(yq -N "$dep | .metadata.annotations.\"argocd.argoproj.io/sync-wave\"" "$f")"
+          [ "$wave" = "4" ] || fail "$l" "API Deployment must be in sync wave 4, got '$wave'"
+
+          # Rolling update that never drops below the current pod count.
+          unavailable="$(yq -N "$dep | .spec.strategy.rollingUpdate.maxUnavailable // \"unset\"" "$f")"
+          surge="$(yq -N "$dep | .spec.strategy.rollingUpdate.maxSurge // 0" "$f")"
+          [ "$unavailable" = "0" ] || fail "$l" "maxUnavailable must be 0, got '$unavailable'"
+          [ "$surge" -ge 1 ] 2>/dev/null || fail "$l" "maxSurge must be at least 1, got '$surge'"
+
+          ready="$(yq -N "$dep | $c.readinessProbe.httpGet.path + \" \" + ($c.readinessProbe.periodSeconds // 999 | tostring)" "$f")"
+          [ "${ready% *}" = "/health/ready" ] && [ "${ready#* }" -le 5 ] \
+            || fail "$l" "readinessProbe must be /health/ready every 5 s or less, got '$ready'"
+          live="$(yq -N "$dep | $c.livenessProbe.httpGet.path // \"\"" "$f")"
+          [ "$live" = "/health/live" ] || fail "$l" "livenessProbe must be /health/live, got '$live'"
+          [ "$(yq -N "$dep | $c.startupProbe.httpGet.path // \"\"" "$f")" = "/health/live" ] \
+            || fail "$l" "startupProbe on /health/live is missing"
+
+          # nginx drops the pod before Kestrel stops; the grace period covers the sleep plus .NET's 30 s.
+          sleep_s="$(yq -N "$dep | $c.lifecycle.preStop.exec.command | select(.[0] == \"sleep\") | .[1]" "$f")"
+          grace="$(yq -N "$dep | .spec.template.spec.terminationGracePeriodSeconds // 30" "$f")"
+          if [ -z "$sleep_s" ]; then fail "$l" "preStop sleep is missing"
+          elif [ "$grace" -lt $((sleep_s + 30)) ]; then fail "$l" "terminationGracePeriodSeconds $grace < preStop sleep $sleep_s + 30"; fi
+
+          # Settings are mounted with subPath, so only a new pod sees a config change.
+          sum="$(yq -N "$dep | .spec.template.metadata.annotations.\"checksum/config\" // \"\"" "$f")"
+          render "$work/$l-changed.yaml" -f "$chart/values.$l.yaml" --set api.appSettings.RenderTest=changed
+          sum2="$(yq -N "$dep | .spec.template.metadata.annotations.\"checksum/config\" // \"\"" "$work/$l-changed.yaml")"
+          [ -n "$sum" ] && [ "$sum" != "$sum2" ] || fail "$l" "pod checksum/config missing or unchanged by appSettings"
+
+          # GET / reports the deployed version.
+          for key in settings.yaml "settings.$l.yaml"; do
+            v="$(yq -N "$api | select(.kind == \"ConfigMap\") | .data.\"$key\"" "$f" | yq -N '.App.Version // ""')"
+            [ "$v" = "$ver" ] || fail "$l" "$key App.Version must be the chart appVersion $ver, got '$v'"
+          done
+
+          pdb="$(yq -N "$api | select(.kind == \"PodDisruptionBudget\") | .spec.maxUnavailable" "$f")"
+          autoscaling="$(yq -N "$dep | .spec.replicas // \"hpa\"" "$f")"
+          if [ "$autoscaling" = "hpa" ]; then
+            [ "$pdb" = "1" ] || fail "$l" "autoscaled API needs a PodDisruptionBudget with maxUnavailable 1, got '$pdb'"
+          else
+            [ -z "$pdb" ] || fail "$l" "a single replica must not get a PodDisruptionBudget (it blocks node drains)"
+          fi
+        done
+
+        render "$work/two.yaml" -f "$chart/values.pichu.yaml" --set api.replicaCount=2
+        pdb="$(yq -N "$api | select(.kind == \"PodDisruptionBudget\") | .spec.maxUnavailable" "$work/two.yaml")"
+        [ "$pdb" = "1" ] || fail pichu "replicaCount 2 needs a PodDisruptionBudget with maxUnavailable 1, got '$pdb'"
+
+        if [ "$fails" -gt 0 ]; then echo "❌ $fails chart check(s) failed"; exit 1; fi
+        echo "✅ API chart checks passed for pichu, pikachu and raichu"
