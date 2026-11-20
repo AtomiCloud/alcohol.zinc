@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using Microsoft.AspNetCore.ResponseCompression;
+using Microsoft.Net.Http.Headers;
 
 namespace App.StartUp.Services;
 
@@ -53,6 +54,22 @@ public static class CompressionService
 
   public static IApplicationBuilder UseCompressionService(this IApplicationBuilder app)
   {
-    return app.UseWhen(c => IsCompressible(c.Request.Path), a => a.UseResponseCompression());
+    return app.UseWhen(c => IsCompressible(c.Request.Path), a =>
+    {
+      // The compression middleware only sets Vary when the request asks for compression, so a
+      // plain reply (e.g. the cacheable plans list) could be cached and replayed to a gzip client.
+      // Always say the reply depends on Accept-Encoding.
+      a.Use((c, next) =>
+      {
+        c.Response.OnStarting(() =>
+        {
+          if (!c.Response.Headers.Vary.Contains(HeaderNames.AcceptEncoding))
+            c.Response.Headers.Append(HeaderNames.Vary, HeaderNames.AcceptEncoding);
+          return Task.CompletedTask;
+        });
+        return next();
+      });
+      a.UseResponseCompression();
+    });
   }
 }

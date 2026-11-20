@@ -91,6 +91,17 @@ public sealed class ResponseCompressionTests : IAsyncLifetime
     Encoding.UTF8.GetString(body).Should().Be(TodayBody);
   }
 
+  [Theory]
+  [InlineData(null)]
+  [InlineData("identity")]
+  [InlineData("gzip")]
+  [InlineData("br")]
+  public async Task Vary_Accept_Encoding_Is_Set_Once_On_Every_Variant(string? enc)
+  {
+    var (res, _) = await Get("/api/v1/habit/u1/overview", enc);
+    res.Headers.Vary.Count(v => v.Equals("Accept-Encoding", StringComparison.OrdinalIgnoreCase)).Should().Be(1);
+  }
+
   [Fact]
   public async Task Identity_Only_Is_Plain()
   {
