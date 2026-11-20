@@ -197,7 +197,11 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
     // Friends: one pending request per ordered pair, one friendship row per direction. Every
     // user reference cascades, so deleting an account removes their side of everything.
     var friendRequest = modelBuilder.Entity<FriendRequestData>();
-    friendRequest.HasIndex(x => new { x.FromUserId, x.ToUserId }).IsUnique();
+    friendRequest.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+    friendRequest.Property(x => x.Status).HasDefaultValue(Domain.Friend.FriendRequestStatus.Pending);
+    friendRequest.HasIndex(x => new { x.FromUserId, x.ToUserId }).IsUnique().HasFilter("\"Status\" = 0");
+    friendRequest.ToTable(t => t.HasCheckConstraint("CK_FriendRequests_Outcome",
+      "\"Status\" BETWEEN 0 AND 3 AND ((\"Status\" = 0 AND \"ResolvedAtUtc\" IS NULL) OR (\"Status\" <> 0 AND \"ResolvedAtUtc\" IS NOT NULL))"));
     friendRequest.HasIndex(x => x.ToUserId);
     friendRequest.HasOne(x => x.From).WithMany().HasForeignKey(x => x.FromUserId).OnDelete(DeleteBehavior.Cascade);
     friendRequest.HasOne(x => x.To).WithMany().HasForeignKey(x => x.ToUserId).OnDelete(DeleteBehavior.Cascade);
@@ -217,6 +221,7 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
     inbox.HasIndex(x => new { x.UserId, x.DedupeKey }).IsUnique().HasFilter("\"DedupeKey\" IS NOT NULL");
     inbox.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
     inbox.HasOne(x => x.Actor).WithMany().HasForeignKey(x => x.ActorUserId).OnDelete(DeleteBehavior.Cascade);
+    inbox.HasOne(x => x.FriendRequest).WithMany().HasForeignKey(x => x.FriendRequestId).OnDelete(DeleteBehavior.SetNull);
 
     // Friend stake: one row per (habit, friend). Habit deletes are soft; the cascade covers purges.
     var watcher = modelBuilder.Entity<HabitFriendWatcherData>();

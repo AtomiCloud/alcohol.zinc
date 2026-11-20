@@ -43,55 +43,58 @@ public class FriendService(
     if (target.IsFailure()) return target.FailureOrDefault();
     if (target.Get() == null) return new NotFoundException("User not found", typeof(FriendUser), toUserId);
 
-    var relation = await repo.Relation(userId, toUserId);
-    if (relation.IsFailure()) return relation.FailureOrDefault();
-    switch (relation.Get())
-    {
-      case FriendRelation.Friend:
-      case FriendRelation.Outgoing:
-        return relation.Get();
-      case FriendRelation.Incoming:
-        // They already asked: asking back is accepting.
-        var accepted = await AcceptRequest(sender, toUserId);
-        if (accepted.IsFailure()) return accepted.FailureOrDefault();
-        return FriendRelation.Friend;
-    }
-
     var created = await repo.CreateRequest(userId, toUserId);
     if (created.IsFailure()) return created.FailureOrDefault();
+    var change = created.Get();
+    if (!change.Changed) return change.Relation;
+    var request = change.Request!;
+    if (request.Status == FriendRequestStatus.Accepted)
+    {
+      await NotifyAccepted(sender, request);
+      return change.Relation;
+    }
+
     await Notify(toUserId, new InboxNotificationRecord
     {
       Kind = InboxKinds.FriendRequest,
       Title = "Friend request",
       Body = $"{sender.Username} wants to be friends",
       ActorUserId = userId,
-      Data = JsonSerializer.Serialize(new { fromUserId = userId }),
+      Data = JsonSerializer.Serialize(new { requestId = request.Id, fromUserId = userId }),
+      FriendRequestId = request.Id,
+      DedupeKey = $"{InboxKinds.FriendRequest}:{request.Id}",
     });
-    return FriendRelation.Outgoing;
+    return change.Relation;
   }
 
   public Task<Result<FriendRequests>> ListRequests(string userId) => repo.ListRequests(userId);
 
-  public async Task<Result<FriendshipPrincipal?>> Accept(string userId, string fromUserId)
+  public Task<Result<FriendshipPrincipal?>> Accept(string userId, string fromUserId) =>
+    Task.FromResult<Result<FriendshipPrincipal?>>(new FriendRequestException(FriendRequestError.IdRequired));
+
+  public Task<Result<Unit?>> DeleteRequest(string userId, string otherUserId) =>
+    Task.FromResult<Result<Unit?>>(new FriendRequestException(FriendRequestError.IdRequired));
+
+  public Task<Result<FriendRequestPrincipal>> GetRequest(string userId, Guid requestId) =>
+    repo.GetRequest(userId, requestId);
+
+  public async Task<Result<FriendRequestPrincipal>> ResolveRequest(string userId, Guid requestId, string decision)
   {
-    var relation = await repo.Relation(userId, fromUserId);
-    if (relation.IsFailure()) return relation.FailureOrDefault();
-    if (relation.Get() != FriendRelation.Incoming) return (FriendshipPrincipal?)null;
-
-    var me = await repo.GetUser(userId);
-    if (me.IsFailure()) return me.FailureOrDefault();
-    if (me.Get() is not { } accepter) return new NotFoundException("User not found", typeof(FriendUser), userId);
-
-    var accepted = await AcceptRequest(accepter, fromUserId);
-    if (accepted.IsFailure()) return accepted.FailureOrDefault();
-    return accepted.Get();
-  }
-
-  public async Task<Result<Unit?>> DeleteRequest(string userId, string otherUserId)
-  {
-    var deleted = await repo.DeleteRequest(userId, otherUserId);
-    if (deleted.IsFailure()) return deleted.FailureOrDefault();
-    return deleted.Get() ? new Unit() : (Unit?)null;
+    var status = decision switch
+    {
+      "accept" => FriendRequestStatus.Accepted,
+      "decline" => FriendRequestStatus.Declined,
+      "cancel" => FriendRequestStatus.Cancelled,
+      _ => FriendRequestStatus.Pending,
+    };
+    if (status == FriendRequestStatus.Pending)
+      return new InvalidRequestException("decision", "Decision must be accept, decline or cancel");
+    var resolved = await repo.ResolveRequest(userId, requestId, status);
+    if (resolved.IsFailure()) return resolved.FailureOrDefault();
+    var change = resolved.Get();
+    if (change.Changed && status == FriendRequestStatus.Accepted)
+      await NotifyAccepted(change.Request!.To, change.Request);
+    return change.Request!;
   }
 
   public Task<Result<List<FriendshipPrincipal>>> ListFriends(string userId) => repo.ListFriends(userId);
@@ -126,25 +129,15 @@ public class FriendService(
     return relation.Get() == FriendRelation.Friend;
   }
 
-  private async Task<Result<FriendshipPrincipal>> AcceptRequest(FriendUser accepter, string requesterId)
-  {
-    var friendship = await repo.CreateFriendship(accepter.UserId, requesterId);
-    if (friendship.IsFailure()) return friendship.FailureOrDefault();
-    await NotifyAccepted(accepter, requesterId, friendship.Get());
-    return friendship.Get();
-  }
-
-  private Task NotifyAccepted(FriendUser accepter, string toUserId, FriendshipPrincipal friendship) =>
-    Notify(toUserId, new InboxNotificationRecord
+  private Task NotifyAccepted(FriendUser accepter, FriendRequestPrincipal request) =>
+    Notify(request.From.UserId, new InboxNotificationRecord
     {
       Kind = InboxKinds.FriendAccepted,
       Title = "New friend",
       Body = $"{accepter.Username} is now your friend",
       ActorUserId = accepter.UserId,
       Data = JsonSerializer.Serialize(new { friendUserId = accepter.UserId }),
-      // Two concurrent accepts of the same request end up with the same friendship row (and so
-      // the same SinceUtc): only one notification. A later re-friending gets a new SinceUtc.
-      DedupeKey = $"{InboxKinds.FriendAccepted}:{accepter.UserId}:{friendship.SinceUtc.Ticks}",
+      DedupeKey = $"{InboxKinds.FriendAccepted}:{request.Id}",
     });
 
   // Best effort, after the friendship change is committed: a failed notification (a failure
