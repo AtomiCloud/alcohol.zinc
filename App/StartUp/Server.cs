@@ -81,6 +81,7 @@ public class Server(
 
     services.AddStartupOptions();
     services.AddHttpContextAccessor();
+    services.AddCompressionService();
 
     // Allow for ContentInspector to be available.
     services.AddMimeDetectionService()
@@ -231,6 +232,8 @@ public class Server(
       webapp.Logger.LogInformation("Configurations");
     }
 
+    // First, so every reply (including error replies and swagger.json) can be compressed
+    webapp.UseCompressionService();
     webapp.UseExceptionHandler();
 
     if (errorPortal.CurrentValue.EnableExceptionResponse) webapp.UseDeveloperExceptionPage();
