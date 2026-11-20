@@ -1,3 +1,10 @@
+## [1.43.2](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.43.1...v1.43.2) (2026-11-20)
+
+
+### 🚀 Performance Improvement 🚀
+
+* compress JSON replies with brotli and gzip ([#106](https://github.com/AtomiCloud/alcohol.zinc/issues/106)) ([e32af34](https://github.com/AtomiCloud/alcohol.zinc/commit/e32af346c65b466420be35aedee5c2b5271252da))
+
 ## [1.43.1](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.43.0...v1.43.1) (2026-11-13)
 
 
