@@ -454,6 +454,47 @@ public class DeleteAllRemnantsIntegrationTests : IAsyncLifetime
         "the paid penalty record is kept after the account is deleted");
   }
 
+  [SkippableFact]
+  public async Task OpenDebts_MixedHistory_OnlyTheUnpaidStakedDayIsOwed()
+  {
+    // One user, several failed days: one paid (Charged), one unpaid (Pending), one with no stake.
+    // Plus a detached Charged penalty (an earlier deleted user) that must match nothing.
+    Skip.IfNot(_enabled, "requires ZINC_DELETE_TEST_DB (a Postgres host)");
+
+    var charity = new CharityData { Name = "Test Charity" };
+    _db.Charities.Add(charity);
+    await _db.SaveChangesAsync();
+    await SeedFullUser("user-A", charity.Id);          // seeded failed day: stake 1.00, no penalty row
+    var (paid, unpaid) = await SeedPenalties("user-A", charity.Id); // two more failed days
+    var seededExec = await _db.HabitExecutions
+      .Where(e => !_db.Penalties.Any(p => p.HabitExecutionId == e.Id)).Select(e => e.Id).SingleAsync();
+    // Turn the seeded day into a zero-stake day (its own version with no stake).
+    var habitId = await _db.Habits.Select(h => h.Id).SingleAsync();
+    var zeroVersion = new HabitVersionData
+    {
+      Id = Guid.NewGuid(), HabitId = habitId, CharityId = null, Version = 2, Task = "run", DaysOfWeek = ["Mon"],
+      StakeCents = 0, RatioBasisPoints = 10000, Timezone = "Asia/Singapore",
+    };
+    _db.HabitVersions.Add(zeroVersion);
+    await _db.SaveChangesAsync();
+    await _db.HabitExecutions.Where(e => e.Id == seededExec)
+      .ExecuteUpdateAsync(s => s.SetProperty(e => e.HabitVersionId, zeroVersion.Id));
+    _db.Penalties.Add(new PenaltyData
+    {
+      Id = Guid.NewGuid(), HabitExecutionId = null, UserId = null, CharityId = charity.Id, AmountCents = 999,
+      Currency = "USD", Status = (int)PenaltyStatus.Charged, PaymentIntentId = "int_old", Attempts = 1,
+    });
+    await _db.SaveChangesAsync();
+    _db.ChangeTracker.Clear();
+
+    var unpaidExec = await _db.Penalties.Where(p => p.Id == unpaid).Select(p => p.HabitExecutionId).SingleAsync();
+    var debts = (await new StreakRepository(_db, NullLogger<StreakRepository>.Instance).GetOpenDebtsForUser("user-A")).Get();
+
+    debts.Where(d => d.Amount > 0).Should().ContainSingle().Which.ExecutionId.Should().Be(unpaidExec!.Value);
+    debts.Should().NotContain(d => d.ExecutionId == _db.Penalties.Where(p => p.Id == paid).Select(p => p.HabitExecutionId).Single());
+    debts.Sum(d => d.Amount).Should().Be(1.00m, "only the unpaid 1.00 stake is owed");
+  }
+
   private static PenaltyService NewPenaltyService(MainDbContext db, IPaymentService payment) =>
     new(new PenaltyRepository(db, NullLogger<PenaltyRepository>.Instance), payment,
       new IntTest.Notification.NoopEmailNotifier(), NullLogger<PenaltyService>.Instance);
