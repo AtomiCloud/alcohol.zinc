@@ -3,7 +3,6 @@ using App.Error.V1;
 using App.StartUp.Database;
 using App.Utility;
 using CSharp_Result;
-using Domain.Penalty;
 using Domain.User;
 using EntityFramework.Exceptions.Common;
 using Microsoft.EntityFrameworkCore;
@@ -316,37 +315,27 @@ public class UserRepository(MainDbContext db, ILogger<UserRepository> logger) : 
   // Account deletion must DETACH the person from it, not erase it. Two links point at the user's data:
   //   - Penalties.UserId           -> Users           (the person)
   //   - Penalties.HabitExecutionId -> HabitExecutions (deleted explicitly by this purge)
-  // Both are nulled here so the rows survive the deletes below (the FKs are also ON DELETE SET NULL as a
-  // database backstop for any other delete path). Amount, currency, charity, payment intent, status and
-  // timestamps are kept. CharityBalances hold no user data and are untouched.
+  // Both are nulled here, before the deletes below, so the rows survive (the FKs are also ON DELETE SET
+  // NULL as a database backstop for any other delete path). Everything else on the row is kept.
   //
-  // A still-unpaid (Pending) penalty can never be charged once the person and their payment consent are
-  // gone, so it is closed as Skipped. A Processing row (claimed by an in-flight charge) is left alone: the
-  // drain settles it (Charged stays charged) or the penalty worker skips it once it sees no user.
-  // Tracked entities only, so the single SaveChangesAsync in DeleteAllRemnants persists this atomically.
+  // Only the two links are written, in one set-based UPDATE, never the status: a concurrent penalty
+  // drain may be settling one of these rows right now, and a status written from an earlier read could
+  // overwrite its result. The penalty worker closes detached rows itself when it next claims them
+  // (Skipped, or Failed for reconciliation when a payment intent already exists), and refuses to save
+  // a new payment intent on a detached row, so nothing is confirmed after detachment.
+  // Runs inside the caller's transaction (UserService.DeleteAllRemnants / DeleteAccount).
   private async Task DetachPenaltyLedger(string id)
   {
-    var penalties = await db.Penalties
+    var detached = await db.Penalties
       .Where(p => p.UserId == id
                   || db.HabitExecutions.Any(e => e.Id == p.HabitExecutionId
                                                  && db.HabitVersions.Any(v => v.Id == e.HabitVersionId
                                                                               && db.Habits.Any(h => h.Id == v.HabitId && h.UserId == id))))
-      .ToListAsync();
-    if (penalties.Count == 0) return;
-
-    logger.LogInformation("Detaching {Count} penalty records from User '{Id}' (retained, not deleted)",
-      penalties.Count, id);
-    var now = DateTime.UtcNow;
-    foreach (var p in penalties)
-    {
-      p.UserId = null;
-      p.HabitExecutionId = null;
-      if (p.Status == (int)PenaltyStatus.Pending)
-      {
-        p.Status = (int)PenaltyStatus.Skipped;
-        p.LastError = "Skipped: user account deleted before the penalty was charged";
-      }
-      p.UpdatedAt = now;
-    }
+      .ExecuteUpdateAsync(s => s
+        .SetProperty(p => p.UserId, (string?)null)
+        .SetProperty(p => p.HabitExecutionId, (Guid?)null)
+        .SetProperty(p => p.UpdatedAt, DateTime.UtcNow));
+    if (detached > 0)
+      logger.LogInformation("Detached {Count} penalty records from User '{Id}' (retained, not deleted)", detached, id);
   }
 }

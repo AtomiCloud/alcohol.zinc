@@ -59,11 +59,23 @@ public class PenaltyService(
   private async Task<Result<int>> ProcessOne(PenaltyPrincipal p, int maxAttempts)
   {
     var rec = p.Record;
-    // A penalty detached from its user or execution (account deletion sets both to NULL) can no
-    // longer be charged: the person and their payment consent are gone. Close it as Skipped —
-    // the same outcome as "no verified consent" below — so it is never retried or charged.
+    // A penalty detached from its user or execution (account deletion sets both to NULL) is never
+    // charged: the person and their payment consent are gone. Closed without calling the gateway:
+    //  - no payment intent yet -> Skipped (same outcome as "no verified consent" below);
+    //  - a payment intent exists -> an earlier attempt may already have moved money, so it is NOT
+    //    marked Skipped; it is marked Failed with a reconcile note and left for a person to settle.
+    // No email: there is no user to send it to.
     if (rec.UserId is not { } userId || rec.HabitExecutionId is not { } habitExecutionId)
-      return await repo.MarkSkipped(p.Id).Then(_ => 1, Errors.MapAll);
+    {
+      if (rec.PaymentIntentId is null)
+        return await repo.MarkSkipped(p.Id).Then(_ => 1, Errors.MapAll);
+      logger.LogWarning(
+        "Penalty {Id} was detached by account deletion with payment intent {IntentId}; needs reconciliation",
+        p.Id, rec.PaymentIntentId);
+      return await repo.MarkFailed(p.Id,
+          $"Detached by account deletion with payment intent {rec.PaymentIntentId}; reconcile with the payment provider")
+        .Then(_ => 1, Errors.MapAll);
+    }
 
     // Deterministic idempotency key tied to this penalty row: a retried or
     // concurrent charge for the same penalty collapses onto the same Airwallex

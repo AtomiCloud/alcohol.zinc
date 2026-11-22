@@ -15,6 +15,7 @@ using App.Modules.Vacation.Data;
 using App.StartUp.Database;
 using App.StartUp.Options;
 using CSharp_Result;
+using Domain.Payment;
 using Domain.Penalty;
 using Domain.User;
 using Microsoft.EntityFrameworkCore;
@@ -36,6 +37,7 @@ namespace IntTest.User;
 public class DeleteAllRemnantsIntegrationTests : IAsyncLifetime
 {
   private MainDbContext _db = null!;
+  private StaticOptionsMonitor<Dictionary<string, DatabaseOption>> _monitor = null!;
   private bool _enabled;
 
   public async Task InitializeAsync()
@@ -54,9 +56,9 @@ public class DeleteAllRemnantsIntegrationTests : IAsyncLifetime
       AutoMigrate = false,
       Timeout = 30,
     };
-    var monitor = new StaticOptionsMonitor<Dictionary<string, DatabaseOption>>(
+    _monitor = new StaticOptionsMonitor<Dictionary<string, DatabaseOption>>(
       new Dictionary<string, DatabaseOption> { [MainDbContext.Key] = opt });
-    _db = new MainDbContext(monitor, NullLoggerFactory.Instance);
+    _db = new MainDbContext(_monitor, NullLoggerFactory.Instance);
     await _db.Database.EnsureDeletedAsync();
     await _db.Database.EnsureCreatedAsync();
   }
@@ -204,8 +206,9 @@ public class DeleteAllRemnantsIntegrationTests : IAsyncLifetime
     var pending = await _db.Penalties.AsNoTracking().SingleAsync(p => p.Id == pendingA);
     pending.UserId.Should().BeNull();
     pending.HabitExecutionId.Should().BeNull();
-    pending.Status.Should().Be((int)PenaltyStatus.Skipped,
-      "an unpaid penalty of a deleted user can no longer be charged, so it is closed as Skipped");
+    pending.Status.Should().Be((int)PenaltyStatus.Pending,
+      "the purge only detaches; it never writes a status a concurrent drain could be settling");
+    pending.AmountCents.Should().Be(300);
 
     // The other user's penalties are untouched.
     var otherCharged = await _db.Penalties.AsNoTracking().SingleAsync(p => p.Id == chargedB);
@@ -214,7 +217,94 @@ public class DeleteAllRemnantsIntegrationTests : IAsyncLifetime
     var otherPending = await _db.Penalties.AsNoTracking().SingleAsync(p => p.Id == pendingB);
     otherPending.UserId.Should().Be("user-B");
     otherPending.Status.Should().Be((int)PenaltyStatus.Pending);
+
+    // The next penalty drain closes the detached unpaid penalty as Skipped WITHOUT calling the payment
+    // gateway, and still charges the other user's penalty as normal.
+    var payment = IntTest.Penalty.StubPaymentService.Succeeds("int_drain");
+    var drained = await NewPenaltyService(_db, payment).ProcessPending(batchSize: 10, maxAttempts: 5);
+    drained.IsSuccess().Should().BeTrue();
+    _db.ChangeTracker.Clear();
+    payment.ExistingIntentIdArgs.Should().ContainSingle("only user-B's penalty reaches the gateway");
+    (await _db.Penalties.AsNoTracking().SingleAsync(p => p.Id == pendingA)).Status
+      .Should().Be((int)PenaltyStatus.Skipped);
+    (await _db.Penalties.AsNoTracking().SingleAsync(p => p.Id == pendingB)).Status
+      .Should().Be((int)PenaltyStatus.Charged);
   }
+
+  [SkippableFact]
+  public async Task DetachedPenaltyWithPaymentIntent_IsFlaggedForReconciliation_NeverSkippedOrCharged()
+  {
+    // A penalty whose earlier attempt already created a payment intent may have moved money. Once the
+    // user is deleted it must not be charged again, and must not be quietly marked Skipped either.
+    Skip.IfNot(_enabled, "requires ZINC_DELETE_TEST_DB (a Postgres host)");
+
+    var charity = new CharityData { Name = "Test Charity" };
+    _db.Charities.Add(charity);
+    await _db.SaveChangesAsync();
+    await SeedFullUser("user-A", charity.Id);
+    var (_, pendingA) = await SeedPenalties("user-A", charity.Id);
+    await _db.Penalties.Where(p => p.Id == pendingA)
+      .ExecuteUpdateAsync(s => s.SetProperty(p => p.PaymentIntentId, "int_earlier_attempt").SetProperty(p => p.Attempts, 1));
+    _db.ChangeTracker.Clear();
+
+    (await new UserRepository(_db, NullLogger<UserRepository>.Instance).DeleteAllRemnants("user-A"))
+      .Get().Should().NotBeNull();
+    _db.ChangeTracker.Clear();
+
+    var payment = IntTest.Penalty.StubPaymentService.Succeeds("int_must_not_happen");
+    (await NewPenaltyService(_db, payment).ProcessPending(batchSize: 10, maxAttempts: 5)).IsSuccess().Should().BeTrue();
+    _db.ChangeTracker.Clear();
+
+    payment.ExistingIntentIdArgs.Should().BeEmpty("a detached penalty never reaches the gateway");
+    var row = await _db.Penalties.AsNoTracking().SingleAsync(p => p.Id == pendingA);
+    row.Status.Should().Be((int)PenaltyStatus.Failed);
+    row.PaymentIntentId.Should().Be("int_earlier_attempt");
+    row.LastError.Should().Contain("reconcile");
+  }
+
+  [SkippableFact]
+  public async Task UserDeletedWhileChargeInFlight_NoNewIntentIsSaved_AndSettledChargeIsKept()
+  {
+    // A drain worker claims a penalty, then the user is deleted (in another request) mid-charge.
+    //  - Saving a freshly created payment intent must now fail, so the worker never confirms it.
+    //  - A charge that the worker had already confirmed still settles: Charged, charity credited once,
+    //    and the worker's write does not re-attach the deleted user.
+    Skip.IfNot(_enabled, "requires ZINC_DELETE_TEST_DB (a Postgres host)");
+
+    var charity = new CharityData { Name = "Test Charity" };
+    _db.Charities.Add(charity);
+    await _db.SaveChangesAsync();
+    await SeedFullUser("user-A", charity.Id);
+    var (_, pendingA) = await SeedPenalties("user-A", charity.Id);
+    _db.ChangeTracker.Clear();
+
+    // Worker context claims the pending penalty (Pending -> Processing) and keeps it tracked.
+    var worker = new PenaltyRepository(_db, NullLogger<PenaltyRepository>.Instance);
+    (await worker.GetPending(10)).Get().Select(p => p.Id).Should().Contain(pendingA);
+
+    // The account is deleted through a separate context (a separate request).
+    await using (var other = new MainDbContext(_monitor, NullLoggerFactory.Instance))
+      (await new UserRepository(other, NullLogger<UserRepository>.Instance).DeleteAllRemnants("user-A"))
+        .Get().Should().NotBeNull();
+
+    var save = () => worker.SetIntentId(pendingA, "int_created_after_delete");
+    (await save.Should().ThrowAsync<InvalidOperationException>()).WithMessage("*detached*");
+
+    (await worker.MarkCharged(pendingA, "int_confirmed_before_delete")).IsSuccess().Should().BeTrue();
+    _db.ChangeTracker.Clear();
+
+    var row = await _db.Penalties.AsNoTracking().SingleAsync(p => p.Id == pendingA);
+    row.Status.Should().Be((int)PenaltyStatus.Charged);
+    row.PaymentIntentId.Should().Be("int_confirmed_before_delete");
+    row.UserId.Should().BeNull("the worker's write must not re-attach the deleted user");
+    row.HabitExecutionId.Should().BeNull();
+    (await _db.CharityBalances.AsNoTracking().SingleAsync(b => b.CharityId == charity.Id)).AccruedCents
+      .Should().Be(300);
+  }
+
+  private static PenaltyService NewPenaltyService(MainDbContext db, IPaymentService payment) =>
+    new(new PenaltyRepository(db, NullLogger<PenaltyRepository>.Instance), payment,
+      new IntTest.Notification.NoopEmailNotifier(), NullLogger<PenaltyService>.Instance);
 
   [SkippableFact]
   public async Task DeletingUserOrExecutionRows_InTheDatabase_NeverDeletesPenalties()

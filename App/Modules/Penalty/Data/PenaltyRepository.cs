@@ -192,14 +192,35 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
     {
       // Fail loud if the row is gone: returning success here would let the caller proceed to
       // confirm without a durable PaymentIntentId, reopening the duplicate_request hole.
-      var penalty = await db.Penalties.Where(x => x.Id == id).FirstOrDefaultAsync()
-        ?? throw new InvalidOperationException($"Cannot persist payment intent: penalty {id} was not found.");
       // Persist only the intent id from a successful create; status/attempts stay as-is
       // (the row remains claimed/Processing for the rest of this pass). This makes the
       // intent id durable across a confirm failure so the retry reconciles it.
-      penalty.PaymentIntentId = paymentIntentId;
-      penalty.UpdatedAt = DateTime.UtcNow;
-      await db.SaveChangesAsync();
+      //
+      // Also fail loud if the penalty was detached by an account deletion while this charge was in
+      // flight (UserId/HabitExecutionId now NULL): throwing here stops the caller BEFORE it confirms
+      // the intent, so no money moves for a deleted user. One conditional UPDATE, read fresh from the
+      // database (not a tracked entity, which may still hold the pre-deletion values).
+      var updated = await db.Penalties
+        .Where(x => x.Id == id && x.UserId != null && x.HabitExecutionId != null)
+        .ExecuteUpdateAsync(s => s
+          .SetProperty(x => x.PaymentIntentId, paymentIntentId)
+          .SetProperty(x => x.UpdatedAt, DateTime.UtcNow));
+      if (updated == 0)
+      {
+        var exists = await db.Penalties.AsNoTracking().AnyAsync(x => x.Id == id);
+        throw new InvalidOperationException(exists
+          ? $"Cannot persist payment intent: penalty {id} was detached by an account deletion."
+          : $"Cannot persist payment intent: penalty {id} was not found.");
+      }
+      // Keep a tracked copy (e.g. from the GetPending claim in this same context) in step with the
+      // row, so later reads in this pass see the persisted intent id instead of the stale null.
+      var tracked = db.Penalties.Local.FirstOrDefault(x => x.Id == id);
+      if (tracked != null)
+      {
+        var prop = db.Entry(tracked).Property(x => x.PaymentIntentId);
+        prop.CurrentValue = paymentIntentId;
+        prop.OriginalValue = paymentIntentId;
+      }
       return new Unit();
     }
     catch (Exception e)

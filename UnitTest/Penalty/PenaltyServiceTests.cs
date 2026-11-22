@@ -200,6 +200,37 @@ public class PenaltyServiceTests
     repo.MarkFailedCalls.Should().BeEmpty();
   }
 
+  [Theory]
+  [InlineData(true, false)]
+  [InlineData(false, true)]
+  public async Task Detached_WithExistingPaymentIntent_MarksFailedForReconciliation_NeverCharges(bool noUser, bool noExecution)
+  {
+    // An earlier attempt may already have moved money: never re-charge, never quietly Skip.
+    var p = Pending(attempts: 1);
+    var detached = p with
+    {
+      Record = p.Record with
+      {
+        UserId = noUser ? null : p.Record.UserId,
+        HabitExecutionId = noExecution ? null : p.Record.HabitExecutionId,
+        PaymentIntentId = "pi_earlier"
+      }
+    };
+    var repo = new FakePenaltyRepository(detached);
+    var payment = FakePaymentService.Succeeds("pi_must_not_happen");
+    var notifier = new RecordingEmailNotifier();
+    var svc = Build(repo, payment, notifier);
+
+    var res = await svc.ProcessPending(batchSize: 10, maxAttempts: 5);
+
+    ((int)res).Should().Be(1);
+    payment.ChargeCalls.Should().BeEmpty();
+    repo.MarkFailedCalls.Should().ContainSingle().Which.Id.Should().Be(detached.Id);
+    repo.MarkSkippedCalls.Should().BeEmpty();
+    repo.MarkChargedCalls.Should().BeEmpty();
+    notifier.PenaltyFailed.Should().BeEmpty("there is no user to email");
+  }
+
   [Fact]
   public async Task TransientError_BelowMax_Bumps()
   {
