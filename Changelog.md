@@ -1,3 +1,14 @@
+## [1.43.3](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.43.2...v1.43.3) (2026-11-22)
+
+
+### 🐛 Bug Fixes 🐛
+
+* close races between user deletion and the penalty drain ([e4dc827](https://github.com/AtomiCloud/alcohol.zinc/commit/e4dc827b18b37e43e19a86f2155634f1f53ff950))
+* keep penalty records when a user is deleted ([0d4f3d6](https://github.com/AtomiCloud/alcohol.zinc/commit/0d4f3d6e268177bca52e1adda39af92eefff07c1))
+* keep REQUIRES_PAYMENT_METHOD intents under reconciliation ([504e9bb](https://github.com/AtomiCloud/alcohol.zinc/commit/504e9bba27743eb43077c1308c49966ad3edaac2))
+* lock Penalties before the migration rollback guard ([39036ea](https://github.com/AtomiCloud/alcohol.zinc/commit/39036ea851affe32eea855a01f1a7be88367f2dc))
+* reconcile detached penalties and make Charged final ([d6cffd2](https://github.com/AtomiCloud/alcohol.zinc/commit/d6cffd2bf8cc2de9c947956f52d5f4eb8ac0482f))
+
 ## [1.43.2](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.43.1...v1.43.2) (2026-11-20)
 
 
