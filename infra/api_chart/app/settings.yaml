@@ -257,7 +257,7 @@ Strava:
   VerifyToken: 'your-strava-verify-token'
   SubscriptionId: 0
   CallbackUrl: 'http://localhost:9050/api/v1/Strava/callback'
-  AppRedirectUri: 'cloud.atomi.lapras.alcohol.neon.app://strava'
+  AppRedirectUri: 'cloud.durian.lapras.alcohol.neon.app://strava'
   MaxAttempts: 5
 # Subscription tier catalog + renewal worker. Single source of truth for tiers,
 # caps and prices. MUST match the public pricing page (alcohol.argon
