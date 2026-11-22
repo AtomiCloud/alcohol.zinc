@@ -1,8 +1,10 @@
+using System.Linq.Expressions;
 using App.StartUp.Database;
 using CSharp_Result;
 using Domain.Penalty;
 using EntityFramework.Exceptions.Common;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Query;
 
 namespace App.Modules.Penalty.Data;
 
@@ -111,6 +113,10 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
         await tx.RollbackAsync();
         return new Unit();
       }
+      // Re-read the locked row: an entity already tracked by this context (e.g. from the GetPending
+      // claim) would otherwise keep its earlier values, and a stale Status would bypass the
+      // already-charged check below even though the row lock is held.
+      await db.Entry(penalty).ReloadAsync();
 
       if (penalty.Status == (int)PenaltyStatus.Charged)
       {
@@ -166,17 +172,39 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
     }
   }
 
+  // Charged is final. MarkCharged has credited the charity for a Charged row, and payouts only pick
+  // Charged rows, so no later write may move a row out of Charged: not a worker whose claim went stale
+  // and was re-claimed, and not a worker closing a penalty detached by an account deletion. Each status
+  // write below is ONE conditional UPDATE read fresh from the database (Status <> Charged), never a
+  // tracked entity that may hold values from an earlier read. Afterwards any tracked copy is detached
+  // so the next read in this context re-reads the row.
+  private async Task UpdateUnlessCharged(
+    Guid id,
+    Expression<Func<SetPropertyCalls<PenaltyData>,
+      SetPropertyCalls<PenaltyData>>> set)
+  {
+    await db.Penalties
+      .Where(x => x.Id == id && x.Status != (int)PenaltyStatus.Charged)
+      .ExecuteUpdateAsync(set);
+    this.ForgetTracked(id);
+  }
+
+  private void ForgetTracked(Guid id)
+  {
+    var tracked = db.Penalties.Local.FirstOrDefault(x => x.Id == id);
+    if (tracked != null) db.Entry(tracked).State = EntityState.Detached;
+  }
+
   public async Task<Result<Unit>> MarkPending(Guid id, string paymentIntentId, int attempts)
   {
     try
     {
-      var penalty = await db.Penalties.Where(x => x.Id == id).FirstOrDefaultAsync();
-      if (penalty == null) return new Unit();
-      penalty.Status = (int)PenaltyStatus.Pending;
-      penalty.PaymentIntentId = paymentIntentId;
-      penalty.Attempts = attempts;
-      penalty.UpdatedAt = DateTime.UtcNow;
-      await db.SaveChangesAsync();
+      var now = DateTime.UtcNow;
+      await this.UpdateUnlessCharged(id, s => s
+        .SetProperty(x => x.Status, (int)PenaltyStatus.Pending)
+        .SetProperty(x => x.PaymentIntentId, paymentIntentId)
+        .SetProperty(x => x.Attempts, attempts)
+        .SetProperty(x => x.UpdatedAt, now));
       return new Unit();
     }
     catch (Exception e)
@@ -192,14 +220,28 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
     {
       // Fail loud if the row is gone: returning success here would let the caller proceed to
       // confirm without a durable PaymentIntentId, reopening the duplicate_request hole.
-      var penalty = await db.Penalties.Where(x => x.Id == id).FirstOrDefaultAsync()
-        ?? throw new InvalidOperationException($"Cannot persist payment intent: penalty {id} was not found.");
       // Persist only the intent id from a successful create; status/attempts stay as-is
       // (the row remains claimed/Processing for the rest of this pass). This makes the
       // intent id durable across a confirm failure so the retry reconciles it.
-      penalty.PaymentIntentId = paymentIntentId;
-      penalty.UpdatedAt = DateTime.UtcNow;
-      await db.SaveChangesAsync();
+      //
+      // Also fail loud if the penalty was detached by an account deletion while this charge was in
+      // flight (UserId/HabitExecutionId now NULL): throwing here stops the caller BEFORE it confirms
+      // the intent, so no money moves for a deleted user. One conditional UPDATE, read fresh from the
+      // database (not a tracked entity, which may still hold the pre-deletion values).
+      var now = DateTime.UtcNow;
+      var updated = await db.Penalties
+        .Where(x => x.Id == id && x.UserId != null && x.HabitExecutionId != null)
+        .ExecuteUpdateAsync(s => s
+          .SetProperty(x => x.PaymentIntentId, paymentIntentId)
+          .SetProperty(x => x.UpdatedAt, now));
+      this.ForgetTracked(id);
+      if (updated == 0)
+      {
+        var exists = await db.Penalties.AsNoTracking().AnyAsync(x => x.Id == id);
+        throw new InvalidOperationException(exists
+          ? $"Cannot persist payment intent: penalty {id} was detached by an account deletion."
+          : $"Cannot persist payment intent: penalty {id} was not found.");
+      }
       return new Unit();
     }
     catch (Exception e)
@@ -213,14 +255,13 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
   {
     try
     {
-      var penalty = await db.Penalties.Where(x => x.Id == id).FirstOrDefaultAsync();
-      if (penalty == null) return new Unit();
-      penalty.Attempts += 1;
-      penalty.LastError = error;
       // Release the claim back to Pending so a later drain retries this row.
-      penalty.Status = (int)PenaltyStatus.Pending;
-      penalty.UpdatedAt = DateTime.UtcNow;
-      await db.SaveChangesAsync();
+      var now = DateTime.UtcNow;
+      await this.UpdateUnlessCharged(id, s => s
+        .SetProperty(x => x.Attempts, x => x.Attempts + 1)
+        .SetProperty(x => x.LastError, error)
+        .SetProperty(x => x.Status, (int)PenaltyStatus.Pending)
+        .SetProperty(x => x.UpdatedAt, now));
       return new Unit();
     }
     catch (Exception e)
@@ -234,12 +275,11 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
   {
     try
     {
-      var penalty = await db.Penalties.Where(x => x.Id == id).FirstOrDefaultAsync();
-      if (penalty == null) return new Unit();
-      penalty.Status = (int)PenaltyStatus.Failed;
-      penalty.LastError = error;
-      penalty.UpdatedAt = DateTime.UtcNow;
-      await db.SaveChangesAsync();
+      var now = DateTime.UtcNow;
+      await this.UpdateUnlessCharged(id, s => s
+        .SetProperty(x => x.Status, (int)PenaltyStatus.Failed)
+        .SetProperty(x => x.LastError, error)
+        .SetProperty(x => x.UpdatedAt, now));
       return new Unit();
     }
     catch (Exception e)
@@ -253,11 +293,10 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
   {
     try
     {
-      var penalty = await db.Penalties.Where(x => x.Id == id).FirstOrDefaultAsync();
-      if (penalty == null) return new Unit();
-      penalty.Status = (int)PenaltyStatus.Skipped;
-      penalty.UpdatedAt = DateTime.UtcNow;
-      await db.SaveChangesAsync();
+      var now = DateTime.UtcNow;
+      await this.UpdateUnlessCharged(id, s => s
+        .SetProperty(x => x.Status, (int)PenaltyStatus.Skipped)
+        .SetProperty(x => x.UpdatedAt, now));
       return new Unit();
     }
     catch (Exception e)

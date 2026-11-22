@@ -45,6 +45,11 @@ public interface IPaymentService
     Func<string, Task>? onIntentCreated = null,
     ConsentPurpose purpose = ConsentPurpose.Penalty);
 
+  // Retrieve-only: reads an existing payment intent from the gateway. Never confirms or charges.
+  // Used to reconcile a penalty whose earlier attempt created an intent, once it can no longer be
+  // charged (its user was deleted).
+  Task<Result<PaymentIntentResult>> RetrievePaymentIntentAsync(string paymentIntentId);
+
   // Query operations
   Task<Result<IEnumerable<PaymentCustomerPrincipal>>> SearchCustomers(PaymentCustomerSearch search);
   Task<Result<PaymentCustomer?>> GetCustomerByUserId(string userId);

@@ -312,6 +312,17 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
            .WithMany()
            .HasForeignKey(x => x.DisbursementId)
            .OnDelete(DeleteBehavior.SetNull);
+    // Person and execution linkage. SetNull (not Cascade): the penalty row is the money ledger.
+    // Deleting a user (account deletion) or one of their habit executions must DETACH the
+    // penalty, never delete it — amount, currency, charity and payment intent are retained.
+    penalty.HasOne(x => x.User)
+           .WithMany()
+           .HasForeignKey(x => x.UserId)
+           .OnDelete(DeleteBehavior.SetNull);
+    penalty.HasOne(x => x.HabitExecution)
+           .WithMany()
+           .HasForeignKey(x => x.HabitExecutionId)
+           .OnDelete(DeleteBehavior.SetNull);
 
     // Disbursement (charity payout ledger): one row per (charity, currency) payout attempt.
     var disbursement = modelBuilder.Entity<DisbursementData>();

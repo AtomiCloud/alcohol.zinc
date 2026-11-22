@@ -13,8 +13,9 @@ public enum PenaltyStatus
 
 public record PenaltyRecord
 {
-  public required Guid HabitExecutionId { get; init; } // idempotency key (one penalty per execution)
-  public required string UserId { get; init; }
+  // Idempotency key (one penalty per execution). Null once the execution was deleted with its user.
+  public required Guid? HabitExecutionId { get; init; }
+  public required string? UserId { get; init; } // null once the user was deleted (detached ledger row)
   public required Guid CharityId { get; init; }
   public required Money Amount { get; init; } // NodaMoney.Money; reconstructed at read boundary from cents+currency
   public required PenaltyStatus Status { get; init; }

@@ -193,6 +193,9 @@ public class PaymentService(
   // No-consent surfaces a typed NotFoundException(PaymentCustomer) so the Penalty
   // drain can pattern-match it and mark the row Skipped.
   //
+  public Task<Result<PaymentIntentResult>> RetrievePaymentIntentAsync(string paymentIntentId)
+    => gateway.RetrievePaymentIntentAsync(paymentIntentId);
+
   // Exactly-once: when existingIntentId is supplied (a prior attempt that recorded
   // an intent) the gateway intent is retrieved and reconciled FIRST — if it already
   // SUCCEEDED it is returned without re-charging; otherwise that SAME intent is

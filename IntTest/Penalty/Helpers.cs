@@ -65,6 +65,16 @@ public sealed class StubPaymentService(Func<string, Money, string, Result<Paymen
   // reconciled the persisted intent (non-null) instead of re-creating (null).
   public List<string?> ExistingIntentIdArgs { get; } = [];
 
+  // Retrieve-only lookup (reconciling a detached penalty's intent). Unset = a gateway error.
+  public Func<string, Result<PaymentIntentResult>>? Retrieve { get; set; }
+  public List<string> RetrieveCalls { get; } = [];
+
+  public Task<Result<PaymentIntentResult>> RetrievePaymentIntentAsync(string paymentIntentId)
+  {
+    RetrieveCalls.Add(paymentIntentId);
+    return Task.FromResult(Retrieve?.Invoke(paymentIntentId) ?? new Exception("retrieve not configured"));
+  }
+
   public async Task<Result<PaymentIntentResult>> ChargeStoredConsentAsync(
     string userId, Money amount, string description,
     string? idempotencyKey = null, string? existingIntentId = null,

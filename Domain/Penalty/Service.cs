@@ -59,13 +59,19 @@ public class PenaltyService(
   private async Task<Result<int>> ProcessOne(PenaltyPrincipal p, int maxAttempts)
   {
     var rec = p.Record;
+    // A penalty detached from its user or execution (account deletion sets both to NULL) is never
+    // charged: the person and their payment consent are gone. It is closed without confirming or
+    // creating any payment (see CloseDetached).
+    if (rec.UserId is not { } userId || rec.HabitExecutionId is not { } habitExecutionId)
+      return await this.CloseDetached(p, maxAttempts);
+
     // Deterministic idempotency key tied to this penalty row: a retried or
     // concurrent charge for the same penalty collapses onto the same Airwallex
     // intent instead of minting a new one. On a retry of a row that already
     // recorded an intent, reconcile that intent rather than re-charging.
     var chargeResult =
       await payment.ChargeStoredConsentAsync(
-        rec.UserId, rec.Amount, $"Habit penalty {rec.HabitExecutionId}",
+        userId, rec.Amount, $"Habit penalty {habitExecutionId}",
         idempotencyKey: p.Id.ToString(),
         existingIntentId: rec.PaymentIntentId,
         // Persist the intent id the moment it's created (before confirm) so a confirm
@@ -87,7 +93,7 @@ public class PenaltyService(
         // of silently counting it as success.
         var charged = await repo.MarkCharged(p.Id, intent.Id).Then(_ => 1, Errors.MapAll);
         if (charged.IsSuccess())
-          await notifier.NotifyPenaltyCharged(rec.UserId, rec.Amount, rec.CharityId, rec.HabitExecutionId, DateTime.UtcNow);
+          await notifier.NotifyPenaltyCharged(userId, rec.Amount, rec.CharityId, habitExecutionId, DateTime.UtcNow);
         return charged;
       }
 
@@ -98,7 +104,7 @@ public class PenaltyService(
         var failed = await repo.MarkFailed(p.Id, $"Max attempts reached, last status {intent.Status}")
           .Then(_ => 1, Errors.MapAll);
         if (failed.IsSuccess())
-          await notifier.NotifyPenaltyFailed(rec.UserId, rec.Amount, rec.CharityId, rec.HabitExecutionId, DateTime.UtcNow);
+          await notifier.NotifyPenaltyFailed(userId, rec.Amount, rec.CharityId, habitExecutionId, DateTime.UtcNow);
         return failed;
       }
 
@@ -117,10 +123,49 @@ public class PenaltyService(
     {
       var failed = await repo.MarkFailed(p.Id, ex?.Message ?? "charge error").Then(_ => 1, Errors.MapAll);
       if (failed.IsSuccess())
-        await notifier.NotifyPenaltyFailed(rec.UserId, rec.Amount, rec.CharityId, rec.HabitExecutionId, DateTime.UtcNow);
+        await notifier.NotifyPenaltyFailed(userId, rec.Amount, rec.CharityId, habitExecutionId, DateTime.UtcNow);
       return failed;
     }
 
     return await repo.Bump(p.Id, ex?.Message ?? "charge error").Then(_ => 0, Errors.MapAll);
+  }
+
+  // Close a penalty detached by an account deletion. Never confirms, creates or re-tries a charge.
+  //  - No payment intent yet: no money can have moved -> Skipped.
+  //  - A payment intent exists (an earlier attempt created it, and may have settled before the worker
+  //    could record it): look it up WITHOUT confirming and settle the ledger from the provider's answer:
+  //      SUCCEEDED                          -> Charged (MarkCharged credits the charity exactly once);
+  //      CANCELLED                          -> Skipped (definitively unpaid);
+  //      anything else, or a lookup error   -> retried on later drains; after maxAttempts it is marked
+  //                                            Failed with a note to reconcile with the provider.
+  // No email: there is no user to send it to.
+  private async Task<Result<int>> CloseDetached(PenaltyPrincipal p, int maxAttempts)
+  {
+    var rec = p.Record;
+    if (rec.PaymentIntentId is not { } intentId)
+      return await repo.MarkSkipped(p.Id).Then(_ => 1, Errors.MapAll);
+
+    var lookup = await payment.RetrievePaymentIntentAsync(intentId);
+    if (lookup.IsSuccess())
+    {
+      var intent = lookup.Get();
+      if (intent.Status == "SUCCEEDED")
+        return await repo.MarkCharged(p.Id, intent.Id).Then(_ => 1, Errors.MapAll);
+      // Only a cancelled intent is definitively unpaid. REQUIRES_PAYMENT_METHOD can still be confirmed
+      // (e.g. by a worker that claimed this row before the deletion), so it stays under reconciliation.
+      if (intent.Status == "CANCELLED")
+        return await repo.MarkSkipped(p.Id).Then(_ => 1, Errors.MapAll);
+    }
+
+    var why = lookup.IsSuccess()
+      ? $"status {lookup.Get().Status}"
+      : lookup.FailureOrDefault()?.Message ?? "lookup error";
+    logger.LogWarning("Detached penalty {Id}: payment intent {IntentId} not settled yet ({Why})", p.Id, intentId, why);
+    if (rec.Attempts + 1 >= maxAttempts)
+      return await repo.MarkFailed(p.Id,
+          $"Detached by account deletion; payment intent {intentId} still unsettled ({why}); reconcile with the payment provider")
+        .Then(_ => 1, Errors.MapAll);
+    return await repo.Bump(p.Id, $"Detached by account deletion; reconciling payment intent {intentId} ({why})")
+      .Then(_ => 0, Errors.MapAll);
   }
 }

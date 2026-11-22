@@ -852,7 +852,7 @@ namespace App.Migrations
                     b.Property<Guid?>("DisbursementId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("HabitExecutionId")
+                    b.Property<Guid?>("HabitExecutionId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("LastError")
@@ -870,7 +870,6 @@ namespace App.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("UserId")
-                        .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
@@ -1521,14 +1520,12 @@ namespace App.Migrations
                     b.HasOne("App.Modules.HabitExecution.Data.HabitExecutionData", "HabitExecution")
                         .WithMany()
                         .HasForeignKey("HabitExecutionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("App.Modules.Users.Data.UserData", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Charity");
 

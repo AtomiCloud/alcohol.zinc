@@ -169,6 +169,114 @@ public class PenaltyServiceTests
     repo.MarkChargedCalls.Should().BeEmpty();
   }
 
+  [Theory]
+  [InlineData(true, false)]
+  [InlineData(false, true)]
+  [InlineData(true, true)]
+  public async Task Detached_NoUserOrNoExecution_MarksSkipped_NeverCharges(bool noUser, bool noExecution)
+  {
+    // Account deletion detaches penalties (UserId/HabitExecutionId -> NULL) to keep the ledger.
+    // Such a penalty must never be charged: it is closed as Skipped without calling the gateway.
+    var p = Pending();
+    var detached = p with
+    {
+      Record = p.Record with
+      {
+        UserId = noUser ? null : p.Record.UserId,
+        HabitExecutionId = noExecution ? null : p.Record.HabitExecutionId
+      }
+    };
+    var repo = new FakePenaltyRepository(detached);
+    var payment = FakePaymentService.Succeeds("pi_must_not_happen");
+    var svc = Build(repo, payment);
+
+    var res = await svc.ProcessPending(batchSize: 10, maxAttempts: 5);
+
+    ((int)res).Should().Be(1);
+    payment.ChargeCalls.Should().BeEmpty("a detached penalty must never reach the payment gateway");
+    repo.MarkSkippedCalls.Should().ContainSingle().Which.Should().Be(detached.Id);
+    repo.MarkChargedCalls.Should().BeEmpty();
+    repo.BumpCalls.Should().BeEmpty();
+    repo.MarkFailedCalls.Should().BeEmpty();
+  }
+  private static PenaltyPrincipal DetachedWithIntent(int attempts = 1)
+  {
+    var p = Pending(attempts);
+    return p with { Record = p.Record with { UserId = null, HabitExecutionId = null, PaymentIntentId = "pi_earlier" } };
+  }
+
+  private static Result<PaymentIntentResult> IntentWithStatus(string status) => new PaymentIntentResult
+  {
+    Id = "pi_earlier", Status = status, Amount = 5m, Currency = "SGD", CustomerId = "cus_fake", MerchantOrderId = "mo_fake"
+  };
+
+  [Fact]
+  public async Task Detached_IntentSucceededAtProvider_RecordsChargeOnce_WithoutCharging()
+  {
+    // The earlier attempt settled but the worker never recorded it: look it up, record Charged.
+    var p = DetachedWithIntent();
+    var repo = new FakePenaltyRepository(p);
+    var payment = FakePaymentService.Succeeds("pi_must_not_happen").WithRetrieve(_ => IntentWithStatus("SUCCEEDED"));
+    var notifier = new RecordingEmailNotifier();
+    var svc = Build(repo, payment, notifier);
+
+    var res = await svc.ProcessPending(batchSize: 10, maxAttempts: 5);
+
+    ((int)res).Should().Be(1);
+    payment.ChargeCalls.Should().BeEmpty("a detached penalty is never charged");
+    payment.RetrieveCalls.Should().Equal("pi_earlier");
+    repo.MarkChargedCalls.Should().ContainSingle().Which.Should().Be((p.Id, "pi_earlier"));
+    repo.MarkSkippedCalls.Should().BeEmpty();
+    notifier.PenaltyCharged.Should().BeEmpty("there is no user to email");
+  }
+
+  [Theory]
+  [InlineData("CANCELLED")]
+  public async Task Detached_IntentDefinitivelyUnpaid_MarksSkipped_WithoutCharging(string status)
+  {
+    var p = DetachedWithIntent();
+    var repo = new FakePenaltyRepository(p);
+    var payment = FakePaymentService.Succeeds("pi_must_not_happen").WithRetrieve(_ => IntentWithStatus(status));
+    var svc = Build(repo, payment);
+
+    ((int)await svc.ProcessPending(batchSize: 10, maxAttempts: 5)).Should().Be(1);
+
+    payment.ChargeCalls.Should().BeEmpty();
+    repo.MarkSkippedCalls.Should().ContainSingle().Which.Should().Be(p.Id);
+    repo.MarkChargedCalls.Should().BeEmpty();
+  }
+
+  [Theory]
+  [InlineData("REQUIRES_PAYMENT_METHOD")] // still confirmable
+  [InlineData("REQUIRES_CUSTOMER_ACTION")]
+  [InlineData("PENDING")]
+  [InlineData(null)] // lookup error
+  public async Task Detached_IntentUnsettledOrLookupFails_RetriesThenFailsForReconciliation(string? status)
+  {
+    Result<PaymentIntentResult> Answer(string _) => status == null ? new Exception("gateway 503") : IntentWithStatus(status);
+
+    // Below max attempts: released for a later drain (Bump), never charged, never Skipped.
+    var below = DetachedWithIntent(attempts: 1);
+    var repo1 = new FakePenaltyRepository(below);
+    var pay1 = FakePaymentService.Succeeds("pi_must_not_happen").WithRetrieve(Answer);
+    ((int)await Build(repo1, pay1).ProcessPending(batchSize: 10, maxAttempts: 5)).Should().Be(0);
+    pay1.ChargeCalls.Should().BeEmpty();
+    repo1.BumpCalls.Should().ContainSingle();
+    repo1.MarkSkippedCalls.Should().BeEmpty();
+    repo1.MarkFailedCalls.Should().BeEmpty();
+
+    // At max attempts: Failed with a reconcile note, no email.
+    var atMax = DetachedWithIntent(attempts: 4);
+    var repo2 = new FakePenaltyRepository(atMax);
+    var pay2 = FakePaymentService.Succeeds("pi_must_not_happen").WithRetrieve(Answer);
+    var notifier = new RecordingEmailNotifier();
+    ((int)await Build(repo2, pay2, notifier).ProcessPending(batchSize: 10, maxAttempts: 5)).Should().Be(1);
+    pay2.ChargeCalls.Should().BeEmpty();
+    repo2.MarkFailedCalls.Should().ContainSingle().Which.Id.Should().Be(atMax.Id);
+    repo2.MarkSkippedCalls.Should().BeEmpty();
+    notifier.PenaltyFailed.Should().BeEmpty();
+  }
+
   [Fact]
   public async Task TransientError_BelowMax_Bumps()
   {
@@ -196,7 +304,7 @@ public class PenaltyServiceTests
     var svc = Build(repo, FakePaymentService.Succeeds("pi_1"), notifier);
     await svc.ProcessPending(batchSize: 10, maxAttempts: 5);
     notifier.PenaltyCharged.Should().ContainSingle()
-      .Which.Should().Be((charged.Record.UserId, charged.Record.Amount, charged.Record.CharityId));
+      .Which.Should().Be((charged.Record.UserId!, charged.Record.Amount, charged.Record.CharityId));
     notifier.PenaltyFailed.Should().BeEmpty();
 
     // Retry (below max) -> silent.
