@@ -231,11 +231,17 @@ public class DeleteAllRemnantsIntegrationTests : IAsyncLifetime
       .Should().Be((int)PenaltyStatus.Charged);
   }
 
-  [SkippableFact]
-  public async Task DetachedPenaltyWithPaymentIntent_IsFlaggedForReconciliation_NeverSkippedOrCharged()
+  [SkippableTheory]
+  [InlineData("SUCCEEDED", PenaltyStatus.Charged, 300)]
+  [InlineData("REQUIRES_PAYMENT_METHOD", PenaltyStatus.Skipped, 0)]
+  [InlineData("REQUIRES_CUSTOMER_ACTION", PenaltyStatus.Pending, 0)] // still unsettled: retried later
+  [InlineData(null, PenaltyStatus.Pending, 0)]                       // lookup error: retried later
+  public async Task DetachedPenaltyWithPaymentIntent_IsReconciledByLookup_NeverCharged(
+    string? providerStatus, PenaltyStatus expected, long expectedCreditCents)
   {
-    // A penalty whose earlier attempt already created a payment intent may have moved money. Once the
-    // user is deleted it must not be charged again, and must not be quietly marked Skipped either.
+    // An earlier attempt created a payment intent (it may have settled before the worker recorded it).
+    // After the user is deleted the drain looks the intent up WITHOUT confirming it and settles the
+    // ledger from the answer; it never creates or confirms a charge.
     Skip.IfNot(_enabled, "requires ZINC_DELETE_TEST_DB (a Postgres host)");
 
     var charity = new CharityData { Name = "Test Charity" };
@@ -252,14 +258,97 @@ public class DeleteAllRemnantsIntegrationTests : IAsyncLifetime
     _db.ChangeTracker.Clear();
 
     var payment = IntTest.Penalty.StubPaymentService.Succeeds("int_must_not_happen");
+    payment.Retrieve = id => providerStatus == null
+      ? new Exception("gateway 503")
+      : new PaymentIntentResult
+      {
+        Id = id, Status = providerStatus, Amount = 3m, Currency = "USD", CustomerId = "cus", MerchantOrderId = "mo"
+      };
     (await NewPenaltyService(_db, payment).ProcessPending(batchSize: 10, maxAttempts: 5)).IsSuccess().Should().BeTrue();
     _db.ChangeTracker.Clear();
 
-    payment.ExistingIntentIdArgs.Should().BeEmpty("a detached penalty never reaches the gateway");
+    payment.ExistingIntentIdArgs.Should().BeEmpty("a detached penalty never reaches the charge path");
+    payment.RetrieveCalls.Should().Equal("int_earlier_attempt");
     var row = await _db.Penalties.AsNoTracking().SingleAsync(p => p.Id == pendingA);
-    row.Status.Should().Be((int)PenaltyStatus.Failed);
+    row.Status.Should().Be((int)expected);
     row.PaymentIntentId.Should().Be("int_earlier_attempt");
-    row.LastError.Should().Contain("reconcile");
+    row.UserId.Should().BeNull();
+    var credited = await _db.CharityBalances.AsNoTracking()
+      .Where(b => b.CharityId == charity.Id).Select(b => b.AccruedCents).SumAsync();
+    credited.Should().Be(expectedCreditCents);
+  }
+
+  [SkippableFact]
+  public async Task ChargedIsFinal_LateWritesFromAnotherWorker_NeverUndoIt_AndCreditHappensOnce()
+  {
+    // Worker A claims a penalty, the user is deleted, A's claim goes stale and worker B re-claims it.
+    // A settles the charge (Charged, charity credited). B, holding older values, then tries to close or
+    // release the row and to record the charge again: none of that may move it out of Charged or credit
+    // the charity twice.
+    Skip.IfNot(_enabled, "requires ZINC_DELETE_TEST_DB (a Postgres host)");
+
+    var charity = new CharityData { Name = "Test Charity" };
+    _db.Charities.Add(charity);
+    await _db.SaveChangesAsync();
+    await SeedFullUser("user-A", charity.Id);
+    var (_, pendingA) = await SeedPenalties("user-A", charity.Id);
+    _db.ChangeTracker.Clear();
+
+    await using var ctxA = new MainDbContext(_monitor, NullLoggerFactory.Instance);
+    await using var ctxB = new MainDbContext(_monitor, NullLoggerFactory.Instance);
+    var workerA = new PenaltyRepository(ctxA, NullLogger<PenaltyRepository>.Instance);
+    var workerB = new PenaltyRepository(ctxB, NullLogger<PenaltyRepository>.Instance);
+
+    (await workerA.GetPending(10)).Get().Select(p => p.Id).Should().Contain(pendingA);
+    (await new UserRepository(_db, NullLogger<UserRepository>.Instance).DeleteAllRemnants("user-A"))
+      .Get().Should().NotBeNull();
+    // A's claim goes stale; B re-claims the same row (now detached) and tracks it as Processing.
+    await _db.Penalties.Where(p => p.Id == pendingA)
+      .ExecuteUpdateAsync(s => s.SetProperty(p => p.UpdatedAt, DateTime.UtcNow.AddHours(-1)));
+    (await workerB.GetPending(10)).Get().Select(p => p.Id).Should().Contain(pendingA);
+
+    (await workerA.MarkCharged(pendingA, "int_a")).IsSuccess().Should().BeTrue();
+
+    (await workerB.MarkSkipped(pendingA)).IsSuccess().Should().BeTrue();
+    (await workerB.MarkFailed(pendingA, "late")).IsSuccess().Should().BeTrue();
+    (await workerB.Bump(pendingA, "late")).IsSuccess().Should().BeTrue();
+    (await workerB.MarkPending(pendingA, "int_b", 2)).IsSuccess().Should().BeTrue();
+    (await workerB.MarkCharged(pendingA, "int_b")).IsSuccess().Should().BeTrue();
+
+    _db.ChangeTracker.Clear();
+    var row = await _db.Penalties.AsNoTracking().SingleAsync(p => p.Id == pendingA);
+    row.Status.Should().Be((int)PenaltyStatus.Charged);
+    row.PaymentIntentId.Should().Be("int_a");
+    (await _db.CharityBalances.AsNoTracking().SingleAsync(b => b.CharityId == charity.Id)).AccruedCents
+      .Should().Be(300, "the charity is credited exactly once");
+  }
+
+  [SkippableFact]
+  public async Task DirectCall_FailurePartWay_RollsBackTheDetach()
+  {
+    // Called outside a transaction, DeleteAllRemnants opens its own: if the final delete fails, the
+    // penalties must not be left detached from a user who still exists.
+    Skip.IfNot(_enabled, "requires ZINC_DELETE_TEST_DB (a Postgres host)");
+
+    var charity = new CharityData { Name = "Test Charity" };
+    _db.Charities.Add(charity);
+    await _db.SaveChangesAsync();
+    await SeedFullUser("user-A", charity.Id);
+    var (chargedA, _) = await SeedPenalties("user-A", charity.Id);
+    // A test-only table whose RESTRICT foreign key makes the final user delete fail.
+    await _db.Database.ExecuteSqlRawAsync(@"
+      CREATE TABLE ""TestBlocker"" (""UserId"" varchar(128) REFERENCES ""Users"" (""Id"") ON DELETE RESTRICT);
+      INSERT INTO ""TestBlocker"" VALUES ('user-A');");
+    _db.ChangeTracker.Clear();
+
+    var act = () => new UserRepository(_db, NullLogger<UserRepository>.Instance).DeleteAllRemnants("user-A");
+    await act.Should().ThrowAsync<Exception>();
+    _db.ChangeTracker.Clear();
+
+    (await _db.Users.CountAsync(u => u.Id == "user-A")).Should().Be(1);
+    var row = await _db.Penalties.AsNoTracking().SingleAsync(p => p.Id == chargedA);
+    row.UserId.Should().Be("user-A", "the detach rolled back with the failed purge");
+    row.HabitExecutionId.Should().NotBeNull();
   }
 
   [SkippableFact]

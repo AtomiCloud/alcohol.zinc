@@ -169,6 +169,13 @@ public class UserRepository(MainDbContext db, ILogger<UserRepository> logger) : 
     {
       logger.LogInformation("Deleting all remnants for User '{Id}'", id);
 
+      // The purge issues one immediate UPDATE (penalty detach) before the final SaveChanges. The service
+      // runs it inside a transaction (TransactionManager); a direct call gets its own, so a failure part-way
+      // never leaves penalties detached from a user who still exists.
+      await using var ownTx = Transaction.Current == null && db.Database.CurrentTransaction == null
+        ? await db.Database.BeginTransactionAsync()
+        : null;
+
       // Check if user exists
       var user = await db.Users
         .Where(x => x.Id == id)
@@ -299,6 +306,7 @@ public class UserRepository(MainDbContext db, ILogger<UserRepository> logger) : 
 
       // Save all changes
       await db.SaveChangesAsync();
+      if (ownTx != null) await ownTx.CommitAsync();
       logger.LogInformation("Successfully deleted all remnants for User '{Id}'", id);
 
       return new Unit();

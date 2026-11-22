@@ -128,6 +128,22 @@ public sealed class FakePaymentService : IPaymentService
     })
     { ThrowOnFirstCall = ex };
 
+  // Retrieve-only lookup (reconciling a detached penalty's intent). Unset = a gateway error.
+  public Func<string, Result<PaymentIntentResult>>? Retrieve { get; private set; }
+
+  public FakePaymentService WithRetrieve(Func<string, Result<PaymentIntentResult>> retrieve)
+  {
+    Retrieve = retrieve;
+    return this;
+  }
+  public List<string> RetrieveCalls { get; } = [];
+
+  public Task<Result<PaymentIntentResult>> RetrievePaymentIntentAsync(string paymentIntentId)
+  {
+    RetrieveCalls.Add(paymentIntentId);
+    return Task.FromResult(Retrieve?.Invoke(paymentIntentId) ?? new Exception("retrieve not configured"));
+  }
+
   public async Task<Result<PaymentIntentResult>> ChargeStoredConsentAsync(
     string userId, Money amount, string description,
     string? idempotencyKey = null, string? existingIntentId = null,
