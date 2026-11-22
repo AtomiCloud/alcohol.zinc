@@ -107,7 +107,7 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
     }
   }
 
-  public async Task<Result<Unit>> MarkCharged(Guid id, string paymentIntentId)
+  public async Task<Result<bool>> MarkCharged(Guid id, string paymentIntentId)
   {
     try
     {
@@ -130,7 +130,7 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
       {
         // Idempotent no-op: nothing to charge.
         await tx.RollbackAsync();
-        return new Unit();
+        return false;
       }
       // Re-read the locked row: an entity already tracked by this context (e.g. from the GetPending
       // claim) would otherwise keep its earlier values, and a stale Status would bypass the
@@ -143,7 +143,7 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
         // committed). The credit below is not idempotent, so re-running it would
         // over-accrue the charity ledger. Treat a repeat as a no-op.
         await tx.RollbackAsync();
-        return new Unit();
+        return false;
       }
 
       penalty.Status = (int)PenaltyStatus.Charged;
@@ -172,7 +172,7 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
         db.Entry(tracked).State = EntityState.Detached;
 
       await tx.CommitAsync();
-      return new Unit();
+      return true;
     }
     catch (Exception e)
     {
@@ -320,11 +320,22 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
     try
     {
       var cutoff = DateTime.UtcNow - olderThan;
-      var rows = await db.Penalties.AsNoTracking()
-        .Where(x => x.Status == (int)PenaltyStatus.Held && x.PaymentIntentId != null
-                    && x.Attempts < maxChecks && x.UpdatedAt < cutoff)
-        .OrderBy(x => x.UpdatedAt)
-        .Take(batchSize)
+      // Claim atomically: stamp UpdatedAt on the due rows (they stay Held) and return them, so a second
+      // pass running at the same time skips them (SKIP LOCKED now, the fresh UpdatedAt afterwards).
+      var rows = await db.Penalties
+        .FromSqlRaw(@"
+          UPDATE ""Penalties"" SET ""UpdatedAt"" = now()
+          WHERE ""Id"" IN (
+            SELECT ""Id"" FROM ""Penalties""
+            WHERE ""Status"" = {0} AND ""PaymentIntentId"" IS NOT NULL
+              AND ""Attempts"" < {1} AND ""UpdatedAt"" < {2}
+            ORDER BY ""UpdatedAt""
+            LIMIT {3}
+            FOR UPDATE SKIP LOCKED
+          )
+          RETURNING *",
+          (int)PenaltyStatus.Held, maxChecks, cutoff, batchSize)
+        .AsNoTracking()
         .ToListAsync();
       return rows.Select(x => x.ToPrincipal()).ToList();
     }
@@ -333,6 +344,14 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
       logger.LogError(e, "GetHeldToReconcile failed for BatchSize={BatchSize}", batchSize);
       throw;
     }
+  }
+
+  public async Task<Result<Unit>> EnsureNotHeld(Guid id)
+  {
+    var status = await db.Penalties.AsNoTracking().Where(x => x.Id == id).Select(x => (int?)x.Status)
+      .FirstOrDefaultAsync();
+    if (status == (int)PenaltyStatus.Held) throw new PenaltyHeldException(id);
+    return new Unit();
   }
 
   public async Task<Result<Unit>> NoteHeldCheck(Guid id, string note)

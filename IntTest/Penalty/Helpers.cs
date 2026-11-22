@@ -79,11 +79,13 @@ public sealed class StubPaymentService(Func<string, Money, string, Result<Paymen
     string userId, Money amount, string description,
     string? idempotencyKey = null, string? existingIntentId = null,
     Func<string, Task>? onIntentCreated = null,
-    ConsentPurpose purpose = ConsentPurpose.Penalty)
+    ConsentPurpose purpose = ConsentPurpose.Penalty,
+    Func<Task>? beforeConfirm = null)
   {
     ExistingIntentIdArgs.Add(existingIntentId);
     if (EmitIntentIdOnFirstCreate != null && existingIntentId == null && onIntentCreated != null)
       await onIntentCreated(EmitIntentIdOnFirstCreate);
+    if (beforeConfirm != null) await beforeConfirm();
     return charge(userId, amount, description);
   }
 

@@ -75,7 +75,10 @@ public class CharityDecommissionIntegrationTests : IAsyncLifetime
 
   private static InboxNotificationRecord TestNotice(string name) => new()
   {
-    Kind = InboxKinds.CharityDecommissioned, Title = "t", Body = name, DedupeKey = "test-notice",
+    Kind = InboxKinds.CharityDecommissioned,
+    Title = "t",
+    Body = name,
+    DedupeKey = "test-notice",
   };
 
   private Task<Result<CharityDecommissionResult?>> Decommission(Guid id, MainDbContext? db = null)
@@ -411,7 +414,12 @@ public class CharityDecommissionIntegrationTests : IAsyncLifetime
       ? new Exception("provider unavailable")
       : new Domain.Payment.PaymentIntentResult
       {
-        Id = id, Status = providerStatus, Amount = 1.00m, Currency = "USD", CustomerId = "cus", MerchantOrderId = "mo",
+        Id = id,
+        Status = providerStatus,
+        Amount = 1.00m,
+        Currency = "USD",
+        CustomerId = "cus",
+        MerchantOrderId = "mo",
       };
     var drain = new PenaltyService(Penalties(), payment, new NoopEmailNotifier(), NullLogger<PenaltyService>.Instance);
     (await drain.ProcessPending(batchSize: 10, maxAttempts: 5)).IsSuccess().Should().BeTrue();
@@ -463,6 +471,62 @@ public class CharityDecommissionIntegrationTests : IAsyncLifetime
     (await _db.InboxNotifications.CountAsync()).Should().Be(0);
   }
 
+  [SkippableFact]
+  public async Task DecommissionWhileAChargeIsBeingRecorded_NoDeadlock()
+  {
+    // Recording a charge (MarkCharged) locks its penalty row, then inserts the charity's first balance
+    // row, whose foreign-key check takes FOR KEY SHARE on the charity. A decommission that already locked
+    // the charity and is waiting for that penalty row must not block that insert, or the two deadlock.
+    // The charge's lock order is reproduced step by step here so the decommission can start in between.
+    Skip.IfNot(_enabled, "requires ZINC_DELETE_TEST_DB (a Postgres host)");
+
+    var target = await SeedCharity("Target Charity");
+    await SeedUser("user-a", target);
+    var claimed = await SeedPenalty("user-a", target, PenaltyStatus.Processing);
+    _db.ChangeTracker.Clear();
+
+    await using var chargeCtx = new MainDbContext(_monitor, NullLoggerFactory.Instance);
+    await using var chargeTx = await chargeCtx.Database.BeginTransactionAsync();
+    await chargeCtx.Database.ExecuteSqlRawAsync(@"SELECT 1 FROM ""Penalties"" WHERE ""Id"" = {0} FOR UPDATE", claimed);
+
+    await using var adminCtx = new MainDbContext(_monitor, NullLoggerFactory.Instance);
+    var decommission = Decommission(target, adminCtx);
+    await Task.Delay(500);
+    decommission.IsCompleted.Should().BeFalse("it waits for the penalty row the charge holds");
+
+    var insert = () => chargeCtx.Database.ExecuteSqlRawAsync(@"
+      INSERT INTO ""CharityBalances"" (""Id"", ""CharityId"", ""Currency"", ""AccruedCents"", ""UpdatedAt"")
+      VALUES ({0}, {1}, 'USD', 100, now())", Guid.NewGuid(), target);
+    await insert.Should().NotThrowAsync("the charge's foreign-key check must not deadlock with the decommission");
+    await chargeTx.CommitAsync();
+
+    (await decommission).Get().Should().NotBeNull();
+  }
+
+  [SkippableFact]
+  public async Task HeldLookups_AreClaimedOnce_PerRecheckWindow()
+  {
+    // Two drain passes running together must not both look up the same held charge.
+    Skip.IfNot(_enabled, "requires ZINC_DELETE_TEST_DB (a Postgres host)");
+
+    var target = await SeedCharity("Target Charity");
+    await SeedUser("user-a", target);
+    var queued = await SeedPenalty("user-a", target, PenaltyStatus.Pending, intent: "int_created");
+    _db.ChangeTracker.Clear();
+    (await Decommission(target)).Get().Should().NotBeNull();
+    await _db.Database.ExecuteSqlRawAsync(
+      @"UPDATE ""Penalties"" SET ""UpdatedAt"" = now() - interval '1 hour' WHERE ""Id"" = {0}", queued);
+
+    await using var other = new MainDbContext(_monitor, NullLoggerFactory.Instance);
+    var first = (await Penalties().GetHeldToReconcile(10, 5, TimeSpan.FromMinutes(10))).Get();
+    var second = (await Penalties(other).GetHeldToReconcile(10, 5, TimeSpan.FromMinutes(10))).Get();
+
+    first.Select(p => p.Id).Should().Equal(queued);
+    second.Should().BeEmpty("the first pass claimed it");
+    _db.ChangeTracker.Clear();
+    (await _db.Penalties.AsNoTracking().SingleAsync(p => p.Id == queued)).Status.Should().Be((int)PenaltyStatus.Held);
+  }
+
   // ---- seeding ----
 
   private async Task<Guid> SeedCharity(string name)
@@ -480,14 +544,24 @@ public class CharityDecommissionIntegrationTests : IAsyncLifetime
     _db.Users.Add(new UserData { Id = userId, Username = $"u_{userId}", Email = $"{userId}@test.local", Active = true });
     _db.Configurations.Add(new ConfigurationData
     {
-      Id = Guid.NewGuid(), UserId = userId, Timezone = "Asia/Singapore", EndOfDay = new TimeOnly(0, 0),
+      Id = Guid.NewGuid(),
+      UserId = userId,
+      Timezone = "Asia/Singapore",
+      EndOfDay = new TimeOnly(0, 0),
       DefaultCharityId = charityId,
     });
     _db.Habits.Add(new HabitData { Id = habitId, UserId = userId, Version = 1, Enabled = true });
     _db.HabitVersions.Add(new HabitVersionData
     {
-      Id = Guid.NewGuid(), HabitId = habitId, CharityId = charityId, Version = 1, Task = "run", DaysOfWeek = ["Mon"],
-      StakeCents = 300, RatioBasisPoints = 10000, Timezone = "Asia/Singapore",
+      Id = Guid.NewGuid(),
+      HabitId = habitId,
+      CharityId = charityId,
+      Version = 1,
+      Task = "run",
+      DaysOfWeek = ["Mon"],
+      StakeCents = 300,
+      RatioBasisPoints = 10000,
+      Timezone = "Asia/Singapore",
     });
     await _db.SaveChangesAsync();
   }
@@ -500,8 +574,11 @@ public class CharityDecommissionIntegrationTests : IAsyncLifetime
     var execId = Guid.NewGuid();
     _db.HabitExecutions.Add(new HabitExecutionData
     {
-      Id = execId, HabitVersionId = versionId, Date = new DateOnly(2026, 3, 2).AddDays(_day++),
-      Status = HabitExecutionStatusData.Failed, PaymentProcessed = false,
+      Id = execId,
+      HabitVersionId = versionId,
+      Date = new DateOnly(2026, 3, 2).AddDays(_day++),
+      Status = HabitExecutionStatusData.Failed,
+      PaymentProcessed = false,
     });
     await _db.SaveChangesAsync();
     return execId;
@@ -513,8 +590,15 @@ public class CharityDecommissionIntegrationTests : IAsyncLifetime
     var id = Guid.NewGuid();
     _db.Penalties.Add(new PenaltyData
     {
-      Id = id, HabitExecutionId = execId, UserId = userId, CharityId = charityId, AmountCents = 100,
-      Currency = "USD", Status = (int)status, PaymentIntentId = intent, Attempts = 0,
+      Id = id,
+      HabitExecutionId = execId,
+      UserId = userId,
+      CharityId = charityId,
+      AmountCents = 100,
+      Currency = "USD",
+      Status = (int)status,
+      PaymentIntentId = intent,
+      Attempts = 0,
     });
     await _db.SaveChangesAsync();
     return id;

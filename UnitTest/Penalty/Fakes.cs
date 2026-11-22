@@ -33,9 +33,23 @@ public sealed class FakePenaltyRepository(params PenaltyPrincipal[] pending) : I
   public Task<Result<List<PenaltyPrincipal>>> GetPending(int batchSize)
     => Task.FromResult<Result<List<PenaltyPrincipal>>>(_pending.Take(batchSize).ToList());
 
-  public Task<Result<Unit>> MarkCharged(Guid id, string paymentIntentId)
+  // What MarkCharged reports: true = this call charged it; false = it was already Charged.
+  public bool MarkChargedCharges { get; init; } = true;
+
+  public Task<Result<bool>> MarkCharged(Guid id, string paymentIntentId)
   {
     MarkChargedCalls.Add((id, paymentIntentId));
+    return Task.FromResult<Result<bool>>(MarkChargedCharges);
+  }
+
+  // Simulates the penalty being put on hold before a confirm: EnsureNotHeld throws.
+  public bool HeldBeforeConfirm { get; init; }
+  public int EnsureNotHeldCalls { get; private set; }
+
+  public Task<Result<Unit>> EnsureNotHeld(Guid id)
+  {
+    EnsureNotHeldCalls++;
+    if (HeldBeforeConfirm) throw new PenaltyHeldException(id);
     return Task.FromResult<Result<Unit>>(new Unit());
   }
 
@@ -115,6 +129,7 @@ public sealed class FakePaymentService : IPaymentService
   }
 
   public List<(string UserId, Money Amount, string Description)> ChargeCalls { get; } = [];
+  public int BeforeConfirmCalls { get; private set; }
 
   public static FakePaymentService Succeeds(string intentId)
     => WithStatus(intentId, "SUCCEEDED");
@@ -171,13 +186,16 @@ public sealed class FakePaymentService : IPaymentService
     string userId, Money amount, string description,
     string? idempotencyKey = null, string? existingIntentId = null,
     Func<string, Task>? onIntentCreated = null,
-    ConsentPurpose purpose = ConsentPurpose.Penalty)
+    ConsentPurpose purpose = ConsentPurpose.Penalty,
+    Func<Task>? beforeConfirm = null)
   {
     ChargeCalls.Add((userId, amount, description));
     if (ThrowOnFirstCall != null && _calls++ == 0)
       throw ThrowOnFirstCall;
     if (_emitIntentId != null && onIntentCreated != null)
       await onIntentCreated(_emitIntentId);
+    BeforeConfirmCalls++;
+    if (beforeConfirm != null) await beforeConfirm();
     return _charge(userId, amount, description);
   }
 

@@ -206,7 +206,8 @@ public class PaymentService(
     string userId, Money amount, string description,
     string? idempotencyKey = null, string? existingIntentId = null,
     Func<string, Task>? onIntentCreated = null,
-    ConsentPurpose purpose = ConsentPurpose.Penalty)
+    ConsentPurpose purpose = ConsentPurpose.Penalty,
+    Func<Task>? beforeConfirm = null)
   {
     return repo.GetByUserId(userId)
       .Then(customer =>
@@ -228,12 +229,14 @@ public class PaymentService(
         if (!string.IsNullOrEmpty(existingIntentId))
         {
           return gateway.RetrievePaymentIntentAsync(existingIntentId!)
-            .ThenAwait(intent =>
-              intent.Status == "SUCCEEDED"
-                // Money already moved on the prior attempt: do not re-charge.
-                ? intent.ToAsyncResult()
-                // Not yet settled: confirm the SAME intent (no new intent id).
-                : gateway.ConfirmPaymentIntentAsync(intent.Id, consentId, r.AirwallexCustomerId));
+            .ThenAwait(async intent =>
+            {
+              // Money already moved on the prior attempt: do not re-charge.
+              if (intent.Status == "SUCCEEDED") return intent.ToResult();
+              // Not yet settled: confirm the SAME intent (no new intent id), unless the caller stops it.
+              if (beforeConfirm != null) await beforeConfirm();
+              return await gateway.ConfirmPaymentIntentAsync(intent.Id, consentId, r.AirwallexCustomerId);
+            });
         }
 
         var createReq = new CreatePaymentIntentRequest
@@ -258,6 +261,7 @@ public class PaymentService(
             // existingIntentId instead of creating a new one, which would reuse the
             // request_id and be rejected by Airwallex as duplicate_request.
             if (onIntentCreated != null) await onIntentCreated(intent.Id);
+            if (beforeConfirm != null) await beforeConfirm();
 
             return await gateway.ConfirmPaymentIntentAsync(intent.Id, consentId, r.AirwallexCustomerId);
           });

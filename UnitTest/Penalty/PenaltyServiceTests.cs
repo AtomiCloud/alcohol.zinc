@@ -530,4 +530,68 @@ public class PenaltyServiceTests
     repo.NoteHeldCheckCalls.Should().ContainSingle().Which.Note.Should().Contain("reconcile with the payment provider");
     repo.MarkChargedCalls.Should().BeEmpty();
   }
+
+  // A retry of a charge whose payment intent already exists: the row is put on hold (charity
+  // decommissioned) while the provider look-up runs. The check right before the confirm stops it.
+  [Fact]
+  public async Task RetryOfExistingIntent_HeldBeforeConfirm_IsLeftOnHold()
+  {
+    var pending = Pending(attempts: 4) with { Record = Pending(attempts: 4).Record with { PaymentIntentId = "pi_old" } };
+    var repo = new FakePenaltyRepository(pending) { HeldBeforeConfirm = true };
+    var payment = FakePaymentService.Succeeds("pi_old");
+    var notifier = new RecordingEmailNotifier();
+
+    var res = await Build(repo, payment, notifier).ProcessPending(batchSize: 10, maxAttempts: 5);
+
+    res.IsSuccess().Should().BeTrue();
+    repo.EnsureNotHeldCalls.Should().Be(1);
+    repo.MarkChargedCalls.Should().BeEmpty();
+    repo.BumpCalls.Should().BeEmpty();
+    repo.MarkFailedCalls.Should().BeEmpty();
+    repo.MarkPendingCalls.Should().BeEmpty();
+    notifier.PenaltyCharged.Should().BeEmpty();
+    notifier.PenaltyFailed.Should().BeEmpty();
+  }
+
+  // Another worker already recorded the charge: no second "charged" email.
+  [Fact]
+  public async Task AlreadyCharged_ByAnotherWorker_NoSecondChargedEmail()
+  {
+    var repo = new FakePenaltyRepository(Pending()) { MarkChargedCharges = false };
+    var notifier = new RecordingEmailNotifier();
+
+    var res = await Build(repo, FakePaymentService.Succeeds("pi_ok"), notifier).ProcessPending(10, 5);
+
+    res.IsSuccess().Should().BeTrue();
+    repo.MarkChargedCalls.Should().ContainSingle();
+    notifier.PenaltyCharged.Should().BeEmpty();
+  }
+
+  [Fact]
+  public async Task HeldWithIntent_SettledBySomeoneElse_NoSecondChargedEmail()
+  {
+    var repo = new FakePenaltyRepository { HeldToReconcile = [HeldWithIntent()], MarkChargedCharges = false };
+    var payment = FakePaymentService.Succeeds("pi_unused").WithRetrieve(id => new PaymentIntentResult
+    {
+      Id = id, Status = "SUCCEEDED", Amount = 5m, Currency = "SGD", CustomerId = "c", MerchantOrderId = "m",
+    });
+    var notifier = new RecordingEmailNotifier();
+
+    (await Build(repo, payment, notifier).ProcessPending(10, 5)).IsSuccess().Should().BeTrue();
+
+    repo.MarkChargedCalls.Should().ContainSingle();
+    notifier.PenaltyCharged.Should().BeEmpty();
+  }
+
+  [Fact]
+  public async Task HeldWithIntent_LookupThrows_StillUsesUpACheck()
+  {
+    var repo = new FakePenaltyRepository { HeldToReconcile = [HeldWithIntent()] };
+    var payment = FakePaymentService.Succeeds("pi_unused").WithRetrieve(_ => throw new TimeoutException("slow"));
+
+    (await Build(repo, payment).ProcessPending(10, 5)).IsSuccess().Should().BeTrue();
+
+    repo.NoteHeldCheckCalls.Should().ContainSingle().Which.Note.Should().Contain("slow");
+    repo.MarkChargedCalls.Should().BeEmpty();
+  }
 }

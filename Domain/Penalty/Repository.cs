@@ -13,7 +13,11 @@ public interface IPenaltyRepository
   Task<Result<List<PenaltyPrincipal>>> GetPending(int batchSize);
 
   // Atomically set Status=Charged + PaymentIntentId, and credit charity_balance by this penalty's amount, in ONE transaction.
-  Task<Result<Unit>> MarkCharged(Guid id, string paymentIntentId);
+  // True if this call charged it; false if it was already Charged or is gone (so tell nobody again).
+  Task<Result<bool>> MarkCharged(Guid id, string paymentIntentId);
+
+  // Read fresh; throws PenaltyHeldException if the penalty is Held. Called right before a confirm.
+  Task<Result<Unit>> EnsureNotHeld(Guid id);
 
   // Keep Pending, persist intent id from a requires-action create, set Attempts.
   Task<Result<Unit>> MarkPending(Guid id, string paymentIntentId, int attempts);
@@ -31,8 +35,9 @@ public interface IPenaltyRepository
   Task<Result<bool>> MarkFailed(Guid id, string error);
 
   // Held rows (charity decommissioned) that already have a payment intent: an earlier attempt may have
-  // been confirmed at the provider before the hold. Read-only batch for a LOOK-UP, never a confirm:
-  // Attempts < maxChecks, last touched before `olderThan` ago.
+  // been confirmed at the provider before the hold. Claims a batch for a LOOK-UP, never a confirm:
+  // Attempts < maxChecks, last touched before `olderThan` ago. Claiming stamps UpdatedAt (rows stay
+  // Held), so overlapping passes never look up the same row within `olderThan`.
   Task<Result<List<PenaltyPrincipal>>> GetHeldToReconcile(int batchSize, int maxChecks, TimeSpan olderThan);
 
   // Record one look-up of a Held row: Attempts += 1, LastError = note. Stays Held.

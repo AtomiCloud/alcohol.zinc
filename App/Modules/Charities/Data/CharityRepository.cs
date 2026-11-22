@@ -220,10 +220,13 @@ namespace App.Modules.Charities.Data
             {
                 logger.LogInformation("Decommissioning Charity Id: {Id}", id);
 
-                // Same lock as Delete: serializes with a habit or default choosing it (FOR SHARE) and with
-                // a penalty being enqueued for it (FOR SHARE), so neither can slip past this.
+                // Serializes with a habit or default choosing it (FOR SHARE), with a penalty being enqueued for
+                // it (FOR SHARE), and with Delete or another Decommission (FOR UPDATE), so none can slip past.
+                // FOR NO KEY UPDATE, not FOR UPDATE: it does NOT conflict with the FOR KEY SHARE a foreign-key
+                // check takes. A charge being recorded holds its penalty row and then inserts into tables that
+                // reference this charity; blocking that insert while this waits for the penalty row would deadlock.
                 var names = await db.Database
-                    .SqlQuery<string>($@"SELECT ""Name"" AS ""Value"" FROM ""Charities"" WHERE ""Id"" = {id} FOR UPDATE")
+                    .SqlQuery<string>($@"SELECT ""Name"" AS ""Value"" FROM ""Charities"" WHERE ""Id"" = {id} FOR NO KEY UPDATE")
                     .ToListAsync();
                 if (names.Count == 0)
                 {

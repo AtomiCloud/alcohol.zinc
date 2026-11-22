@@ -92,6 +92,40 @@ public class ChargeStoredConsentTests
     hookCalled.Should().BeFalse();                                // nothing new created -> hook not used
   }
 
+  // The caller's beforeConfirm runs right before EVERY confirm, and throwing from it stops the confirm
+  // (a penalty put on hold by a charity decommission while its charge was in flight). Both paths.
+  [Theory]
+  [InlineData(true)]  // retry of an existing intent: retrieve, then confirm
+  [InlineData(false)] // fresh intent: create, persist, then confirm
+  public async Task BeforeConfirm_RunsBeforeEveryConfirm_AndCanStopIt(bool existing)
+  {
+    var gateway = new FakeGateway
+    {
+      RetrieveResult = Intent("int_old", "REQUIRES_PAYMENT_METHOD"),
+      CreateResult = Intent("int_new", "REQUIRES_PAYMENT_METHOD"),
+      ConfirmResult = Intent("int_x", "SUCCEEDED")
+    };
+    var svc = new PaymentService(new FakeCustomerRepo(VerifiedCustomer()), gateway);
+
+    static Task Stop() => throw new InvalidOperationException("on hold");
+
+    try
+    {
+      var res = await svc.ChargeStoredConsentAsync(
+        UserId, Amount, "penalty",
+        idempotencyKey: "pen-1",
+        existingIntentId: existing ? "int_old" : null,
+        onIntentCreated: _ => Task.CompletedTask,
+        beforeConfirm: Stop);
+      res.IsSuccess().Should().BeFalse("the confirm was stopped");
+    }
+    catch (InvalidOperationException)
+    {
+      // Propagating the caller's exception is also a stop.
+    }
+    gateway.Calls.Should().NotContain("confirm");
+  }
+
   // --- Fakes ---
 
   private sealed class FakeCustomerRepo(PaymentCustomer customer) : IPaymentCustomerRepository

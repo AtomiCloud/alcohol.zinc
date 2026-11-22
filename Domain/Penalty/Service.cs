@@ -74,9 +74,28 @@ public class PenaltyService(
   //                decommissioned charity stay stopped, so the money is held);
   //   otherwise -> stays Held; checked again later, up to maxChecks times, then left with a note to
   //                reconcile with the payment provider.
+  private static string HeldNote(string intentId, string why, int checksSoFar, int maxChecks) =>
+    checksSoFar + 1 >= maxChecks
+      ? $"held: charity decommissioned; payment intent {intentId} still not taken ({why}) after {maxChecks} checks; reconcile with the payment provider"
+      : $"held: charity decommissioned; payment intent {intentId} not taken ({why})";
+
   private async Task<int> ReconcileHeld(int batchSize, int maxChecks)
   {
-    var batch = await repo.GetHeldToReconcile(batchSize, maxChecks, HeldRecheck);
+    Result<List<PenaltyPrincipal>> batch;
+    try
+    {
+      batch = await repo.GetHeldToReconcile(batchSize, maxChecks, HeldRecheck);
+    }
+    catch (OperationCanceledException)
+    {
+      throw;
+    }
+    catch (Exception e)
+    {
+      // Never let the look-ups stop the normal drain.
+      logger.LogError(e, "Loading held penalties to reconcile failed; continuing");
+      return 0;
+    }
     if (!batch.IsSuccess())
     {
       logger.LogError(batch.FailureOrDefault(), "Loading held penalties to reconcile failed; continuing");
@@ -99,6 +118,7 @@ public class PenaltyService(
             logger.LogError(charged.FailureOrDefault(), "Recording held penalty {Id} as charged failed", p.Id);
             continue;
           }
+          if (!charged.Get()) continue; // already Charged by someone else: settled, nobody told twice
           settled++;
           if (rec.UserId is { } userId && rec.HabitExecutionId is { } executionId)
             await notifier.NotifyPenaltyCharged(userId, rec.Amount, rec.CharityId, executionId, DateTime.UtcNow);
@@ -108,10 +128,7 @@ public class PenaltyService(
         var why = lookup.IsSuccess()
           ? $"status {lookup.Get().Status}"
           : lookup.FailureOrDefault()?.Message ?? "lookup error";
-        var note = rec.Attempts + 1 >= maxChecks
-          ? $"held: charity decommissioned; payment intent {intentId} still not taken ({why}) after {maxChecks} checks; reconcile with the payment provider"
-          : $"held: charity decommissioned; payment intent {intentId} not taken ({why})";
-        await repo.NoteHeldCheck(p.Id, note);
+        await repo.NoteHeldCheck(p.Id, HeldNote(intentId, why, rec.Attempts, maxChecks));
       }
       catch (OperationCanceledException)
       {
@@ -119,7 +136,16 @@ public class PenaltyService(
       }
       catch (Exception e)
       {
+        // A thrown look-up still uses up one check, so a row cannot be retried forever.
         logger.LogError(e, "Reconciling held penalty {Id} threw; continuing", p.Id);
+        try
+        {
+          await repo.NoteHeldCheck(p.Id, HeldNote(intentId, e.Message, rec.Attempts, maxChecks));
+        }
+        catch (Exception inner)
+        {
+          logger.LogError(inner, "Recording the failed look-up for held penalty {Id} failed", p.Id);
+        }
       }
     }
     return settled;
@@ -155,10 +181,29 @@ public class PenaltyService(
     // intent instead of minting a new one. On a retry of a row that already
     // recorded an intent, reconcile that intent rather than re-charging.
     //
-    // If the charity is decommissioned while this charge is in flight, the penalty is moved on hold and
-    // SetIntentId refuses with PenaltyHeldException before the intent is confirmed: no money moves, and
-    // the row is left Held (no retry, no failure, no email).
+    // If the charity is decommissioned while this charge is in flight, the penalty is moved on hold.
+    // Right before ANY confirm (a fresh intent, or a retry of an existing one) the row is re-read, and
+    // a Held row stops the confirm with PenaltyHeldException (SetIntentId refuses the same way for a
+    // fresh intent): no money moves, and the row is left Held (no retry, no failure, no email).
     var heldMidFlight = false;
+    async Task Gate(Func<Task<Result<Unit>>> step, string what)
+    {
+      Result<Unit> ok;
+      try
+      {
+        ok = await step();
+      }
+      catch (PenaltyHeldException)
+      {
+        heldMidFlight = true;
+        throw;
+      }
+      if (ok.IsSuccess()) return;
+      var err = ok.FailureOrDefault();
+      if (err is PenaltyHeldException) heldMidFlight = true;
+      throw err ?? new Exception($"{what} failed for penalty {p.Id}");
+    }
+
     Result<PaymentIntentResult> chargeResult;
     try
     {
@@ -168,25 +213,8 @@ public class PenaltyService(
         existingIntentId: rec.PaymentIntentId,
         // Persist the intent id the moment it's created (before confirm) so a confirm
         // failure doesn't lose it; a persistence failure surfaces so the attempt retries.
-        onIntentCreated: async intentId =>
-        {
-          Result<Unit> saved;
-          try
-          {
-            saved = await repo.SetIntentId(p.Id, intentId);
-          }
-          catch (PenaltyHeldException)
-          {
-            heldMidFlight = true;
-            throw;
-          }
-          if (!saved.IsSuccess())
-          {
-            var err = saved.FailureOrDefault();
-            if (err is PenaltyHeldException) heldMidFlight = true;
-            throw err ?? new Exception($"SetIntentId failed for penalty {p.Id}");
-          }
-        });
+        onIntentCreated: intentId => Gate(() => repo.SetIntentId(p.Id, intentId), "SetIntentId"),
+        beforeConfirm: () => Gate(() => repo.EnsureNotHeld(p.Id), "EnsureNotHeld"));
     }
     catch (PenaltyHeldException)
     {
@@ -203,10 +231,11 @@ public class PenaltyService(
         // Terminal success: charge + atomic charity credit. Propagate a
         // persistence failure (the credit's transaction rolling back) instead
         // of silently counting it as success.
-        var charged = await repo.MarkCharged(p.Id, intent.Id).Then(_ => 1, Errors.MapAll);
-        if (charged.IsSuccess())
+        // Email only when THIS call charged it: a repeat (another worker already did) tells nobody twice.
+        var charged = await repo.MarkCharged(p.Id, intent.Id);
+        if (charged.IsSuccess() && charged.Get())
           await notifier.NotifyPenaltyCharged(userId, rec.Amount, rec.CharityId, habitExecutionId, DateTime.UtcNow);
-        return charged;
+        return charged.Then(_ => 1, Errors.MapAll);
       }
 
       // REQUIRES_PAYMENT_METHOD / REQUIRES_CUSTOMER_ACTION / REQUIRES_CAPTURE -> not yet settled, retry.
