@@ -132,36 +132,26 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
       penalty.LastError = null; // clear any stale failure from earlier retries now that it settled
       penalty.UpdatedAt = DateTime.UtcNow;
 
-      // Upsert the (charity, currency) accrual ledger in place. The balance is keyed
-      // by (CharityId, Currency) — a charity can receive penalties in multiple
-      // currencies, each accruing into its own row, so money is never summed across
-      // currencies. Lock the row too: two DIFFERENT penalties for the SAME (charity,
-      // currency), drained concurrently across workers, would otherwise both read the
-      // same AccruedCents and lost-update one credit. FOR UPDATE serializes the
-      // read-modify-write. (When the row does not exist yet FOR UPDATE locks nothing;
-      // the unique (CharityId, Currency) index is the backstop — a losing concurrent
-      // insert raises a unique violation, the tx rolls back, and the penalty is
-      // re-claimed by the stale-claim lease on a later drain.)
-      var bal = (await db.CharityBalances
-          .FromSqlRaw(
-            @"SELECT * FROM ""CharityBalances"" WHERE ""CharityId"" = {0} AND ""Currency"" = {1} FOR UPDATE",
-            penalty.CharityId, penalty.Currency)
-          .ToListAsync())
-        .FirstOrDefault();
-      if (bal == null)
-      {
-        bal = new CharityBalanceData
-        {
-          CharityId = penalty.CharityId,
-          Currency = penalty.Currency,
-          AccruedCents = 0
-        };
-        db.CharityBalances.Add(bal);
-      }
-      bal.AccruedCents += penalty.AmountCents;
-      bal.UpdatedAt = DateTime.UtcNow;
-
       await db.SaveChangesAsync();
+
+      // Credit the (charity, currency) accrual ledger. The balance is keyed by (CharityId, Currency): a
+      // charity can receive penalties in several currencies, each in its own row, so money is never
+      // summed across currencies. ONE atomic upsert that adds to the value in the database: two
+      // workers crediting the same charity can never lose a credit, whatever either has cached (a
+      // read-modify-write through a tracked entity could add to a stale copy), and a first credit racing
+      // another first credit cannot fail on the unique (CharityId, Currency) index.
+      var now = DateTime.UtcNow;
+      await db.Database.ExecuteSqlInterpolatedAsync($@"
+        INSERT INTO ""CharityBalances"" (""Id"", ""CharityId"", ""Currency"", ""AccruedCents"", ""UpdatedAt"")
+        VALUES ({Guid.NewGuid()}, {penalty.CharityId}, {penalty.Currency}, {(long)penalty.AmountCents}, {now})
+        ON CONFLICT (""CharityId"", ""Currency"") DO UPDATE
+        SET ""AccruedCents"" = ""CharityBalances"".""AccruedCents"" + EXCLUDED.""AccruedCents"",
+            ""UpdatedAt"" = EXCLUDED.""UpdatedAt""");
+      // Any copy of that balance this context tracks is now stale: forget it so a later read is fresh.
+      foreach (var tracked in db.CharityBalances.Local
+                 .Where(b => b.CharityId == penalty.CharityId && b.Currency == penalty.Currency).ToList())
+        db.Entry(tracked).State = EntityState.Detached;
+
       await tx.CommitAsync();
       return new Unit();
     }
