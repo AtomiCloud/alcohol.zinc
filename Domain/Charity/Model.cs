@@ -35,6 +35,14 @@ namespace Domain.Charity
       public required CharityPrincipal Principal { get; init; }
     }
 
+    // What a decommission changed: who to tell, and how many queued charges went on hold.
+    public record CharityDecommissionResult
+    {
+      public required string CharityName { get; init; }
+      public required IReadOnlyList<string> AffectedUserIds { get; init; }
+      public required int HeldPenalties { get; init; }
+    }
+
     public record BulkUpsertCharity
     {
       public required CharityRecord Charity { get; init; }

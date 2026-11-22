@@ -421,4 +421,36 @@ public class PenaltyServiceTests
     // Each row charged exactly once.
     repo.MarkChargedCalls.Select(c => c.Id).Distinct().Should().HaveCount(2);
   }
+
+  // A decommission that lands while a charge is in flight puts the penalty on hold, and SetIntentId
+  // refuses before the intent is confirmed. The drain must leave the row alone: no confirm result is
+  // acted on, no retry, no failure and no "payment failed" email, even on the last attempt.
+  [Theory]
+  [InlineData(true)]
+  [InlineData(false)]
+  public async Task HeldMidCharge_IsLeftOnHold_NoRetryNoFailureNoEmail(bool repositoryThrows)
+  {
+    var pending = Pending(attempts: 4); // last attempt: any failure here would mark it Failed
+    var held = new PenaltyHeldException(pending.Id);
+    var repo = new FakePenaltyRepository(pending)
+    {
+      SetIntentIdThrows = repositoryThrows ? held : null,
+      SetIntentIdReturns = repositoryThrows ? null : held,
+    };
+    var payment = FakePaymentService.CreatesThenFails("pi_created", new Exception("confirm must not be reached"));
+    var notifier = new RecordingEmailNotifier();
+    var svc = Build(repo, payment, notifier);
+
+    var res = await svc.ProcessPending(batchSize: 10, maxAttempts: 5);
+
+    res.IsSuccess().Should().BeTrue();
+    ((int)res).Should().Be(1, "the row is settled for this pass: it is on hold");
+    repo.SetIntentIdCalls.Should().ContainSingle();
+    repo.BumpCalls.Should().BeEmpty();
+    repo.MarkFailedCalls.Should().BeEmpty();
+    repo.MarkPendingCalls.Should().BeEmpty();
+    repo.MarkChargedCalls.Should().BeEmpty();
+    repo.MarkSkippedCalls.Should().BeEmpty();
+    notifier.PenaltyFailed.Should().BeEmpty();
+  }
 }

@@ -56,6 +56,12 @@ public class PenaltyService(
       });
   }
 
+  private int LeftOnHold(PenaltyPrincipal p)
+  {
+    logger.LogInformation("Penalty {Id} was put on hold mid-charge (charity decommissioned); not charged", p.Id);
+    return 1;
+  }
+
   private async Task<Result<int>> ProcessOne(PenaltyPrincipal p, int maxAttempts)
   {
     var rec = p.Record;
@@ -69,8 +75,15 @@ public class PenaltyService(
     // concurrent charge for the same penalty collapses onto the same Airwallex
     // intent instead of minting a new one. On a retry of a row that already
     // recorded an intent, reconcile that intent rather than re-charging.
-    var chargeResult =
-      await payment.ChargeStoredConsentAsync(
+    //
+    // If the charity is decommissioned while this charge is in flight, the penalty is moved on hold and
+    // SetIntentId refuses with PenaltyHeldException before the intent is confirmed: no money moves, and
+    // the row is left Held (no retry, no failure, no email).
+    var heldMidFlight = false;
+    Result<PaymentIntentResult> chargeResult;
+    try
+    {
+      chargeResult = await payment.ChargeStoredConsentAsync(
         userId, rec.Amount, $"Habit penalty {habitExecutionId}",
         idempotencyKey: p.Id.ToString(),
         existingIntentId: rec.PaymentIntentId,
@@ -78,10 +91,30 @@ public class PenaltyService(
         // failure doesn't lose it; a persistence failure surfaces so the attempt retries.
         onIntentCreated: async intentId =>
         {
-          var saved = await repo.SetIntentId(p.Id, intentId);
+          Result<Unit> saved;
+          try
+          {
+            saved = await repo.SetIntentId(p.Id, intentId);
+          }
+          catch (PenaltyHeldException)
+          {
+            heldMidFlight = true;
+            throw;
+          }
           if (!saved.IsSuccess())
-            throw saved.FailureOrDefault() ?? new Exception($"SetIntentId failed for penalty {p.Id}");
+          {
+            var err = saved.FailureOrDefault();
+            if (err is PenaltyHeldException) heldMidFlight = true;
+            throw err ?? new Exception($"SetIntentId failed for penalty {p.Id}");
+          }
         });
+    }
+    catch (PenaltyHeldException)
+    {
+      return this.LeftOnHold(p);
+    }
+
+    if (heldMidFlight) return this.LeftOnHold(p);
 
     if (chargeResult.IsSuccess())
     {

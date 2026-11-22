@@ -37,6 +37,11 @@ public sealed class FakeDisbursementRepository(
 
   public Task<Result<List<DisbursementPrincipal>>> GetReconcilable(TimeSpan olderThan, int batchSize)
     => Task.FromResult<Result<List<DisbursementPrincipal>>>(_reconcilable.Take(batchSize).ToList());
+
+  public HashSet<Guid> Stopped { get; } = [];
+
+  public Task<Result<bool>> IsPayoutStopped(Guid charityId)
+    => Task.FromResult<Result<bool>>(Stopped.Contains(charityId));
 }
 
 public sealed class FakeDonationGateway : IDonationGateway

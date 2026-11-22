@@ -1,9 +1,11 @@
 using System.Transactions;
 using App.Error.V1;
+using App.Modules.Penalty.Data;
 using App.StartUp.Database;
 using App.Utility;
 using CSharp_Result;
 using Domain.Charity;
+using Domain.Penalty;
 using Microsoft.EntityFrameworkCore;
 
 namespace App.Modules.Charities.Data
@@ -123,6 +125,7 @@ namespace App.Modules.Charities.Data
                 var updated = db.Charities.Update(data);
                 // Metadata edits never touch the switched-off flag: a stale save must not undo a Delete.
                 updated.Property(x => x.DeletedAt).IsModified = false;
+                updated.Property(x => x.DecommissionedAt).IsModified = false;
                 await db.SaveChangesAsync();
 
                 logger.LogInformation("Charity updated for Id: {Id}", id);
@@ -188,6 +191,94 @@ namespace App.Modules.Charities.Data
             catch (Exception e)
             {
                 logger.LogError(e, "Failed to delete Charity Id: {Id}", id);
+                throw;
+            }
+        }
+
+        // Decommissioning switches the charity off exactly like Delete, and also stops all money flowing to
+        // it. In one transaction, under the same FOR UPDATE lock on the charity row:
+        //   - DeletedAt and DecommissionedAt are set (each keeps its first time);
+        //   - queued charges for it that have not reached the card provider yet (Pending, or claimed by a
+        //     worker but with no payment intent) are moved to Held. A worker still holding such a row is
+        //     refused when it tries to record a payment intent, before any confirm, so no money moves;
+        //   - users' default-charity settings that point at it are cleared, as Delete does.
+        // A charge that already has a payment intent was started before the decommission and is left to
+        // finish; if it succeeds the money is held with the rest (payouts to this charity stop).
+        // Nothing is erased. Returns the users to tell: those with a live habit giving to it, and those
+        // whose default charity it was.
+        public async Task<Result<CharityDecommissionResult?>> Decommission(Guid id)
+        {
+            await using var ownTx = Transaction.Current == null && db.Database.CurrentTransaction == null
+                ? await db.Database.BeginTransactionAsync()
+                : null;
+            try
+            {
+                logger.LogInformation("Decommissioning Charity Id: {Id}", id);
+
+                // Same lock as Delete: serializes with a habit or default choosing it (FOR SHARE) and with
+                // a penalty being enqueued for it (FOR SHARE), so neither can slip past this.
+                var names = await db.Database
+                    .SqlQuery<string>($@"SELECT ""Name"" AS ""Value"" FROM ""Charities"" WHERE ""Id"" = {id} FOR UPDATE")
+                    .ToListAsync();
+                if (names.Count == 0)
+                {
+                    logger.LogWarning("Charity not found for decommission, Id: {Id}", id);
+                    return (CharityDecommissionResult?)null;
+                }
+
+                var now = DateTime.UtcNow;
+                await db.Charities
+                    .Where(c => c.Id == id && c.DeletedAt == null)
+                    .ExecuteUpdateAsync(s => s.SetProperty(c => c.DeletedAt, now));
+                await db.Charities
+                    .Where(c => c.Id == id && c.DecommissionedAt == null)
+                    .ExecuteUpdateAsync(s => s.SetProperty(c => c.DecommissionedAt, now));
+                var tracked = db.Charities.Local.FirstOrDefault(c => c.Id == id);
+                if (tracked != null) db.Entry(tracked).State = EntityState.Detached;
+
+                var held = await db.Penalties
+                    .Where(p => p.CharityId == id
+                                && (p.Status == (int)PenaltyStatus.Pending || p.Status == (int)PenaltyStatus.Processing)
+                                && p.PaymentIntentId == null)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(p => p.Status, (int)PenaltyStatus.Held)
+                        .SetProperty(p => p.LastError, PenaltyRepository.HeldReason)
+                        .SetProperty(p => p.UpdatedAt, now));
+                foreach (var p in db.Penalties.Local.Where(p => p.CharityId == id).ToList())
+                    db.Entry(p).State = EntityState.Detached;
+
+                var habitUsers = await (
+                        from h in db.Habits
+                        join v in db.HabitVersions on new { HabitId = h.Id, h.Version } equals new { v.HabitId, v.Version }
+                        where h.DeletedAt == null && v.CharityId == id
+                        select h.UserId)
+                    .Distinct()
+                    .ToListAsync();
+                var defaultUsers = await db.Configurations
+                    .Where(c => c.DefaultCharityId == id)
+                    .Select(c => c.UserId)
+                    .ToListAsync();
+
+                await db.Configurations
+                    .Where(c => c.DefaultCharityId == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(c => c.DefaultCharityId, (Guid?)null));
+
+                if (ownTx != null) await ownTx.CommitAsync();
+
+                var users = habitUsers.Concat(defaultUsers).Distinct().Order(StringComparer.Ordinal).ToList();
+                logger.LogInformation(
+                    "Charity decommissioned for Id: {Id}; {Held} queued charges put on hold", id, held);
+
+                return new CharityDecommissionResult
+                {
+                    CharityName = names[0],
+                    AffectedUserIds = users,
+                    HeldPenalties = held,
+                };
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Failed to decommission Charity Id: {Id}", id);
                 throw;
             }
         }
@@ -444,9 +535,12 @@ namespace App.Modules.Charities.Data
                 if (charitiesToUpdate.Count > 0)
                 {
                     db.Charities.UpdateRange(charitiesToUpdate);
-                    // Sync never touches the switched-off flag: a stale save must not undo a Delete.
+                    // Sync never touches the switched-off or decommissioned flags: a stale save must not undo them.
                     foreach (var c in charitiesToUpdate)
+                    {
                         db.Entry(c).Property(x => x.DeletedAt).IsModified = false;
+                        db.Entry(c).Property(x => x.DecommissionedAt).IsModified = false;
+                    }
                 }
                 await db.SaveChangesAsync(ct);
 

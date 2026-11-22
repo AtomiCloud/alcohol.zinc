@@ -45,9 +45,16 @@ public sealed class FakePenaltyRepository(params PenaltyPrincipal[] pending) : I
     return Task.FromResult<Result<Unit>>(new Unit());
   }
 
+  // Simulates SetIntentId refusing (e.g. the penalty was put on hold by a decommission mid-charge).
+  // Thrown = the repository throws; Returned = it hands back a failed Result.
+  public Exception? SetIntentIdThrows { get; init; }
+  public Exception? SetIntentIdReturns { get; init; }
+
   public Task<Result<Unit>> SetIntentId(Guid id, string paymentIntentId)
   {
     SetIntentIdCalls.Add((id, paymentIntentId));
+    if (SetIntentIdThrows != null) throw SetIntentIdThrows;
+    if (SetIntentIdReturns != null) return Task.FromResult<Result<Unit>>(SetIntentIdReturns);
     return Task.FromResult<Result<Unit>>(new Unit());
   }
 

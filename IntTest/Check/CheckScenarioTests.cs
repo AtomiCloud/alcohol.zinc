@@ -697,7 +697,8 @@ public class CheckScenarioTests : IAsyncLifetime
     new HabitRepository(_db, NullLogger<HabitRepository>.Instance),
     new Domain.Configuration.ConfigurationService(
       new ConfigurationRepository(_db, NullLogger<ConfigurationRepository>.Instance), checks, new NoTransaction()),
-    new Domain.Charity.CharityService(new CharityRepository(_db, NullLogger<CharityRepository>.Instance)),
+    new Domain.Charity.CharityService(new CharityRepository(_db, NullLogger<CharityRepository>.Instance), null!,
+      NullLogger<Domain.Charity.CharityService>.Instance),
     new StreakService(new StreakRepository(_db, NullLogger<StreakRepository>.Instance)),
     new StreakRepository(_db, NullLogger<StreakRepository>.Instance),
     new FixedMonth(),

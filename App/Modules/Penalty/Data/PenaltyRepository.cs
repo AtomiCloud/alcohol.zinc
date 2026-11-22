@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using System.Transactions;
 using App.StartUp.Database;
 using CSharp_Result;
 using Domain.Penalty;
@@ -10,11 +11,28 @@ namespace App.Modules.Penalty.Data;
 
 public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logger) : IPenaltyRepository
 {
+  public const string HeldReason = "held: charity decommissioned";
+
   public async Task<Result<bool>> EnqueuePending(PenaltyRecord record)
   {
     PenaltyData? data = null;
+    // Own transaction only when the caller has none (an ambient TransactionScope cannot nest one), so
+    // the charity lock below is held until the insert commits.
+    await using var ownTx = Transaction.Current == null && db.Database.CurrentTransaction == null
+      ? await db.Database.BeginTransactionAsync()
+      : null;
     try
     {
+      // A decommissioned charity takes no more money: the penalty is still recorded, but as Held, so
+      // the drain never charges it. The charity row is read FOR SHARE, so a concurrent decommission
+      // (FOR UPDATE) either commits first and is seen here, or waits for this insert and then holds it.
+      var decommissionedAt = await db.Database
+        .SqlQuery<DateTime?>(
+          $@"SELECT ""DecommissionedAt"" AS ""Value"" FROM ""Charities"" WHERE ""Id"" = {record.CharityId} FOR SHARE")
+        .ToListAsync();
+      if (decommissionedAt is [not null])
+        record = record with { Status = PenaltyStatus.Held, LastError = HeldReason };
+
       // Idempotent insert via unique(HabitExecutionId): no-op on conflict.
       // The AnyAsync pre-check collapses the common case, but it is NOT atomic
       // with the insert: two overlapping enqueue passes can both observe false
@@ -28,6 +46,7 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
       data = record.ToData();
       db.Penalties.Add(data);
       await db.SaveChangesAsync();
+      if (ownTx != null) await ownTx.CommitAsync();
       return true;
     }
     catch (UniqueConstraintException)
@@ -168,13 +187,18 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
   // write below is ONE conditional UPDATE read fresh from the database (Status <> Charged), never a
   // tracked entity that may hold values from an earlier read. Afterwards any tracked copy is detached
   // so the next read in this context re-reads the row.
-  private async Task UpdateUnlessCharged(
+  //
+  // Held is final in the same way: a decommission moved the row on hold while a worker had it claimed,
+  // and that worker's later writes (retry, fail, skip) must not put it back in the charge queue.
+  private async Task UpdateUnlessFinal(
     Guid id,
     Expression<Func<SetPropertyCalls<PenaltyData>,
       SetPropertyCalls<PenaltyData>>> set)
   {
     await db.Penalties
-      .Where(x => x.Id == id && x.Status != (int)PenaltyStatus.Charged)
+      .Where(x => x.Id == id
+                  && x.Status != (int)PenaltyStatus.Charged
+                  && x.Status != (int)PenaltyStatus.Held)
       .ExecuteUpdateAsync(set);
     this.ForgetTracked(id);
   }
@@ -190,7 +214,7 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
     try
     {
       var now = DateTime.UtcNow;
-      await this.UpdateUnlessCharged(id, s => s
+      await this.UpdateUnlessFinal(id, s => s
         .SetProperty(x => x.Status, (int)PenaltyStatus.Pending)
         .SetProperty(x => x.PaymentIntentId, paymentIntentId)
         .SetProperty(x => x.Attempts, attempts)
@@ -218,21 +242,32 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
       // flight (UserId/HabitExecutionId now NULL): throwing here stops the caller BEFORE it confirms
       // the intent, so no money moves for a deleted user. One conditional UPDATE, read fresh from the
       // database (not a tracked entity, which may still hold the pre-deletion values).
+      //
+      // Likewise a penalty moved on hold by a charity decommission while in flight: no money may be
+      // taken for it, so stop BEFORE the confirm with a PenaltyHeldException the drain recognises.
       var now = DateTime.UtcNow;
       var updated = await db.Penalties
-        .Where(x => x.Id == id && x.UserId != null && x.HabitExecutionId != null)
+        .Where(x => x.Id == id && x.UserId != null && x.HabitExecutionId != null
+                    && x.Status != (int)PenaltyStatus.Held)
         .ExecuteUpdateAsync(s => s
           .SetProperty(x => x.PaymentIntentId, paymentIntentId)
           .SetProperty(x => x.UpdatedAt, now));
       this.ForgetTracked(id);
       if (updated == 0)
       {
-        var exists = await db.Penalties.AsNoTracking().AnyAsync(x => x.Id == id);
+        var status = await db.Penalties.AsNoTracking().Where(x => x.Id == id).Select(x => (int?)x.Status)
+          .FirstOrDefaultAsync();
+        if (status == (int)PenaltyStatus.Held) throw new PenaltyHeldException(id);
+        var exists = status != null;
         throw new InvalidOperationException(exists
           ? $"Cannot persist payment intent: penalty {id} was detached by an account deletion."
           : $"Cannot persist payment intent: penalty {id} was not found.");
       }
       return new Unit();
+    }
+    catch (PenaltyHeldException)
+    {
+      throw; // expected when a decommission lands mid-charge; the drain handles it
     }
     catch (Exception e)
     {
@@ -247,7 +282,7 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
     {
       // Release the claim back to Pending so a later drain retries this row.
       var now = DateTime.UtcNow;
-      await this.UpdateUnlessCharged(id, s => s
+      await this.UpdateUnlessFinal(id, s => s
         .SetProperty(x => x.Attempts, x => x.Attempts + 1)
         .SetProperty(x => x.LastError, error)
         .SetProperty(x => x.Status, (int)PenaltyStatus.Pending)
@@ -266,7 +301,7 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
     try
     {
       var now = DateTime.UtcNow;
-      await this.UpdateUnlessCharged(id, s => s
+      await this.UpdateUnlessFinal(id, s => s
         .SetProperty(x => x.Status, (int)PenaltyStatus.Failed)
         .SetProperty(x => x.LastError, error)
         .SetProperty(x => x.UpdatedAt, now));
@@ -284,7 +319,7 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
     try
     {
       var now = DateTime.UtcNow;
-      await this.UpdateUnlessCharged(id, s => s
+      await this.UpdateUnlessFinal(id, s => s
         .SetProperty(x => x.Status, (int)PenaltyStatus.Skipped)
         .SetProperty(x => x.UpdatedAt, now));
       return new Unit();

@@ -172,4 +172,25 @@ public class DisbursementServiceTests
     repo.MarkFailedCalls.Should().ContainSingle().Which.Id.Should().Be(stale.Id);
     repo.MarkDisbursedCalls.Should().BeEmpty();
   }
+
+  // A charity decommissioned after its payout was claimed: nothing is sent, and the claim is released
+  // so the money stays held under the charity (the next claim skips decommissioned charities).
+  [Fact]
+  public async Task DecommissionedAfterClaim_NothingIsSent_ClaimIsReleased()
+  {
+    var stopped = Payout();
+    var live = Payout(org: "org_live");
+    var repo = new FakeDisbursementRepository(claim: [stopped, live]);
+    repo.Stopped.Add(stopped.CharityId);
+    var gw = FakeDonationGateway.Succeeds("don_live");
+    var svc = Build(repo, gw);
+
+    var res = await svc.ProcessPending(Donor, minPayoutCents: 0, maxGroups: 100);
+
+    res.IsSuccess().Should().BeTrue();
+    gw.CreateCalls.Should().ContainSingle().Which.OrganizationId.Should().Be("org_live");
+    repo.MarkFailedCalls.Should().ContainSingle().Which.Id.Should().Be(stopped.DisbursementId);
+    repo.MarkFailedCalls[0].Error.Should().Contain("decommissioned");
+    repo.MarkDisbursedCalls.Should().ContainSingle().Which.Id.Should().Be(live.DisbursementId);
+  }
 }

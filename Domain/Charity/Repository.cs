@@ -10,6 +10,11 @@ namespace Domain.Charity
         Task<Result<CharityPrincipal?>> Update(Guid id, CharityRecord record);
         Task<Result<Unit?>> Delete(Guid id);
 
+        // Decommission: hidden like Delete, and no more money flows to the charity. Queued charges not yet
+        // taken from a card are put on hold, later missed days are recorded on hold, and payouts to it stop.
+        // Every record is kept. Null when the charity does not exist. Repeating it is a harmless success.
+        Task<Result<CharityDecommissionResult?>> Decommission(Guid id);
+
         // Linking
         Task<Result<Unit?>> SetCauses(Guid id, IEnumerable<string> causeKeys);
         Task<Result<Unit?>> AddCause(Guid id, string causeKey);

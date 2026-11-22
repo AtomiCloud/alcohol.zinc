@@ -5,6 +5,8 @@ namespace Domain.Penalty;
 public interface IPenaltyRepository
 {
   // Idempotent upsert: returns true if newly inserted, false if HabitExecutionId already present.
+  // Inserted as Pending, or as Held when its charity is decommissioned (decided under a lock on the
+  // charity row, so it serializes with a decommission).
   Task<Result<bool>> EnqueuePending(PenaltyRecord record);
 
   // Drain query: Status==Pending ordered by CreatedAt, .Take(batchSize), AsNoTracking.
