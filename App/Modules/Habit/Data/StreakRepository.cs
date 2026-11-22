@@ -1,6 +1,7 @@
 using App.StartUp.Database;
 using CSharp_Result;
 using Domain.Habit;
+using Domain.Penalty;
 using Microsoft.EntityFrameworkCore;
 
 namespace App.Modules.Habit.Data;
@@ -74,7 +75,9 @@ public class StreakRepository(MainDbContext db, ILogger<StreakRepository> logger
                         join hv in db.HabitVersions on he.HabitVersionId equals hv.Id
                         where hv.HabitId == habitId
                               && he.Status == App.Modules.HabitExecution.Data.HabitExecutionStatusData.Failed
-                              && he.PaymentProcessed == false
+                              // Owed until its penalty is Charged (paid). HabitExecutions.PaymentProcessed is
+                              // never set to true anywhere, so it cannot tell paid from unpaid.
+                              && !db.Penalties.Any(p => p.HabitExecutionId == he.Id && p.Status == (int)PenaltyStatus.Charged)
                         select new
                         {
                           he.Id,
@@ -124,7 +127,9 @@ public class StreakRepository(MainDbContext db, ILogger<StreakRepository> logger
                         join h in db.Habits on hv.HabitId equals h.Id
                         where h.UserId == userId
                               && he.Status == App.Modules.HabitExecution.Data.HabitExecutionStatusData.Failed
-                              && he.PaymentProcessed == false
+                              // Owed until its penalty is Charged (paid). HabitExecutions.PaymentProcessed is
+                              // never set to true anywhere, so it cannot tell paid from unpaid.
+                              && !db.Penalties.Any(p => p.HabitExecutionId == he.Id && p.Status == (int)PenaltyStatus.Charged)
                         select new
                         {
                           he.Id,
