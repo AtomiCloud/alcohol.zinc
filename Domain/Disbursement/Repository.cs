@@ -24,4 +24,8 @@ public interface IDisbursementRepository
   // Pending disbursements older than `olderThan` — a process that created the donation but
   // crashed before MarkDisbursed leaves one of these. Reconciled against the vendor.
   Task<Result<List<DisbursementPrincipal>>> GetReconcilable(TimeSpan olderThan, int batchSize);
+
+  // True once the charity is decommissioned: no payout may be sent to it. Checked again right before
+  // a claimed payout is sent, so a decommission that lands after the claim still stops it.
+  Task<Result<bool>> IsPayoutStopped(Guid charityId);
 }

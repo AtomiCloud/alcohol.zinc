@@ -36,5 +36,10 @@ namespace App.Modules.Charities.Data
         // chosen for a habit or as a default) but never erased, because penalties, balances, payouts
         // and habit history point at it.
         public DateTime? DeletedAt { get; set; }
+
+        // Set when an admin decommissions the charity: switched off like a delete (DeletedAt is set too),
+        // AND no more money flows to it. Queued charges not yet taken go on hold, later missed days are
+        // recorded on hold, and payouts to it stop. Money already collected stays recorded under it.
+        public DateTime? DecommissionedAt { get; set; }
     }
 }

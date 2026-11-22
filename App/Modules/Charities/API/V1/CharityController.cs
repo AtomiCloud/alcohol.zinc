@@ -82,6 +82,17 @@ public class CharityController(
     return this.ReturnUnitNullableResult(result, new EntityNotFound("Charity Not Found", typeof(Charity), id.ToString()));
   }
 
+  // Deprecate is DELETE above: the charity is hidden, and habits that already give to it carry on.
+  // Decommission also stops all money flowing to it: queued charges and later missed days are held,
+  // and payouts to it stop. Every record is kept. Repeating it is a harmless success.
+  [Authorize(Policy = AuthPolicies.OnlyAdmin), HttpPost("{id:guid}/decommission")]
+  public async Task<ActionResult> Decommission(Guid id)
+  {
+    var result = await service.Decommission(id);
+
+    return this.ReturnUnitNullableResult(result, new EntityNotFound("Charity Not Found", typeof(Charity), id.ToString()));
+  }
+
   [HttpGet("supported-countries")]
   public ActionResult<IEnumerable<string>> GetSupportedCountries()
   {

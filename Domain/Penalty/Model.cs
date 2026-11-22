@@ -8,8 +8,14 @@ public enum PenaltyStatus
   Charged,
   Failed,
   Skipped,
-  Processing // claimed by a drain worker (atomic Pending->Processing lease); excluded from GetPending so concurrent drains cannot double-charge.
+  Processing, // claimed by a drain worker (atomic Pending->Processing lease); excluded from GetPending so concurrent drains cannot double-charge.
+  Held // its charity was decommissioned before the money was taken: kept as a record, never charged and never paid out, until someone decides what to do with it
 }
+
+// Thrown when a penalty can no longer take a payment because its charity was decommissioned while
+// the charge was in flight. Raised before the payment is confirmed, so no money moves.
+public class PenaltyHeldException(Guid penaltyId)
+  : InvalidOperationException($"Penalty {penaltyId} is on hold: its charity was decommissioned.");
 
 public record PenaltyRecord
 {

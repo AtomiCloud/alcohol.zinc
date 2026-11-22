@@ -401,6 +401,7 @@ public class DeleteAllRemnantsIntegrationTests : IAsyncLifetime
   [InlineData(PenaltyStatus.Processing, true)]
   [InlineData(PenaltyStatus.Failed, true)]
   [InlineData(PenaltyStatus.Skipped, true)]
+  [InlineData(PenaltyStatus.Held, false)] // on hold because its charity was decommissioned: not the user's debt
   [InlineData(null, true)] // failed day with no penalty row (yet)
   public async Task DebtGate_FollowsThePenaltysRealPaymentState(PenaltyStatus? penaltyStatus, bool owes)
   {
@@ -450,8 +451,8 @@ public class DeleteAllRemnantsIntegrationTests : IAsyncLifetime
     result.IsSuccess().Should().Be(!owes);
     (await _db.Users.CountAsync(u => u.Id == "user-A")).Should().Be(owes ? 1 : 0);
     if (!owes)
-      (await _db.Penalties.AsNoTracking().SingleAsync()).Status.Should().Be((int)PenaltyStatus.Charged,
-        "the paid penalty record is kept after the account is deleted");
+      (await _db.Penalties.AsNoTracking().SingleAsync()).Status.Should().Be((int)penaltyStatus!.Value,
+        "the penalty record is kept, unchanged, after the account is deleted");
   }
 
   [SkippableFact]

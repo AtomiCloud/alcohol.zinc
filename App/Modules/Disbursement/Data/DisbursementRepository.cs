@@ -22,10 +22,14 @@ public class DisbursementRepository(MainDbContext db, ILogger<DisbursementReposi
       // the stamping below (DisbursementId set) is what keeps them excluded on later passes.
       // ToListAsync (not FirstOrDefault) so EF runs the raw SQL verbatim without wrapping the
       // FOR UPDATE in an unsupported subquery.
+      // A decommissioned charity is never paid out: its collected money stays held, recorded under it.
       var candidates = await db.Penalties
         .FromSqlRaw(@"
           SELECT * FROM ""Penalties""
           WHERE ""Status"" = {0} AND ""DisbursementId"" IS NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM ""Charities"" c
+              WHERE c.""Id"" = ""Penalties"".""CharityId"" AND c.""DecommissionedAt"" IS NOT NULL)
           ORDER BY ""CreatedAt""
           FOR UPDATE SKIP LOCKED",
           (int)PenaltyStatus.Charged)
@@ -200,6 +204,20 @@ public class DisbursementRepository(MainDbContext db, ILogger<DisbursementReposi
     catch (Exception e)
     {
       logger.LogError(e, "MarkFailed failed for Id={Id}", disbursementId);
+      throw;
+    }
+  }
+
+  public async Task<Result<bool>> IsPayoutStopped(Guid charityId)
+  {
+    try
+    {
+      return await db.Charities.AsNoTracking()
+        .AnyAsync(c => c.Id == charityId && c.DecommissionedAt != null);
+    }
+    catch (Exception e)
+    {
+      logger.LogError(e, "IsPayoutStopped failed for CharityId={CharityId}", charityId);
       throw;
     }
   }

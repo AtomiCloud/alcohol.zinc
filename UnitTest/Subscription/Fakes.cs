@@ -298,7 +298,8 @@ public sealed class FakeSubscriptionPaymentService : IPaymentService
     string userId, Money amount, string description,
     string? idempotencyKey = null, string? existingIntentId = null,
     Func<string, Task>? onIntentCreated = null,
-    ConsentPurpose purpose = ConsentPurpose.Penalty)
+    ConsentPurpose purpose = ConsentPurpose.Penalty,
+    Func<Task>? beforeConfirm = null)
   {
     ChargeCalls.Add((userId, amount, description, idempotencyKey, existingIntentId, purpose));
     if (_emitIntentId != null && onIntentCreated != null)

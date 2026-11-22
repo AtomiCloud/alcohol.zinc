@@ -12,6 +12,10 @@ public interface ICharityService
 
   Task<Result<Unit?>> Delete(Guid id);
 
+  // Decommission the charity (see ICharityRepository.Decommission) and tell affected users in the app
+  // to pick a new charity. Null when the charity does not exist.
+  Task<Result<Unit?>> Decommission(Guid id);
+
   // Linking
   Task<Result<Unit?>> SetCauses(Guid id, IEnumerable<string> causeKeys);
   Task<Result<Unit?>> AddCause(Guid id, string causeKey);

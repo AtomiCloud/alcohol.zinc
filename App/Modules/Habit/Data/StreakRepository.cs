@@ -76,8 +76,11 @@ public class StreakRepository(MainDbContext db, ILogger<StreakRepository> logger
                         where hv.HabitId == habitId
                               && he.Status == App.Modules.HabitExecution.Data.HabitExecutionStatusData.Failed
                               // Owed until its penalty is Charged (paid). HabitExecutions.PaymentProcessed is
-                              // never set to true anywhere, so it cannot tell paid from unpaid.
-                              && !db.Penalties.Any(p => p.HabitExecutionId == he.Id && p.Status == (int)PenaltyStatus.Charged)
+                              // never set to true anywhere, so it cannot tell paid from unpaid. A Held penalty
+                              // (its charity was decommissioned) is not owed: the user did not cause the hold.
+                              && !db.Penalties.Any(p => p.HabitExecutionId == he.Id
+                                                        && (p.Status == (int)PenaltyStatus.Charged
+                                                            || p.Status == (int)PenaltyStatus.Held))
                         select new
                         {
                           he.Id,
@@ -128,8 +131,11 @@ public class StreakRepository(MainDbContext db, ILogger<StreakRepository> logger
                         where h.UserId == userId
                               && he.Status == App.Modules.HabitExecution.Data.HabitExecutionStatusData.Failed
                               // Owed until its penalty is Charged (paid). HabitExecutions.PaymentProcessed is
-                              // never set to true anywhere, so it cannot tell paid from unpaid.
-                              && !db.Penalties.Any(p => p.HabitExecutionId == he.Id && p.Status == (int)PenaltyStatus.Charged)
+                              // never set to true anywhere, so it cannot tell paid from unpaid. A Held penalty
+                              // (its charity was decommissioned) is not owed: the user did not cause the hold.
+                              && !db.Penalties.Any(p => p.HabitExecutionId == he.Id
+                                                        && (p.Status == (int)PenaltyStatus.Charged
+                                                            || p.Status == (int)PenaltyStatus.Held))
                         select new
                         {
                           he.Id,
