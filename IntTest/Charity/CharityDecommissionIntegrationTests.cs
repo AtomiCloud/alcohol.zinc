@@ -4,7 +4,6 @@ using App.Modules.Disbursement.Data;
 using App.Modules.Habit.Data;
 using App.Modules.HabitExecution.Data;
 using App.Modules.HabitVersion.Data;
-using App.Modules.Notification.Data;
 using App.Modules.Penalty.Data;
 using App.Modules.Users.Data;
 using App.StartUp.Database;
@@ -13,10 +12,12 @@ using CSharp_Result;
 using Domain.Charity;
 using Domain.Notification;
 using Domain.Penalty;
+using IntTest.Notification;
 using IntTest.User;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using NodaMoney;
+using StubPaymentService = IntTest.Penalty.StubPaymentService;
 
 namespace IntTest.Charity;
 
@@ -70,10 +71,15 @@ public class CharityDecommissionIntegrationTests : IAsyncLifetime
   private CharityRepository Charities(MainDbContext? db = null) => new(db ?? _db, NullLogger<CharityRepository>.Instance);
   private PenaltyRepository Penalties(MainDbContext? db = null) => new(db ?? _db, NullLogger<PenaltyRepository>.Instance);
 
-  private CharityService Service() => new(
-    Charities(),
-    new InboxService(new InboxRepository(_db, NullLogger<InboxRepository>.Instance)),
-    NullLogger<CharityService>.Instance);
+  private CharityService Service() => new(Charities(), NullLogger<CharityService>.Instance);
+
+  private static InboxNotificationRecord TestNotice(string name) => new()
+  {
+    Kind = InboxKinds.CharityDecommissioned, Title = "t", Body = name, DedupeKey = "test-notice",
+  };
+
+  private Task<Result<CharityDecommissionResult?>> Decommission(Guid id, MainDbContext? db = null)
+    => Charities(db).Decommission(id, TestNotice);
 
   [SkippableFact]
   public async Task Decommission_HoldsChargesNotYetTaken_KeepsEverythingElse()
@@ -87,7 +93,7 @@ public class CharityDecommissionIntegrationTests : IAsyncLifetime
 
     var queued = await SeedPenalty("user-a", target, PenaltyStatus.Pending);
     var claimedNoIntent = await SeedPenalty("user-a", target, PenaltyStatus.Processing);
-    var inFlightWithIntent = await SeedPenalty("user-a", target, PenaltyStatus.Pending, intent: "int_started");
+    var retryWithIntent = await SeedPenalty("user-a", target, PenaltyStatus.Pending, intent: "int_started");
     var charged = await SeedPenalty("user-a", target, PenaltyStatus.Charged, intent: "int_paid");
     var failed = await SeedPenalty("user-a", target, PenaltyStatus.Failed);
     var otherQueued = await SeedPenalty("user-b", other, PenaltyStatus.Pending);
@@ -95,11 +101,12 @@ public class CharityDecommissionIntegrationTests : IAsyncLifetime
     await _db.SaveChangesAsync();
     _db.ChangeTracker.Clear();
 
-    var result = (await Charities().Decommission(target)).Get();
+    var result = (await Decommission(target)).Get();
     _db.ChangeTracker.Clear();
 
     result.Should().NotBeNull();
-    result!.HeldPenalties.Should().Be(2);
+    result!.HeldPenalties.Should().Be(3);
+    result.NoticesPosted.Should().Be(1);
     result.CharityName.Should().Be("Target Charity");
     result.AffectedUserIds.Should().Equal("user-a");
 
@@ -107,8 +114,8 @@ public class CharityDecommissionIntegrationTests : IAsyncLifetime
     (await Row(queued)).Status.Should().Be((int)PenaltyStatus.Held, "a queued charge is put on hold, not cancelled");
     (await Row(queued)).LastError.Should().Be(PenaltyRepository.HeldReason);
     (await Row(claimedNoIntent)).Status.Should().Be((int)PenaltyStatus.Held, "no payment was started for it yet");
-    (await Row(inFlightWithIntent)).Status.Should().Be((int)PenaltyStatus.Pending,
-      "a charge already started at the card provider is left to finish");
+    (await Row(retryWithIntent)).Status.Should().Be((int)PenaltyStatus.Held,
+      "a created-but-unconfirmed payment is never confirmed after a decommission");
     (await Row(charged)).Status.Should().Be((int)PenaltyStatus.Charged);
     (await Row(failed)).Status.Should().Be((int)PenaltyStatus.Failed);
     (await Row(otherQueued)).Status.Should().Be((int)PenaltyStatus.Pending, "other charities are untouched");
@@ -131,8 +138,9 @@ public class CharityDecommissionIntegrationTests : IAsyncLifetime
       .Should().NotContain(target);
 
     // Repeating it is a harmless success that keeps the first times.
-    var again = (await Charities().Decommission(target)).Get();
+    var again = (await Decommission(target)).Get();
     again!.HeldPenalties.Should().Be(0);
+    again.NoticesPosted.Should().Be(0, "each user is told once");
     _db.ChangeTracker.Clear();
     var c2 = await _db.Charities.AsNoTracking().SingleAsync(x => x.Id == target);
     c2.DecommissionedAt.Should().Be(c.DecommissionedAt);
@@ -155,7 +163,7 @@ public class CharityDecommissionIntegrationTests : IAsyncLifetime
     (await _db.Penalties.AsNoTracking().SingleAsync(p => p.Id == queued)).Status
       .Should().Be((int)PenaltyStatus.Pending, "deprecate alone keeps money flowing");
 
-    (await Charities().Decommission(target)).Get()!.HeldPenalties.Should().Be(1);
+    (await Decommission(target)).Get()!.HeldPenalties.Should().Be(1);
     _db.ChangeTracker.Clear();
 
     var c = await _db.Charities.AsNoTracking().SingleAsync(x => x.Id == target);
@@ -169,7 +177,7 @@ public class CharityDecommissionIntegrationTests : IAsyncLifetime
   {
     Skip.IfNot(_enabled, "requires ZINC_DELETE_TEST_DB (a Postgres host)");
 
-    (await Charities().Decommission(Guid.NewGuid())).Get().Should().BeNull();
+    (await Decommission(Guid.NewGuid())).Get().Should().BeNull();
     (await Service().Decommission(Guid.NewGuid())).Get().Should().BeNull();
   }
 
@@ -184,7 +192,7 @@ public class CharityDecommissionIntegrationTests : IAsyncLifetime
     var execTarget = await SeedExecution("user-a");
     var execOther = await SeedExecution("user-a");
     _db.ChangeTracker.Clear();
-    (await Charities().Decommission(target)).Get().Should().NotBeNull();
+    (await Decommission(target)).Get().Should().NotBeNull();
     _db.ChangeTracker.Clear();
 
     (await Penalties().EnqueuePending(Record(execTarget, "user-a", target))).Get().Should().BeTrue();
@@ -220,14 +228,14 @@ public class CharityDecommissionIntegrationTests : IAsyncLifetime
     (await worker.GetPending(10)).Get().Select(p => p.Id).Should().Equal(queued);
 
     await using (var other = new MainDbContext(_monitor, NullLoggerFactory.Instance))
-      (await Charities(other).Decommission(target)).Get()!.HeldPenalties.Should().Be(1);
+      (await Decommission(target, other)).Get()!.HeldPenalties.Should().Be(1);
 
     var save = () => worker.SetIntentId(queued, "int_created_after_decommission");
     await save.Should().ThrowAsync<PenaltyHeldException>();
 
     await worker.Bump(queued, "retry");
     await worker.MarkPending(queued, "int_x", 2);
-    await worker.MarkFailed(queued, "gave up");
+    (await worker.MarkFailed(queued, "gave up")).Get().Should().BeFalse("nothing was marked, so no failure email");
     await worker.MarkSkipped(queued);
     _db.ChangeTracker.Clear();
 
@@ -253,7 +261,7 @@ public class CharityDecommissionIntegrationTests : IAsyncLifetime
     await _db.SaveChangesAsync();
     _db.ChangeTracker.Clear();
 
-    (await Charities().Decommission(target)).Get().Should().NotBeNull();
+    (await Decommission(target)).Get().Should().NotBeNull();
     _db.ChangeTracker.Clear();
 
     var payouts = new DisbursementRepository(_db, NullLogger<DisbursementRepository>.Instance);
@@ -286,7 +294,7 @@ public class CharityDecommissionIntegrationTests : IAsyncLifetime
     await using var stale = new MainDbContext(_monitor, NullLoggerFactory.Instance);
     (await stale.Charities.SingleAsync(c => c.Id == target)).DecommissionedAt.Should().BeNull(); // tracked, before
 
-    (await Charities().Decommission(target)).Get().Should().NotBeNull();
+    (await Decommission(target)).Get().Should().NotBeNull();
 
     var staleRepo = Charities(stale);
     (await staleRepo.Update(target, new CharityRecord { Name = "Renamed" })).IsSuccess().Should().BeTrue();
@@ -345,6 +353,114 @@ public class CharityDecommissionIntegrationTests : IAsyncLifetime
       n.Body.Should().Contain("Save the Owls");
       n.Data.Should().Contain(target.ToString());
     });
+  }
+
+  [SkippableFact]
+  public async Task MissedDayBeingRecorded_WhenDecommissionStarts_IsHeldOnceBothFinish()
+  {
+    // A missed day is being recorded (its transaction is open, the charity looked live) when an admin
+    // decommissions the charity. The decommission must wait for it, then hold the new charge; it must
+    // never end with a Pending charge for a decommissioned charity.
+    Skip.IfNot(_enabled, "requires ZINC_DELETE_TEST_DB (a Postgres host)");
+
+    var target = await SeedCharity("Target Charity");
+    await SeedUser("user-a", target);
+    var exec = await SeedExecution("user-a");
+    _db.ChangeTracker.Clear();
+
+    await using var cronCtx = new MainDbContext(_monitor, NullLoggerFactory.Instance);
+    await using var cronTx = await cronCtx.Database.BeginTransactionAsync();
+    (await Penalties(cronCtx).EnqueuePending(Record(exec, "user-a", target))).Get().Should().BeTrue();
+
+    await using var adminCtx = new MainDbContext(_monitor, NullLoggerFactory.Instance);
+    var decommission = Decommission(target, adminCtx);
+    await Task.Delay(500);
+    decommission.IsCompleted.Should().BeFalse("the decommission waits on the charity row the enqueue holds");
+
+    await cronTx.CommitAsync();
+    (await decommission).Get()!.HeldPenalties.Should().Be(1, "it ran after the enqueue committed and held it");
+
+    _db.ChangeTracker.Clear();
+    (await _db.Penalties.AsNoTracking().SingleAsync(p => p.HabitExecutionId == exec)).Status
+      .Should().Be((int)PenaltyStatus.Held);
+  }
+
+  [SkippableTheory]
+  [InlineData("SUCCEEDED", true)]
+  [InlineData("REQUIRES_PAYMENT_METHOD", false)]
+  [InlineData("REQUIRES_CUSTOMER_ACTION", false)]
+  [InlineData(null, false)] // the look-up itself failed
+  public async Task HeldChargeWithAPayment_IsOnlyLookedUp_NeverConfirmed(string? providerStatus, bool taken)
+  {
+    // A charge that had a payment created (e.g. waiting to retry) is put on hold by a decommission.
+    // The drain never confirms it. It only asks the provider whether an earlier confirm took the money:
+    // if so it is recorded as Charged (the money is held: no payout to this charity), else it stays Held.
+    Skip.IfNot(_enabled, "requires ZINC_DELETE_TEST_DB (a Postgres host)");
+
+    var target = await SeedCharity("Target Charity");
+    await SeedUser("user-a", target);
+    var queued = await SeedPenalty("user-a", target, PenaltyStatus.Pending, intent: "int_created");
+    _db.ChangeTracker.Clear();
+    (await Decommission(target)).Get()!.HeldPenalties.Should().Be(1);
+    await _db.Database.ExecuteSqlRawAsync(
+      @"UPDATE ""Penalties"" SET ""UpdatedAt"" = now() - interval '1 hour' WHERE ""Id"" = {0}", queued);
+    _db.ChangeTracker.Clear();
+
+    var payment = StubPaymentService.Succeeds("int_created");
+    payment.Retrieve = id => providerStatus == null
+      ? new Exception("provider unavailable")
+      : new Domain.Payment.PaymentIntentResult
+      {
+        Id = id, Status = providerStatus, Amount = 1.00m, Currency = "USD", CustomerId = "cus", MerchantOrderId = "mo",
+      };
+    var drain = new PenaltyService(Penalties(), payment, new NoopEmailNotifier(), NullLogger<PenaltyService>.Instance);
+    (await drain.ProcessPending(batchSize: 10, maxAttempts: 5)).IsSuccess().Should().BeTrue();
+    _db.ChangeTracker.Clear();
+
+    payment.RetrieveCalls.Should().Equal("int_created");
+    payment.ExistingIntentIdArgs.Should().BeEmpty("a held charge is never sent to be charged or confirmed");
+    var row = await _db.Penalties.AsNoTracking().SingleAsync(p => p.Id == queued);
+    if (taken)
+    {
+      row.Status.Should().Be((int)PenaltyStatus.Charged);
+      (await _db.CharityBalances.AsNoTracking().SingleAsync(b => b.CharityId == target)).AccruedCents.Should().Be(100);
+      var claimed = (await new DisbursementRepository(_db, NullLogger<DisbursementRepository>.Instance)
+        .ClaimPendingPayouts(minPayoutCents: 0, maxGroups: 10)).Get();
+      claimed.Should().BeEmpty("the money is held: payouts to a decommissioned charity stay stopped");
+    }
+    else
+    {
+      row.Status.Should().Be((int)PenaltyStatus.Held);
+      row.Attempts.Should().Be(1, "one look-up recorded");
+      row.LastError.Should().Contain("int_created");
+      // Not looked up again until it is due.
+      (await drain.ProcessPending(batchSize: 10, maxAttempts: 5)).IsSuccess().Should().BeTrue();
+      payment.RetrieveCalls.Should().HaveCount(1);
+    }
+  }
+
+  [SkippableFact]
+  public async Task Decommission_FailingPartWay_ChangesNothing_IncludingNotices()
+  {
+    // The notices are written in the decommission's own transaction. If anything fails, nothing is
+    // committed: the charity is not decommissioned, nothing is held, nobody is told, defaults are kept.
+    Skip.IfNot(_enabled, "requires ZINC_DELETE_TEST_DB (a Postgres host)");
+
+    var target = await SeedCharity("Target Charity");
+    await SeedUser("user-a", target);
+    var queued = await SeedPenalty("user-a", target, PenaltyStatus.Pending);
+    _db.ChangeTracker.Clear();
+
+    var act = () => Charities().Decommission(target, _ => throw new InvalidOperationException("boom"));
+    await act.Should().ThrowAsync<InvalidOperationException>();
+    _db.ChangeTracker.Clear();
+
+    var c = await _db.Charities.AsNoTracking().SingleAsync(x => x.Id == target);
+    c.DecommissionedAt.Should().BeNull();
+    c.DeletedAt.Should().BeNull();
+    (await _db.Penalties.AsNoTracking().SingleAsync(p => p.Id == queued)).Status.Should().Be((int)PenaltyStatus.Pending);
+    (await _db.Configurations.AsNoTracking().SingleAsync(x => x.UserId == "user-a")).DefaultCharityId.Should().Be(target);
+    (await _db.InboxNotifications.CountAsync()).Should().Be(0);
   }
 
   // ---- seeding ----

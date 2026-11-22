@@ -1,5 +1,6 @@
 using System.Transactions;
 using App.Error.V1;
+using App.Modules.Notification.Data;
 using App.Modules.Penalty.Data;
 using App.StartUp.Database;
 using App.Utility;
@@ -198,15 +199,19 @@ namespace App.Modules.Charities.Data
         // Decommissioning switches the charity off exactly like Delete, and also stops all money flowing to
         // it. In one transaction, under the same FOR UPDATE lock on the charity row:
         //   - DeletedAt and DecommissionedAt are set (each keeps its first time);
-        //   - queued charges for it that have not reached the card provider yet (Pending, or claimed by a
-        //     worker but with no payment intent) are moved to Held. A worker still holding such a row is
-        //     refused when it tries to record a payment intent, before any confirm, so no money moves;
+        //   - every charge for it not yet taken (Pending, or claimed by a worker as Processing) is moved to
+        //     Held, whether or not a payment intent was created for it. The drain never confirms a Held
+        //     row: a worker still holding one is refused when it records a new payment intent (before the
+        //     confirm), and a stale claim is never re-claimed. Held rows that already have a payment intent
+        //     are only ever LOOKED UP (PenaltyService reconciles them): if the provider reports the money was
+        //     taken anyway, the row becomes Charged and the money is held with the rest;
         //   - users' default-charity settings that point at it are cleared, as Delete does.
-        // A charge that already has a payment intent was started before the decommission and is left to
-        // finish; if it succeeds the money is held with the rest (payouts to this charity stop).
+        // The one boundary: a confirm already on its way to the provider when this commits can still
+        // succeed. Its money is recorded as Charged and held (payouts to this charity stop).
         // Nothing is erased. Returns the users to tell: those with a live habit giving to it, and those
         // whose default charity it was.
-        public async Task<Result<CharityDecommissionResult?>> Decommission(Guid id)
+        public async Task<Result<CharityDecommissionResult?>> Decommission(
+            Guid id, Func<string, Domain.Notification.InboxNotificationRecord> notice)
         {
             await using var ownTx = Transaction.Current == null && db.Database.CurrentTransaction == null
                 ? await db.Database.BeginTransactionAsync()
@@ -238,10 +243,11 @@ namespace App.Modules.Charities.Data
 
                 var held = await db.Penalties
                     .Where(p => p.CharityId == id
-                                && (p.Status == (int)PenaltyStatus.Pending || p.Status == (int)PenaltyStatus.Processing)
-                                && p.PaymentIntentId == null)
+                                && (p.Status == (int)PenaltyStatus.Pending || p.Status == (int)PenaltyStatus.Processing))
                     .ExecuteUpdateAsync(s => s
                         .SetProperty(p => p.Status, (int)PenaltyStatus.Held)
+                        // From here Attempts counts provider look-ups of a Held row with an intent.
+                        .SetProperty(p => p.Attempts, 0)
                         .SetProperty(p => p.LastError, PenaltyRepository.HeldReason)
                         .SetProperty(p => p.UpdatedAt, now));
                 foreach (var p in db.Penalties.Local.Where(p => p.CharityId == id).ToList())
@@ -263,9 +269,23 @@ namespace App.Modules.Charities.Data
                     .Where(c => c.DefaultCharityId == id)
                     .ExecuteUpdateAsync(s => s.SetProperty(c => c.DefaultCharityId, (Guid?)null));
 
+                // The in-app notices, in this same transaction, so a committed decommission always has them.
+                // Decommissions of one charity serialize on the row lock above, so skipping users who already
+                // have this notice (a repeat) cannot race another insert of the same dedupe key.
+                var users = habitUsers.Concat(defaultUsers).Distinct().Order(StringComparer.Ordinal).ToList();
+                var record = notice(names[0]);
+                var alreadyTold = record.DedupeKey == null
+                    ? []
+                    : await db.InboxNotifications
+                        .Where(n => n.DedupeKey == record.DedupeKey && users.Contains(n.UserId))
+                        .Select(n => n.UserId)
+                        .ToListAsync();
+                var toTell = users.Except(alreadyTold).ToList();
+                db.InboxNotifications.AddRange(toTell.Select(u => record.ToData(u)));
+                await db.SaveChangesAsync();
+
                 if (ownTx != null) await ownTx.CommitAsync();
 
-                var users = habitUsers.Concat(defaultUsers).Distinct().Order(StringComparer.Ordinal).ToList();
                 logger.LogInformation(
                     "Charity decommissioned for Id: {Id}; {Held} queued charges put on hold", id, held);
 
@@ -274,6 +294,7 @@ namespace App.Modules.Charities.Data
                     CharityName = names[0],
                     AffectedUserIds = users,
                     HeldPenalties = held,
+                    NoticesPosted = toTell.Count,
                 };
             }
             catch (Exception e)

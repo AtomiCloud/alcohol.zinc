@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Domain.Charity;
 
-public class CharityService(ICharityRepository repo, IInboxService inbox, ILogger<CharityService> logger) : ICharityService
+public class CharityService(ICharityRepository repo, ILogger<CharityService> logger) : ICharityService
 {
   public Task<Result<Charity?>> Get(Guid id)
   {
@@ -34,38 +34,24 @@ public class CharityService(ICharityRepository repo, IInboxService inbox, ILogge
 
   public async Task<Result<Unit?>> Decommission(Guid id)
   {
-    var result = await repo.Decommission(id);
+    // The in-app notice asks each affected user to pick a new charity. It is written in the same
+    // transaction as the decommission, so it is never lost; the dedupe key posts it once per user.
+    InboxNotificationRecord Notice(string charityName) => new()
+    {
+      Kind = InboxKinds.CharityDecommissioned,
+      Title = "Pick a new charity",
+      Body = $"{charityName} is no longer taking donations. Pick a new charity for the habits that give to it.",
+      Data = JsonSerializer.Serialize(new { charityId = id }),
+      DedupeKey = $"{InboxKinds.CharityDecommissioned}:{id}",
+    };
+
+    var result = await repo.Decommission(id, Notice);
     if (!result.IsSuccess()) return result.FailureOrDefault()!;
     if (result.Get() is not { } done) return (Unit?)null;
 
     logger.LogInformation(
-      "Charity {Id} decommissioned: {Held} queued charges put on hold, {Users} users to tell",
-      id, done.HeldPenalties, done.AffectedUserIds.Count);
-
-    // Tell each affected user in the app. Best effort: the decommission is already committed, and the
-    // dedupe key makes a repeat decommission (e.g. a retry after a failed send) post at most once each.
-    var record = new InboxNotificationRecord
-    {
-      Kind = InboxKinds.CharityDecommissioned,
-      Title = "Pick a new charity",
-      Body = $"{done.CharityName} is no longer taking donations. Pick a new charity for the habits that give to it.",
-      Data = JsonSerializer.Serialize(new { charityId = id }),
-      DedupeKey = $"{InboxKinds.CharityDecommissioned}:{id}",
-    };
-    foreach (var userId in done.AffectedUserIds)
-    {
-      try
-      {
-        var posted = await inbox.Post(userId, record);
-        if (!posted.IsSuccess())
-          logger.LogWarning(posted.FailureOrDefault(), "Decommission notice failed for charity {Id}", id);
-      }
-      catch (Exception e)
-      {
-        logger.LogWarning(e, "Decommission notice failed for charity {Id}", id);
-      }
-    }
-
+      "Charity {Id} decommissioned: {Held} charges put on hold, {Notices} users notified",
+      id, done.HeldPenalties, done.NoticesPosted);
     return new Unit();
   }
 

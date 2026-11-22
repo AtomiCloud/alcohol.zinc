@@ -15,6 +15,12 @@ public class PenaltyService(
 {
   public async Task<Result<int>> ProcessPending(int batchSize, int maxAttempts)
   {
+    var reconciled = await this.ReconcileHeld(batchSize, maxAttempts);
+    return await this.Drain(batchSize, maxAttempts).Then(n => n + reconciled, Errors.MapAll);
+  }
+
+  private async Task<Result<int>> Drain(int batchSize, int maxAttempts)
+  {
     return await repo.GetPending(batchSize)
       .ThenAwait(async pending =>
       {
@@ -38,9 +44,10 @@ public class PenaltyService(
             logger.LogError(ex, "ProcessOne threw for penalty {Id}; isolating and continuing", p.Id);
             try
             {
-              await (p.Record.Attempts + 1 >= maxAttempts
-                ? repo.MarkFailed(p.Id, $"unhandled: {ex.Message}")
-                : repo.Bump(p.Id, $"unhandled: {ex.Message}"));
+              if (p.Record.Attempts + 1 >= maxAttempts)
+                await repo.MarkFailed(p.Id, $"unhandled: {ex.Message}");
+              else
+                await repo.Bump(p.Id, $"unhandled: {ex.Message}");
             }
             catch (Exception inner)
             {
@@ -54,6 +61,78 @@ public class PenaltyService(
           .ToResultOfSeq()
           .Then(xs => xs.Sum(), Errors.MapAll);
       });
+  }
+
+  // How long a Held row waits between provider look-ups. Also keeps a look-up clear of a confirm that
+  // was already on its way to the provider when the charity was decommissioned (seconds).
+  private static readonly TimeSpan HeldRecheck = TimeSpan.FromMinutes(10);
+
+  // A charge put on hold by a charity decommission is never confirmed again. But if it already had a
+  // payment intent, an earlier attempt may have been confirmed at the provider before the hold (or a
+  // confirm was in flight). Look it up, WITHOUT confirming:
+  //   SUCCEEDED -> the money was taken: Charged (credits the charity ledger once; payouts to a
+  //                decommissioned charity stay stopped, so the money is held);
+  //   otherwise -> stays Held; checked again later, up to maxChecks times, then left with a note to
+  //                reconcile with the payment provider.
+  private async Task<int> ReconcileHeld(int batchSize, int maxChecks)
+  {
+    var batch = await repo.GetHeldToReconcile(batchSize, maxChecks, HeldRecheck);
+    if (!batch.IsSuccess())
+    {
+      logger.LogError(batch.FailureOrDefault(), "Loading held penalties to reconcile failed; continuing");
+      return 0;
+    }
+
+    var settled = 0;
+    foreach (var p in batch.Get())
+    {
+      var rec = p.Record;
+      var intentId = rec.PaymentIntentId!;
+      try
+      {
+        var lookup = await payment.RetrievePaymentIntentAsync(intentId);
+        if (lookup.IsSuccess() && lookup.Get().Status == "SUCCEEDED")
+        {
+          var charged = await repo.MarkCharged(p.Id, intentId);
+          if (!charged.IsSuccess())
+          {
+            logger.LogError(charged.FailureOrDefault(), "Recording held penalty {Id} as charged failed", p.Id);
+            continue;
+          }
+          settled++;
+          if (rec.UserId is { } userId && rec.HabitExecutionId is { } executionId)
+            await notifier.NotifyPenaltyCharged(userId, rec.Amount, rec.CharityId, executionId, DateTime.UtcNow);
+          continue;
+        }
+
+        var why = lookup.IsSuccess()
+          ? $"status {lookup.Get().Status}"
+          : lookup.FailureOrDefault()?.Message ?? "lookup error";
+        var note = rec.Attempts + 1 >= maxChecks
+          ? $"held: charity decommissioned; payment intent {intentId} still not taken ({why}) after {maxChecks} checks; reconcile with the payment provider"
+          : $"held: charity decommissioned; payment intent {intentId} not taken ({why})";
+        await repo.NoteHeldCheck(p.Id, note);
+      }
+      catch (OperationCanceledException)
+      {
+        throw;
+      }
+      catch (Exception e)
+      {
+        logger.LogError(e, "Reconciling held penalty {Id} threw; continuing", p.Id);
+      }
+    }
+    return settled;
+  }
+
+  // Mark Failed and email the user, but only if the row was really marked: a row that became final
+  // meanwhile (Charged, or Held by a charity decommission) gets no "payment failed" email.
+  private async Task<Result<int>> FailAndNotify(PenaltyPrincipal p, string userId, Guid habitExecutionId, string error)
+  {
+    var failed = await repo.MarkFailed(p.Id, error);
+    if (failed.IsSuccess() && failed.Get())
+      await notifier.NotifyPenaltyFailed(userId, p.Record.Amount, p.Record.CharityId, habitExecutionId, DateTime.UtcNow);
+    return failed.Then(_ => 1, Errors.MapAll);
   }
 
   private int LeftOnHold(PenaltyPrincipal p)
@@ -134,11 +213,7 @@ public class PenaltyService(
       var attempts = rec.Attempts + 1;
       if (attempts >= maxAttempts)
       {
-        var failed = await repo.MarkFailed(p.Id, $"Max attempts reached, last status {intent.Status}")
-          .Then(_ => 1, Errors.MapAll);
-        if (failed.IsSuccess())
-          await notifier.NotifyPenaltyFailed(userId, rec.Amount, rec.CharityId, habitExecutionId, DateTime.UtcNow);
-        return failed;
+        return await this.FailAndNotify(p, userId, habitExecutionId, $"Max attempts reached, last status {intent.Status}");
       }
 
       return await repo.MarkPending(p.Id, intent.Id, attempts).Then(_ => 0, Errors.MapAll);
@@ -154,10 +229,7 @@ public class PenaltyService(
     // Transient/other error -> bump; exhaust to Failed.
     if (rec.Attempts + 1 >= maxAttempts)
     {
-      var failed = await repo.MarkFailed(p.Id, ex?.Message ?? "charge error").Then(_ => 1, Errors.MapAll);
-      if (failed.IsSuccess())
-        await notifier.NotifyPenaltyFailed(userId, rec.Amount, rec.CharityId, habitExecutionId, DateTime.UtcNow);
-      return failed;
+      return await this.FailAndNotify(p, userId, habitExecutionId, ex?.Message ?? "charge error");
     }
 
     return await repo.Bump(p.Id, ex?.Message ?? "charge error").Then(_ => 0, Errors.MapAll);

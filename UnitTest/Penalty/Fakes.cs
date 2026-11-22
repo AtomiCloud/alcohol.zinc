@@ -64,9 +64,25 @@ public sealed class FakePenaltyRepository(params PenaltyPrincipal[] pending) : I
     return Task.FromResult<Result<Unit>>(new Unit());
   }
 
-  public Task<Result<Unit>> MarkFailed(Guid id, string error)
+  // What MarkFailed reports: true = the row was marked; false = it was already final (e.g. Held).
+  public bool MarkFailedMarks { get; init; } = true;
+
+  public Task<Result<bool>> MarkFailed(Guid id, string error)
   {
     MarkFailedCalls.Add((id, error));
+    return Task.FromResult<Result<bool>>(MarkFailedMarks);
+  }
+
+  // Held rows with a payment intent, handed out for a look-up.
+  public List<PenaltyPrincipal> HeldToReconcile { get; init; } = [];
+  public List<(Guid Id, string Note)> NoteHeldCheckCalls { get; } = [];
+
+  public Task<Result<List<PenaltyPrincipal>>> GetHeldToReconcile(int batchSize, int maxChecks, TimeSpan olderThan)
+    => Task.FromResult<Result<List<PenaltyPrincipal>>>(HeldToReconcile.Take(batchSize).ToList());
+
+  public Task<Result<Unit>> NoteHeldCheck(Guid id, string note)
+  {
+    NoteHeldCheckCalls.Add((id, note));
     return Task.FromResult<Result<Unit>>(new Unit());
   }
 

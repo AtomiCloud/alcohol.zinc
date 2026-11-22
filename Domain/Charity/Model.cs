@@ -40,6 +40,7 @@ namespace Domain.Charity
     {
       public required string CharityName { get; init; }
       public required IReadOnlyList<string> AffectedUserIds { get; init; }
+      public required int NoticesPosted { get; init; }
       public required int HeldPenalties { get; init; }
     }
 

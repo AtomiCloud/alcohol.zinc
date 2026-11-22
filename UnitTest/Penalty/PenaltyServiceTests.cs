@@ -453,4 +453,81 @@ public class PenaltyServiceTests
     repo.MarkSkippedCalls.Should().BeEmpty();
     notifier.PenaltyFailed.Should().BeEmpty();
   }
+
+  // The last attempt fails, but the row became final meanwhile (put on hold by a charity decommission):
+  // MarkFailed reports it marked nothing, so the user must not get a "payment failed" email.
+  [Theory]
+  [InlineData(true)]  // the charge call failed
+  [InlineData(false)] // the charge call returned an unsettled intent
+  public async Task LastAttemptFails_ButRowWasAlreadyFinal_NoFailureEmail(bool chargeErrors)
+  {
+    var pending = Pending(attempts: 4);
+    var repo = new FakePenaltyRepository(pending) { MarkFailedMarks = false };
+    var payment = chargeErrors
+      ? FakePaymentService.Fails(new Exception("gateway timeout"))
+      : FakePaymentService.WithStatus("pi_x", "REQUIRES_PAYMENT_METHOD");
+    var notifier = new RecordingEmailNotifier();
+
+    var res = await Build(repo, payment, notifier).ProcessPending(batchSize: 10, maxAttempts: 5);
+
+    res.IsSuccess().Should().BeTrue();
+    repo.MarkFailedCalls.Should().ContainSingle();
+    notifier.PenaltyFailed.Should().BeEmpty();
+  }
+
+  private static PenaltyPrincipal HeldWithIntent(int checks = 0) => Pending() with
+  {
+    Record = Pending().Record with
+    {
+      Status = PenaltyStatus.Held, PaymentIntentId = "pi_held", Attempts = checks,
+    },
+  };
+
+  // A held charge with a payment intent is only LOOKED UP, never confirmed: money the provider says was
+  // taken is recorded as Charged (and the user is told it was charged); anything else stays Held.
+  [Theory]
+  [InlineData("SUCCEEDED", true)]
+  [InlineData("REQUIRES_CUSTOMER_ACTION", false)]
+  [InlineData("CANCELLED", false)]
+  public async Task HeldWithIntent_IsLookedUp_NeverCharged(string status, bool taken)
+  {
+    var held = HeldWithIntent();
+    var repo = new FakePenaltyRepository { HeldToReconcile = [held] };
+    var payment = FakePaymentService.Succeeds("pi_unused").WithRetrieve(id => new PaymentIntentResult
+    {
+      Id = id, Status = status, Amount = 5m, Currency = "SGD", CustomerId = "c", MerchantOrderId = "m",
+    });
+    var notifier = new RecordingEmailNotifier();
+
+    var res = await Build(repo, payment, notifier).ProcessPending(batchSize: 10, maxAttempts: 5);
+
+    res.IsSuccess().Should().BeTrue();
+    payment.RetrieveCalls.Should().Equal("pi_held");
+    payment.ChargeCalls.Should().BeEmpty("a held charge is never charged or confirmed");
+    if (taken)
+    {
+      repo.MarkChargedCalls.Should().ContainSingle().Which.Should().Be((held.Id, "pi_held"));
+      repo.NoteHeldCheckCalls.Should().BeEmpty();
+      notifier.PenaltyCharged.Should().ContainSingle();
+    }
+    else
+    {
+      repo.MarkChargedCalls.Should().BeEmpty();
+      repo.NoteHeldCheckCalls.Should().ContainSingle().Which.Note.Should().Contain(status);
+      notifier.PenaltyCharged.Should().BeEmpty();
+    }
+  }
+
+  [Fact]
+  public async Task HeldWithIntent_LastCheck_LeavesANoteToReconcile()
+  {
+    var held = HeldWithIntent(checks: 4);
+    var repo = new FakePenaltyRepository { HeldToReconcile = [held] };
+    var payment = FakePaymentService.Succeeds("pi_unused").WithRetrieve(_ => new Exception("provider down"));
+
+    (await Build(repo, payment).ProcessPending(batchSize: 10, maxAttempts: 5)).IsSuccess().Should().BeTrue();
+
+    repo.NoteHeldCheckCalls.Should().ContainSingle().Which.Note.Should().Contain("reconcile with the payment provider");
+    repo.MarkChargedCalls.Should().BeEmpty();
+  }
 }

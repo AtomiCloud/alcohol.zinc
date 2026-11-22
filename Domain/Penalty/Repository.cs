@@ -26,8 +26,17 @@ public interface IPenaltyRepository
   // Attempts += 1, set LastError, keep Pending (transient retry).
   Task<Result<Unit>> Bump(Guid id, string error);
 
-  // Status=Failed, set LastError.
-  Task<Result<Unit>> MarkFailed(Guid id, string error);
+  // Status=Failed, set LastError. True if the row was marked; false if it was already final (Charged, or
+  // Held by a charity decommission) or gone, so the caller must not tell the user the payment failed.
+  Task<Result<bool>> MarkFailed(Guid id, string error);
+
+  // Held rows (charity decommissioned) that already have a payment intent: an earlier attempt may have
+  // been confirmed at the provider before the hold. Read-only batch for a LOOK-UP, never a confirm:
+  // Attempts < maxChecks, last touched before `olderThan` ago.
+  Task<Result<List<PenaltyPrincipal>>> GetHeldToReconcile(int batchSize, int maxChecks, TimeSpan olderThan);
+
+  // Record one look-up of a Held row: Attempts += 1, LastError = note. Stays Held.
+  Task<Result<Unit>> NoteHeldCheck(Guid id, string note);
 
   // Status=Skipped (no-consent terminal).
   Task<Result<Unit>> MarkSkipped(Guid id);

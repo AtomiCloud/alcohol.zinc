@@ -190,17 +190,18 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
   //
   // Held is final in the same way: a decommission moved the row on hold while a worker had it claimed,
   // and that worker's later writes (retry, fail, skip) must not put it back in the charge queue.
-  private async Task UpdateUnlessFinal(
+  private async Task<int> UpdateUnlessFinal(
     Guid id,
     Expression<Func<SetPropertyCalls<PenaltyData>,
       SetPropertyCalls<PenaltyData>>> set)
   {
-    await db.Penalties
+    var updated = await db.Penalties
       .Where(x => x.Id == id
                   && x.Status != (int)PenaltyStatus.Charged
                   && x.Status != (int)PenaltyStatus.Held)
       .ExecuteUpdateAsync(set);
     this.ForgetTracked(id);
+    return updated;
   }
 
   private void ForgetTracked(Guid id)
@@ -296,20 +297,61 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
     }
   }
 
-  public async Task<Result<Unit>> MarkFailed(Guid id, string error)
+  public async Task<Result<bool>> MarkFailed(Guid id, string error)
   {
     try
     {
       var now = DateTime.UtcNow;
-      await this.UpdateUnlessFinal(id, s => s
+      var updated = await this.UpdateUnlessFinal(id, s => s
         .SetProperty(x => x.Status, (int)PenaltyStatus.Failed)
         .SetProperty(x => x.LastError, error)
         .SetProperty(x => x.UpdatedAt, now));
-      return new Unit();
+      return updated > 0;
     }
     catch (Exception e)
     {
       logger.LogError(e, "MarkFailed failed for Id={Id}", id);
+      throw;
+    }
+  }
+
+  public async Task<Result<List<PenaltyPrincipal>>> GetHeldToReconcile(int batchSize, int maxChecks, TimeSpan olderThan)
+  {
+    try
+    {
+      var cutoff = DateTime.UtcNow - olderThan;
+      var rows = await db.Penalties.AsNoTracking()
+        .Where(x => x.Status == (int)PenaltyStatus.Held && x.PaymentIntentId != null
+                    && x.Attempts < maxChecks && x.UpdatedAt < cutoff)
+        .OrderBy(x => x.UpdatedAt)
+        .Take(batchSize)
+        .ToListAsync();
+      return rows.Select(x => x.ToPrincipal()).ToList();
+    }
+    catch (Exception e)
+    {
+      logger.LogError(e, "GetHeldToReconcile failed for BatchSize={BatchSize}", batchSize);
+      throw;
+    }
+  }
+
+  public async Task<Result<Unit>> NoteHeldCheck(Guid id, string note)
+  {
+    try
+    {
+      var now = DateTime.UtcNow;
+      await db.Penalties
+        .Where(x => x.Id == id && x.Status == (int)PenaltyStatus.Held)
+        .ExecuteUpdateAsync(s => s
+          .SetProperty(x => x.Attempts, x => x.Attempts + 1)
+          .SetProperty(x => x.LastError, note)
+          .SetProperty(x => x.UpdatedAt, now));
+      this.ForgetTracked(id);
+      return new Unit();
+    }
+    catch (Exception e)
+    {
+      logger.LogError(e, "NoteHeldCheck failed for Id={Id}", id);
       throw;
     }
   }
