@@ -754,8 +754,15 @@ public class PenaltyIntegrationTests : IAsyncLifetime
     await using var ctxA = NewContext(_conn!);
     await using var ctxB = NewContext(_conn!);
     (await Repo(ctxA).MarkCharged(ids[0], "int_0")).IsSuccess().Should().BeTrue();
+    // A now tracks the balance row (100), as a worker context that read it would.
+    (await ctxA.CharityBalances.SingleAsync(b => b.CharityId == charityId && b.Currency == "USD"))
+      .AccruedCents.Should().Be(100);
     (await Repo(ctxB).MarkCharged(ids[1], "int_1")).IsSuccess().Should().BeTrue();
     (await Repo(ctxA).MarkCharged(ids[2], "int_2")).IsSuccess().Should().BeTrue();
+
+    // A's own context must not keep serving its stale copy after crediting.
+    (await ctxA.CharityBalances.SingleAsync(b => b.CharityId == charityId && b.Currency == "USD"))
+      .AccruedCents.Should().Be(300, "MarkCharged forgets its cached copy of the balance");
 
     await using var check = NewContext(_conn!);
     (await check.Penalties.CountAsync(p => p.CharityId == charityId && p.Status == (int)PenaltyStatus.Charged))
