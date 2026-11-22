@@ -9,7 +9,9 @@ public class PenaltyData
 {
   [Key]
   public Guid Id { get; set; }
-  public required Guid HabitExecutionId { get; set; } // UNIQUE idempotency key
+  // UNIQUE idempotency key. Nullable: when the execution is deleted (account deletion) the penalty
+  // is detached (SET NULL), never deleted — the penalty row is the money ledger and must outlive it.
+  public required Guid? HabitExecutionId { get; set; }
   public required int AmountCents { get; set; }
   [MaxLength(8)]
   public required string Currency { get; set; }
@@ -30,7 +32,9 @@ public class PenaltyData
 
   // Foreign Keys & Navigation
   [MaxLength(128)]
-  public required string UserId { get; set; }
+  // Nullable: a deleted user is detached from their penalties (SET NULL) so the financial record
+  // (amount, currency, charity, payment intent, timestamps) is retained without the person.
+  public required string? UserId { get; set; }
   public virtual UserData? User { get; set; }
   public required Guid CharityId { get; set; }
   public virtual CharityData? Charity { get; set; }

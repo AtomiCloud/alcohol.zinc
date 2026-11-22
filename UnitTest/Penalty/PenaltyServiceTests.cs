@@ -169,6 +169,37 @@ public class PenaltyServiceTests
     repo.MarkChargedCalls.Should().BeEmpty();
   }
 
+  [Theory]
+  [InlineData(true, false)]
+  [InlineData(false, true)]
+  [InlineData(true, true)]
+  public async Task Detached_NoUserOrNoExecution_MarksSkipped_NeverCharges(bool noUser, bool noExecution)
+  {
+    // Account deletion detaches penalties (UserId/HabitExecutionId -> NULL) to keep the ledger.
+    // Such a penalty must never be charged: it is closed as Skipped without calling the gateway.
+    var p = Pending();
+    var detached = p with
+    {
+      Record = p.Record with
+      {
+        UserId = noUser ? null : p.Record.UserId,
+        HabitExecutionId = noExecution ? null : p.Record.HabitExecutionId
+      }
+    };
+    var repo = new FakePenaltyRepository(detached);
+    var payment = FakePaymentService.Succeeds("pi_must_not_happen");
+    var svc = Build(repo, payment);
+
+    var res = await svc.ProcessPending(batchSize: 10, maxAttempts: 5);
+
+    ((int)res).Should().Be(1);
+    payment.ChargeCalls.Should().BeEmpty("a detached penalty must never reach the payment gateway");
+    repo.MarkSkippedCalls.Should().ContainSingle().Which.Should().Be(detached.Id);
+    repo.MarkChargedCalls.Should().BeEmpty();
+    repo.BumpCalls.Should().BeEmpty();
+    repo.MarkFailedCalls.Should().BeEmpty();
+  }
+
   [Fact]
   public async Task TransientError_BelowMax_Bumps()
   {
@@ -196,7 +227,7 @@ public class PenaltyServiceTests
     var svc = Build(repo, FakePaymentService.Succeeds("pi_1"), notifier);
     await svc.ProcessPending(batchSize: 10, maxAttempts: 5);
     notifier.PenaltyCharged.Should().ContainSingle()
-      .Which.Should().Be((charged.Record.UserId, charged.Record.Amount, charged.Record.CharityId));
+      .Which.Should().Be((charged.Record.UserId!, charged.Record.Amount, charged.Record.CharityId));
     notifier.PenaltyFailed.Should().BeEmpty();
 
     // Retry (below max) -> silent.

@@ -3,6 +3,7 @@ using App.Error.V1;
 using App.StartUp.Database;
 using App.Utility;
 using CSharp_Result;
+using Domain.Penalty;
 using Domain.User;
 using EntityFramework.Exceptions.Common;
 using Microsoft.EntityFrameworkCore;
@@ -268,8 +269,8 @@ public class UserRepository(MainDbContext db, ILogger<UserRepository> logger) : 
         db.FreezeConsumptions.RemoveRange(freezeConsumptions);
       }
 
-      // Anonymize-retain the donation/charge ledger (penalty charges + charity donations).
-      AnonymizePenaltyLedger(id);
+      // Detach-retain the penalty ledger (the money record): never deleted with the user.
+      await this.DetachPenaltyLedger(id);
 
       // Delete configuration if exists
       var configuration = await db.Configurations
@@ -310,21 +311,42 @@ public class UserRepository(MainDbContext db, ILogger<UserRepository> logger) : 
     }
   }
 
-  // ── Penalty anonymize-retain seam ─────────────────────────────────────────────────────────────
-  // The Penalty module (PenaltyData / CharityBalanceData) does NOT exist on `main` yet — it lives on
-  // the unmerged `Yek-Khan/habit-penalty-feature` branch — so there are no penalty rows to act on and
-  // this is intentionally a no-op for now (safe: zero penalty PII exists on this branch).
+  // ── Penalty detach-retain ─────────────────────────────────────────────────────────────────────
+  // A penalty row is the money ledger: what was charged, to which charity, under which payment intent.
+  // Account deletion must DETACH the person from it, not erase it. Two links point at the user's data:
+  //   - Penalties.UserId           -> Users           (the person)
+  //   - Penalties.HabitExecutionId -> HabitExecutions (deleted explicitly by this purge)
+  // Both are nulled here so the rows survive the deletes below (the FKs are also ON DELETE SET NULL as a
+  // database backstop for any other delete path). Amount, currency, charity, payment intent, status and
+  // timestamps are kept. CharityBalances hold no user data and are untouched.
   //
-  // TODO(account-deletion): when the Penalty module merges to main, ANONYMIZE-RETAIN here instead of
-  // hard-deleting. For every PenaltyData row where UserId == id:
-  //   - set UserId = a sentinel (e.g. "deleted-user") to DETACH the person from the financial record;
-  //   - KEEP AmountCents, Currency, CharityId, CreatedAt and PaymentIntentId (accounting/legal record);
-  //   - do NOT delete the row; CharityBalanceData holds no user PII and stays untouched.
-  // It must mutate tracked entities so the single SaveChangesAsync below (same transaction) persists it.
-  // A skipped unit test already asserts the expected behavior — un-skip it once the module exists.
-  private void AnonymizePenaltyLedger(string id)
+  // A still-unpaid (Pending) penalty can never be charged once the person and their payment consent are
+  // gone, so it is closed as Skipped. A Processing row (claimed by an in-flight charge) is left alone: the
+  // drain settles it (Charged stays charged) or the penalty worker skips it once it sees no user.
+  // Tracked entities only, so the single SaveChangesAsync in DeleteAllRemnants persists this atomically.
+  private async Task DetachPenaltyLedger(string id)
   {
-    logger.LogDebug(
-      "Penalty anonymize-retain seam for User '{Id}': no-op until the Penalty module merges to main", id);
+    var penalties = await db.Penalties
+      .Where(p => p.UserId == id
+                  || db.HabitExecutions.Any(e => e.Id == p.HabitExecutionId
+                                                 && db.HabitVersions.Any(v => v.Id == e.HabitVersionId
+                                                                              && db.Habits.Any(h => h.Id == v.HabitId && h.UserId == id))))
+      .ToListAsync();
+    if (penalties.Count == 0) return;
+
+    logger.LogInformation("Detaching {Count} penalty records from User '{Id}' (retained, not deleted)",
+      penalties.Count, id);
+    var now = DateTime.UtcNow;
+    foreach (var p in penalties)
+    {
+      p.UserId = null;
+      p.HabitExecutionId = null;
+      if (p.Status == (int)PenaltyStatus.Pending)
+      {
+        p.Status = (int)PenaltyStatus.Skipped;
+        p.LastError = "Skipped: user account deleted before the penalty was charged";
+      }
+      p.UpdatedAt = now;
+    }
   }
 }

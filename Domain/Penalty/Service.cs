@@ -59,13 +59,19 @@ public class PenaltyService(
   private async Task<Result<int>> ProcessOne(PenaltyPrincipal p, int maxAttempts)
   {
     var rec = p.Record;
+    // A penalty detached from its user or execution (account deletion sets both to NULL) can no
+    // longer be charged: the person and their payment consent are gone. Close it as Skipped —
+    // the same outcome as "no verified consent" below — so it is never retried or charged.
+    if (rec.UserId is not { } userId || rec.HabitExecutionId is not { } habitExecutionId)
+      return await repo.MarkSkipped(p.Id).Then(_ => 1, Errors.MapAll);
+
     // Deterministic idempotency key tied to this penalty row: a retried or
     // concurrent charge for the same penalty collapses onto the same Airwallex
     // intent instead of minting a new one. On a retry of a row that already
     // recorded an intent, reconcile that intent rather than re-charging.
     var chargeResult =
       await payment.ChargeStoredConsentAsync(
-        rec.UserId, rec.Amount, $"Habit penalty {rec.HabitExecutionId}",
+        userId, rec.Amount, $"Habit penalty {habitExecutionId}",
         idempotencyKey: p.Id.ToString(),
         existingIntentId: rec.PaymentIntentId,
         // Persist the intent id the moment it's created (before confirm) so a confirm
@@ -87,7 +93,7 @@ public class PenaltyService(
         // of silently counting it as success.
         var charged = await repo.MarkCharged(p.Id, intent.Id).Then(_ => 1, Errors.MapAll);
         if (charged.IsSuccess())
-          await notifier.NotifyPenaltyCharged(rec.UserId, rec.Amount, rec.CharityId, rec.HabitExecutionId, DateTime.UtcNow);
+          await notifier.NotifyPenaltyCharged(userId, rec.Amount, rec.CharityId, habitExecutionId, DateTime.UtcNow);
         return charged;
       }
 
@@ -98,7 +104,7 @@ public class PenaltyService(
         var failed = await repo.MarkFailed(p.Id, $"Max attempts reached, last status {intent.Status}")
           .Then(_ => 1, Errors.MapAll);
         if (failed.IsSuccess())
-          await notifier.NotifyPenaltyFailed(rec.UserId, rec.Amount, rec.CharityId, rec.HabitExecutionId, DateTime.UtcNow);
+          await notifier.NotifyPenaltyFailed(userId, rec.Amount, rec.CharityId, habitExecutionId, DateTime.UtcNow);
         return failed;
       }
 
@@ -117,7 +123,7 @@ public class PenaltyService(
     {
       var failed = await repo.MarkFailed(p.Id, ex?.Message ?? "charge error").Then(_ => 1, Errors.MapAll);
       if (failed.IsSuccess())
-        await notifier.NotifyPenaltyFailed(rec.UserId, rec.Amount, rec.CharityId, rec.HabitExecutionId, DateTime.UtcNow);
+        await notifier.NotifyPenaltyFailed(userId, rec.Amount, rec.CharityId, habitExecutionId, DateTime.UtcNow);
       return failed;
     }
 

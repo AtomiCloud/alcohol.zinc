@@ -4,6 +4,7 @@ using App.Modules.Habit.Data;
 using App.Modules.HabitExecution.Data;
 using App.Modules.HabitVersion.Data;
 using App.Modules.Payment.Data;
+using App.Modules.Penalty.Data;
 using App.Modules.Proof.Data;
 using App.Modules.Protection.Data;
 using App.Modules.Routine.Data;
@@ -14,6 +15,7 @@ using App.Modules.Vacation.Data;
 using App.StartUp.Database;
 using App.StartUp.Options;
 using CSharp_Result;
+using Domain.Penalty;
 using Domain.User;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -164,6 +166,123 @@ public class DeleteAllRemnantsIntegrationTests : IAsyncLifetime
 
     result.IsSuccess().Should().BeTrue("the real-transaction delete path must not throw");
     (await _db.Users.CountAsync(u => u.Id == "user-tx")).Should().Be(0);
+  }
+
+  [SkippableFact]
+  public async Task DeleteAllRemnants_KeepsPenaltyRecords_DetachedFromUserAndExecution()
+  {
+    // Penalties are the money ledger (what was charged, for which charity, which payment intent).
+    // Deleting the person must DETACH them from it, not erase it. There are two cascade paths into
+    // Penalties — from the user (UserId) and from the habit execution (HabitExecutionId), and the purge
+    // deletes executions explicitly — so both must be cut.
+    Skip.IfNot(_enabled, "requires ZINC_DELETE_TEST_DB (a Postgres host)");
+
+    var charity = new CharityData { Name = "Test Charity" };
+    _db.Charities.Add(charity);
+    await _db.SaveChangesAsync();
+    await SeedFullUser("user-A", charity.Id);
+    await SeedFullUser("user-B", charity.Id);
+    var (chargedA, pendingA) = await SeedPenalties("user-A", charity.Id);
+    var (chargedB, pendingB) = await SeedPenalties("user-B", charity.Id);
+    _db.ChangeTracker.Clear();
+
+    var repo = new UserRepository(_db, NullLogger<UserRepository>.Instance);
+    (await repo.DeleteAllRemnants("user-A")).Get().Should().NotBeNull();
+    _db.ChangeTracker.Clear();
+
+    (await _db.Penalties.CountAsync()).Should().Be(4, "no penalty row may be deleted with the user");
+
+    var charged = await _db.Penalties.AsNoTracking().SingleAsync(p => p.Id == chargedA);
+    charged.UserId.Should().BeNull("the person is detached from the ledger");
+    charged.HabitExecutionId.Should().BeNull("the execution is gone; the penalty must not cascade with it");
+    charged.AmountCents.Should().Be(500);
+    charged.Currency.Should().Be("USD");
+    charged.CharityId.Should().Be(charity.Id);
+    charged.PaymentIntentId.Should().Be("int_charged_user-A");
+    charged.Status.Should().Be((int)PenaltyStatus.Charged, "a settled charge stays a settled charge");
+
+    var pending = await _db.Penalties.AsNoTracking().SingleAsync(p => p.Id == pendingA);
+    pending.UserId.Should().BeNull();
+    pending.HabitExecutionId.Should().BeNull();
+    pending.Status.Should().Be((int)PenaltyStatus.Skipped,
+      "an unpaid penalty of a deleted user can no longer be charged, so it is closed as Skipped");
+
+    // The other user's penalties are untouched.
+    var otherCharged = await _db.Penalties.AsNoTracking().SingleAsync(p => p.Id == chargedB);
+    otherCharged.UserId.Should().Be("user-B");
+    otherCharged.HabitExecutionId.Should().NotBeNull();
+    var otherPending = await _db.Penalties.AsNoTracking().SingleAsync(p => p.Id == pendingB);
+    otherPending.UserId.Should().Be("user-B");
+    otherPending.Status.Should().Be((int)PenaltyStatus.Pending);
+  }
+
+  [SkippableFact]
+  public async Task DeletingUserOrExecutionRows_InTheDatabase_NeverDeletesPenalties()
+  {
+    // Database backstop: any path that removes a user or an execution row (not just DeleteAllRemnants)
+    // must leave the penalty rows in place, detached.
+    Skip.IfNot(_enabled, "requires ZINC_DELETE_TEST_DB (a Postgres host)");
+
+    var charity = new CharityData { Name = "Test Charity" };
+    _db.Charities.Add(charity);
+    await _db.SaveChangesAsync();
+    await SeedFullUser("user-A", charity.Id);
+    await SeedFullUser("user-B", charity.Id);
+    var (chargedA, _) = await SeedPenalties("user-A", charity.Id);
+    var (chargedB, _) = await SeedPenalties("user-B", charity.Id);
+    _db.ChangeTracker.Clear();
+
+    // Execution path: delete user-B's executions only.
+    await _db.Database.ExecuteSqlRawAsync(@"
+      DELETE FROM ""HabitExecutions"" WHERE ""HabitVersionId"" IN (
+        SELECT v.""Id"" FROM ""HabitVersions"" v JOIN ""Habits"" h ON h.""Id"" = v.""HabitId""
+        WHERE h.""UserId"" = 'user-B')");
+    // User path: delete user-A's user row only (habits have no FK to Users, so the execution stays).
+    await _db.Database.ExecuteSqlRawAsync(@"DELETE FROM ""Users"" WHERE ""Id"" = 'user-A'");
+
+    (await _db.Penalties.CountAsync()).Should().Be(4);
+    var a = await _db.Penalties.AsNoTracking().SingleAsync(p => p.Id == chargedA);
+    a.UserId.Should().BeNull();
+    a.HabitExecutionId.Should().NotBeNull("only the user row was deleted; the execution still exists");
+    a.AmountCents.Should().Be(500);
+    var b = await _db.Penalties.AsNoTracking().SingleAsync(p => p.Id == chargedB);
+    b.UserId.Should().Be("user-B");
+    b.HabitExecutionId.Should().BeNull();
+  }
+
+  // Seeds one Charged and one Pending penalty for the user, each on its own failed execution of the
+  // user's habit version (HabitExecutionId is unique per penalty).
+  private async Task<(Guid Charged, Guid Pending)> SeedPenalties(string userId, Guid charityId)
+  {
+    var versionId = await _db.HabitVersions
+      .Where(v => _db.Habits.Any(h => h.Id == v.HabitId && h.UserId == userId))
+      .Select(v => v.Id)
+      .SingleAsync();
+    var exec1 = new HabitExecutionData
+    {
+      Id = Guid.NewGuid(), HabitVersionId = versionId, Date = new DateOnly(2026, 2, 1),
+      Status = HabitExecutionStatusData.Failed, PaymentProcessed = true,
+    };
+    var exec2 = new HabitExecutionData
+    {
+      Id = Guid.NewGuid(), HabitVersionId = versionId, Date = new DateOnly(2026, 2, 2),
+      Status = HabitExecutionStatusData.Failed, PaymentProcessed = true,
+    };
+    _db.HabitExecutions.AddRange(exec1, exec2);
+    var charged = new PenaltyData
+    {
+      Id = Guid.NewGuid(), HabitExecutionId = exec1.Id, UserId = userId, CharityId = charityId,
+      AmountCents = 500, Currency = "USD", Status = (int)PenaltyStatus.Charged,
+      PaymentIntentId = $"int_charged_{userId}", Attempts = 1,
+    };
+    var pending = new PenaltyData
+    {
+      Id = Guid.NewGuid(), HabitExecutionId = exec2.Id, UserId = userId, CharityId = charityId,
+      AmountCents = 300, Currency = "USD", Status = (int)PenaltyStatus.Pending, Attempts = 0,
+    };
+    _db.Penalties.AddRange(charged, pending);
+    await _db.SaveChangesAsync();
+    return (charged.Id, pending.Id);
   }
 
   private async Task SeedFullUser(string id, Guid charityId)
