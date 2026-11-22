@@ -544,7 +544,7 @@ public class PenaltyServiceTests
     var res = await Build(repo, payment, notifier).ProcessPending(batchSize: 10, maxAttempts: 5);
 
     res.IsSuccess().Should().BeTrue();
-    repo.EnsureNotHeldCalls.Should().Be(1);
+    repo.EnsureChargeableCalls.Should().Be(1);
     repo.MarkChargedCalls.Should().BeEmpty();
     repo.BumpCalls.Should().BeEmpty();
     repo.MarkFailedCalls.Should().BeEmpty();
@@ -593,5 +593,22 @@ public class PenaltyServiceTests
 
     repo.NoteHeldCheckCalls.Should().ContainSingle().Which.Note.Should().Contain("slow");
     repo.MarkChargedCalls.Should().BeEmpty();
+  }
+
+  // An HTTP client timeout surfaces as TaskCanceledException wrapping a TimeoutException. For a held
+  // look-up that is a failed look-up (one check used), not a shutdown that aborts the drain.
+  [Fact]
+  public async Task HeldWithIntent_LookupTimesOut_IsAFailedCheck_NotAnAbort()
+  {
+    var queued = Pending();
+    var repo = new FakePenaltyRepository(queued) { HeldToReconcile = [HeldWithIntent()] };
+    var payment = FakePaymentService.Succeeds("pi_ok")
+      .WithRetrieve(_ => throw new TaskCanceledException("timed out", new TimeoutException("100s")));
+
+    var res = await Build(repo, payment).ProcessPending(10, 5);
+
+    res.IsSuccess().Should().BeTrue();
+    repo.NoteHeldCheckCalls.Should().ContainSingle();
+    repo.MarkChargedCalls.Should().ContainSingle("the normal drain still ran").Which.Id.Should().Be(queued.Id);
   }
 }

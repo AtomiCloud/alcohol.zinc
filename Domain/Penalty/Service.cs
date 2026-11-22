@@ -130,13 +130,13 @@ public class PenaltyService(
           : lookup.FailureOrDefault()?.Message ?? "lookup error";
         await repo.NoteHeldCheck(p.Id, HeldNote(intentId, why, rec.Attempts, maxChecks));
       }
-      catch (OperationCanceledException)
+      catch (OperationCanceledException e) when (e.InnerException is not TimeoutException)
       {
-        throw;
+        throw; // a real cancellation (host shutdown); an HTTP timeout is just a failed look-up, below
       }
       catch (Exception e)
       {
-        // A thrown look-up still uses up one check, so a row cannot be retried forever.
+        // A thrown look-up (including an HTTP timeout) still uses up one check, so a row cannot be retried forever.
         logger.LogError(e, "Reconciling held penalty {Id} threw; continuing", p.Id);
         try
         {
@@ -214,7 +214,7 @@ public class PenaltyService(
         // Persist the intent id the moment it's created (before confirm) so a confirm
         // failure doesn't lose it; a persistence failure surfaces so the attempt retries.
         onIntentCreated: intentId => Gate(() => repo.SetIntentId(p.Id, intentId), "SetIntentId"),
-        beforeConfirm: () => Gate(() => repo.EnsureNotHeld(p.Id), "EnsureNotHeld"));
+        beforeConfirm: () => Gate(() => repo.EnsureChargeable(p.Id), "EnsureChargeable"));
     }
     catch (PenaltyHeldException)
     {

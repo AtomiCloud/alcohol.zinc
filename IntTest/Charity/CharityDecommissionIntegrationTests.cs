@@ -527,6 +527,27 @@ public class CharityDecommissionIntegrationTests : IAsyncLifetime
     (await _db.Penalties.AsNoTracking().SingleAsync(p => p.Id == queued)).Status.Should().Be((int)PenaltyStatus.Held);
   }
 
+  [SkippableFact]
+  public async Task StaleWorker_WhoseRowWasMovedOn_StillCannotConfirmAfterDecommission()
+  {
+    // Worker A's claim went stale; worker B re-claimed the row and marked it Failed. A decommission then
+    // holds only Pending/Processing rows, so this one stays Failed. When A resumes, the check right before
+    // its confirm must still stop it: no money is taken for a decommissioned charity, whatever the status.
+    Skip.IfNot(_enabled, "requires ZINC_DELETE_TEST_DB (a Postgres host)");
+
+    var target = await SeedCharity("Target Charity");
+    var other = await SeedCharity("Other Charity");
+    await SeedUser("user-a", target);
+    var movedOn = await SeedPenalty("user-a", target, PenaltyStatus.Failed, intent: "int_old");
+    var live = await SeedPenalty("user-a", other, PenaltyStatus.Processing, intent: "int_live");
+    _db.ChangeTracker.Clear();
+    (await Decommission(target)).Get()!.HeldPenalties.Should().Be(0);
+
+    var gate = () => Penalties().EnsureChargeable(movedOn);
+    await gate.Should().ThrowAsync<PenaltyHeldException>();
+    (await Penalties().EnsureChargeable(live)).IsSuccess().Should().BeTrue("other charities charge as normal");
+  }
+
   // ---- seeding ----
 
   private async Task<Guid> SeedCharity(string name)

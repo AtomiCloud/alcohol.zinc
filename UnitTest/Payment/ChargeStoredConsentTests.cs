@@ -160,10 +160,13 @@ public class ChargeStoredConsentTests
       return Task.FromResult(RetrieveResult!.Value);
     }
 
-    public Task<Result<PaymentIntentResult>> ConfirmPaymentIntentAsync(string paymentIntentId, string paymentConsentId, string customerId)
+    public async Task<Result<PaymentIntentResult>> ConfirmPaymentIntentAsync(string paymentIntentId, string paymentConsentId, string customerId,
+      Func<Task>? beforeSend = null)
     {
+      Calls.Add("authenticate");
+      if (beforeSend != null) await beforeSend();
       Calls.Add("confirm");
-      return Task.FromResult(ConfirmResult!.Value);
+      return ConfirmResult!.Value;
     }
 
     public void MarkPersist() => Calls.Add("persist");

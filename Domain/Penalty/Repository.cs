@@ -16,8 +16,10 @@ public interface IPenaltyRepository
   // True if this call charged it; false if it was already Charged or is gone (so tell nobody again).
   Task<Result<bool>> MarkCharged(Guid id, string paymentIntentId);
 
-  // Read fresh; throws PenaltyHeldException if the penalty is Held. Called right before a confirm.
-  Task<Result<Unit>> EnsureNotHeld(Guid id);
+  // Read fresh; throws PenaltyHeldException if the penalty is Held OR its charity is decommissioned (a
+  // stale worker's row may have been moved to another status the decommission did not hold). Called
+  // right before a confirm is sent.
+  Task<Result<Unit>> EnsureChargeable(Guid id);
 
   // Keep Pending, persist intent id from a requires-action create, set Attempts.
   Task<Result<Unit>> MarkPending(Guid id, string paymentIntentId, int attempts);

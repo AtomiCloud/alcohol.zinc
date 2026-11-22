@@ -104,7 +104,8 @@ public class AirwallexGateway(AirwallexClient client) : IPaymentGateway
       }, Errors.MapNone);
   }
 
-  public async Task<Result<PaymentIntentResult>> ConfirmPaymentIntentAsync(string paymentIntentId, string paymentConsentId, string customerId)
+  public async Task<Result<PaymentIntentResult>> ConfirmPaymentIntentAsync(string paymentIntentId, string paymentConsentId, string customerId,
+    Func<Task>? beforeSend = null)
   {
     var req = new AirwallexConfirmPaymentIntentReq
     {
@@ -121,7 +122,7 @@ public class AirwallexGateway(AirwallexClient client) : IPaymentGateway
     };
 
     return await client
-      .ConfirmPaymentIntentAsync(paymentIntentId, req)
+      .ConfirmPaymentIntentAsync(paymentIntentId, req, beforeSend)
       .Then(res => new PaymentIntentResult
       {
         Id = res.Id,

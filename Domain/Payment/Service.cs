@@ -234,8 +234,7 @@ public class PaymentService(
               // Money already moved on the prior attempt: do not re-charge.
               if (intent.Status == "SUCCEEDED") return intent.ToResult();
               // Not yet settled: confirm the SAME intent (no new intent id), unless the caller stops it.
-              if (beforeConfirm != null) await beforeConfirm();
-              return await gateway.ConfirmPaymentIntentAsync(intent.Id, consentId, r.AirwallexCustomerId);
+              return await gateway.ConfirmPaymentIntentAsync(intent.Id, consentId, r.AirwallexCustomerId, beforeConfirm);
             });
         }
 
@@ -261,9 +260,8 @@ public class PaymentService(
             // existingIntentId instead of creating a new one, which would reuse the
             // request_id and be rejected by Airwallex as duplicate_request.
             if (onIntentCreated != null) await onIntentCreated(intent.Id);
-            if (beforeConfirm != null) await beforeConfirm();
 
-            return await gateway.ConfirmPaymentIntentAsync(intent.Id, consentId, r.AirwallexCustomerId);
+            return await gateway.ConfirmPaymentIntentAsync(intent.Id, consentId, r.AirwallexCustomerId, beforeConfirm);
           });
       });
   }

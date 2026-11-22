@@ -346,11 +346,17 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
     }
   }
 
-  public async Task<Result<Unit>> EnsureNotHeld(Guid id)
+  public async Task<Result<Unit>> EnsureChargeable(Guid id)
   {
-    var status = await db.Penalties.AsNoTracking().Where(x => x.Id == id).Select(x => (int?)x.Status)
+    // Both the row and its charity: a stale worker can still hold a row that another worker moved to,
+    // say, Failed before the decommission (which only holds Pending/Processing rows). No money may be
+    // taken for a decommissioned charity whatever the row's status.
+    var row = await db.Penalties.AsNoTracking()
+      .Where(x => x.Id == id)
+      .Select(x => new { x.Status, Decommissioned = x.Charity!.DecommissionedAt != null })
       .FirstOrDefaultAsync();
-    if (status == (int)PenaltyStatus.Held) throw new PenaltyHeldException(id);
+    if (row != null && (row.Status == (int)PenaltyStatus.Held || row.Decommissioned))
+      throw new PenaltyHeldException(id);
     return new Unit();
   }
 

@@ -42,13 +42,13 @@ public sealed class FakePenaltyRepository(params PenaltyPrincipal[] pending) : I
     return Task.FromResult<Result<bool>>(MarkChargedCharges);
   }
 
-  // Simulates the penalty being put on hold before a confirm: EnsureNotHeld throws.
+  // Simulates the penalty being put on hold before a confirm: EnsureChargeable throws.
   public bool HeldBeforeConfirm { get; init; }
-  public int EnsureNotHeldCalls { get; private set; }
+  public int EnsureChargeableCalls { get; private set; }
 
-  public Task<Result<Unit>> EnsureNotHeld(Guid id)
+  public Task<Result<Unit>> EnsureChargeable(Guid id)
   {
-    EnsureNotHeldCalls++;
+    EnsureChargeableCalls++;
     if (HeldBeforeConfirm) throw new PenaltyHeldException(id);
     return Task.FromResult<Result<Unit>>(new Unit());
   }

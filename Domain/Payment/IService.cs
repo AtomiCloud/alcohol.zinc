@@ -39,8 +39,9 @@ public interface IPaymentService
   // onIntentCreated: invoked with the new intent id right after a fresh create succeeds
   //   and BEFORE confirm, so the caller can persist it; this keeps the id durable across
   //   a confirm failure so the retry reconciles the existing intent instead of re-creating.
-  // beforeConfirm: invoked immediately before EVERY confirm (a fresh intent or a retried one). It may
-  //   throw to stop the confirm, e.g. when the charge was put on hold meanwhile; then no money moves.
+  // beforeConfirm: invoked before EVERY confirm (a fresh intent or a retried one), after the gateway has
+  //   authenticated and immediately before the request is sent. It may throw to stop the confirm, e.g.
+  //   when the charge was put on hold meanwhile; then nothing is sent and no money moves.
   Task<Result<PaymentIntentResult>> ChargeStoredConsentAsync(
     string userId, Money amount, string description,
     string? idempotencyKey = null, string? existingIntentId = null,
