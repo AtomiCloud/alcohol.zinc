@@ -31,5 +31,10 @@ namespace App.Modules.Charities.Data
 
         [MaxLength(512)]
         public string? LogoUrl { get; set; }
+
+        // Set when an admin deletes the charity: it is switched off (hidden from search, cannot be
+        // chosen for a habit or as a default) but never erased, because penalties, balances, payouts
+        // and habit history point at it.
+        public DateTime? DeletedAt { get; set; }
     }
 }
