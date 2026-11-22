@@ -1,3 +1,15 @@
+## [1.44.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.43.3...v1.44.0) (2026-11-22)
+
+
+### 🐛 Bug Fixes 🐛
+
+* debt follows the penalty's real payment state ([6218056](https://github.com/AtomiCloud/alcohol.zinc/commit/6218056324008598fdd91e759d3c90e119bfba75))
+
+
+### 🧪 Tests 🧪
+
+* cover open debts over a mixed failure history ([463580f](https://github.com/AtomiCloud/alcohol.zinc/commit/463580f64ecf060d5f9b10c6a6fe421e257bd896))
+
 ## [1.43.3](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.43.2...v1.43.3) (2026-11-22)
 
 
