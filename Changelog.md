@@ -1,3 +1,12 @@
+## [1.44.1](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.44.0...v1.44.1) (2026-11-22)
+
+
+### 🐛 Bug Fixes 🐛
+
+* deleting a charity switches it off instead of erasing it ([1d67d31](https://github.com/AtomiCloud/alcohol.zinc/commit/1d67d31fc7a49f44a4240b8adb1eacc481fc8882))
+* serialize charity switch-off with metadata saves and choices ([e4debf0](https://github.com/AtomiCloud/alcohol.zinc/commit/e4debf012ef089ff50374680a3e9897162cb7fee))
+* write the charity switch-off mark straight to the database ([9d1167d](https://github.com/AtomiCloud/alcohol.zinc/commit/9d1167d007140633661b687f2f72b00cf3895a62))
+
 ## [1.44.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.43.3...v1.44.0) (2026-11-22)
 
 
