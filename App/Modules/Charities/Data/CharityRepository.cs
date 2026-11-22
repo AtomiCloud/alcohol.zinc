@@ -40,7 +40,8 @@ namespace App.Modules.Charities.Data
             {
                 logger.LogInformation("Searching Charities with '{@Search}'", search);
 
-                IQueryable<CharityData> query = db.Charities.AsQueryable();
+                // Switched-off (deleted) charities are hidden from search; Get(id) still returns them.
+                IQueryable<CharityData> query = db.Charities.Where(x => x.DeletedAt == null);
 
                 if (!string.IsNullOrWhiteSpace(search.Name))
                     query = query.Where(x => EF.Functions.ILike(x.Name, $"%{search.Name}%"));
@@ -132,28 +133,44 @@ namespace App.Modules.Charities.Data
             }
         }
 
+        // Deleting a charity SWITCHES IT OFF; it never erases the row. Penalties, accrued balances,
+        // payouts and habit history point at it (the database refuses a hard delete of a charity that
+        // has them). Switched off = hidden from search and refused as a new choice for a habit or a
+        // default; Get(id) still returns it. Users' default-charity settings that point at it are
+        // cleared (the rest of the settings row is kept). Deleting an already switched-off charity is
+        // an idempotent success.
         public async Task<Result<Unit?>> Delete(Guid id)
         {
+            await using var transaction = await db.Database.BeginTransactionAsync();
             try
             {
-                logger.LogInformation("Deleting Charity Id: {Id}", id);
+                logger.LogInformation("Switching off (soft-deleting) Charity Id: {Id}", id);
 
                 var data = await db.Charities.FirstOrDefaultAsync(x => x.Id == id);
                 if (data == null)
                 {
                     logger.LogWarning("Charity not found for delete, Id: {Id}", id);
+                    await transaction.RollbackAsync();
                     return (Unit?)null;
                 }
-                db.Charities.Remove(data);
-                await db.SaveChangesAsync();
 
-                logger.LogInformation("Charity deleted for Id: {Id}", id);
+                var clearedDefaults = await db.Configurations
+                    .Where(c => c.DefaultCharityId == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(c => c.DefaultCharityId, (Guid?)null));
+
+                data.DeletedAt ??= DateTime.UtcNow;
+                await db.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                logger.LogInformation(
+                    "Charity switched off for Id: {Id}; cleared {Count} default-charity settings", id, clearedDefaults);
 
                 return new Unit();
             }
             catch (Exception e)
             {
                 logger.LogError(e, "Failed to delete Charity Id: {Id}", id);
+                await transaction.RollbackAsync();
                 throw;
             }
         }

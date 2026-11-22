@@ -3,6 +3,7 @@ using App.StartUp.Database;
 using App.Utility;
 using CSharp_Result;
 using Domain.Configuration;
+using Domain.Exceptions;
 using EntityFramework.Exceptions.Common;
 using Microsoft.EntityFrameworkCore;
 
@@ -10,6 +11,13 @@ namespace App.Modules.Configurations.Data
 {
     public class ConfigurationRepository(MainDbContext db, ILogger<ConfigurationRepository> logger) : IConfigurationRepository
     {
+        // A switched-off (deleted) charity cannot be newly chosen as the default charity.
+        private async Task<bool> IsSwitchedOffCharity(Guid? charityId) =>
+            charityId is { } id && await db.Charities.AnyAsync(c => c.Id == id && c.DeletedAt != null);
+
+        private static InvalidRequestException SwitchedOffCharity(Guid? charityId) =>
+            new("DefaultCharityId", $"Charity {charityId} is no longer available");
+
         public async Task<Result<Configuration?>> GetByUserId(string userId)
         {
             try
@@ -96,6 +104,9 @@ namespace App.Modules.Configurations.Data
             {
                 logger.LogInformation("Adding Configuration for UserId: {UserId}", userId);
 
+                if (await IsSwitchedOffCharity(record.DefaultCharityId))
+                    return SwitchedOffCharity(record.DefaultCharityId);
+
                 var data = record.ToData(Guid.NewGuid(), userId);
                 var r = db.Configurations.Add(data);
                 await db.SaveChangesAsync();
@@ -134,6 +145,9 @@ namespace App.Modules.Configurations.Data
                     logger.LogWarning("Configuration not found for update, Id: {Id}, UserId: {UserId}", id, userId);
                     return (ConfigurationPrincipal?)null;
                 }
+
+                if (record.DefaultCharityId != data.DefaultCharityId && await IsSwitchedOffCharity(record.DefaultCharityId))
+                    return SwitchedOffCharity(record.DefaultCharityId);
 
                 data.Timezone = record.Timezone;
                 data.DefaultCharityId = record.DefaultCharityId;

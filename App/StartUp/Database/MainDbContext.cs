@@ -97,7 +97,7 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
     configuration.HasOne(c => c.Charity)
                  .WithMany()
                  .HasForeignKey(c => c.DefaultCharityId)
-                 .OnDelete(DeleteBehavior.Cascade);
+                 .OnDelete(DeleteBehavior.SetNull); // a user setting: cleared, never deleted with a charity
 
     // Habit configuration (main entity)
     var habit = modelBuilder.Entity<HabitData>();
@@ -126,7 +126,7 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
     habitVersion.HasOne(hv => hv.Charity)
                 .WithMany()
                 .HasForeignKey(hv => hv.CharityId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.Restrict); // habit history: a charity in use is switched off, never erased
     habitVersion.HasMany(hv => hv.Executions)
                 .WithOne(he => he.HabitVersion)
                 .HasForeignKey(he => he.HabitVersionId);
@@ -305,7 +305,7 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
     penalty.HasOne(x => x.Charity)
            .WithMany()
            .HasForeignKey(x => x.CharityId)
-           .OnDelete(DeleteBehavior.Cascade);
+           .OnDelete(DeleteBehavior.Restrict); // money ledger: the database refuses to erase a charity with money records
     // Payout linkage. SetNull (not Cascade): deleting a disbursement row must never
     // delete the underlying penalties — it just releases them back to pending-payout.
     penalty.HasOne<DisbursementData>()
@@ -330,7 +330,7 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
     disbursement.HasOne(x => x.Charity)
                 .WithMany()
                 .HasForeignKey(x => x.CharityId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.Restrict); // money ledger: the database refuses to erase a charity with money records
 
     var charityBalance = modelBuilder.Entity<CharityBalanceData>();
     // One accrual row per (charity, currency): a charity can legitimately receive
@@ -340,7 +340,7 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
     charityBalance.HasOne(x => x.Charity)
                   .WithMany()
                   .HasForeignKey(x => x.CharityId)
-                  .OnDelete(DeleteBehavior.Cascade);
+                  .OnDelete(DeleteBehavior.Restrict); // money ledger: the database refuses to erase a charity with money records
 
     // Subscription (paid tiers): one row per user.
     var subscription = modelBuilder.Entity<UserSubscriptionData>();

@@ -30,6 +30,13 @@ namespace App.Modules.Habit.Data
             return new InvalidRequestException("CharityId", $"Charity {charityId} does not exist");
         }
 
+        // A switched-off (deleted) charity cannot be newly chosen. A habit that already uses it keeps it.
+        private async Task<bool> IsSwitchedOffCharity(Guid? charityId) =>
+            charityId is { } id && await db.Charities.AnyAsync(c => c.Id == id && c.DeletedAt != null);
+
+        private static InvalidRequestException SwitchedOffCharity(Guid? charityId) =>
+            new("CharityId", $"Charity {charityId} is no longer available");
+
         public async Task<Result<int>> CountHabitsForUser(string userId)
         {
             try
@@ -230,6 +237,14 @@ namespace App.Modules.Habit.Data
                     return new TierInsufficient(habits.Tier, habits.Key, habits.Limit).ToException();
                 }
 
+                if (await IsSwitchedOffCharity(versionRecord.CharityId))
+                {
+                    logger.LogWarning("Create habit refused for UserId: {UserId}: charity {CharityId} is switched off",
+                        userId, versionRecord.CharityId);
+                    await transaction.RollbackAsync();
+                    return SwitchedOffCharity(versionRecord.CharityId);
+                }
+
                 Guid resolvedRoutineId;
                 if (routineId != null)
                 {
@@ -308,6 +323,20 @@ namespace App.Modules.Habit.Data
             try
             {
                 logger.LogInformation("Updating habit version and enabled status for HabitId: {HabitId}, Enabled: {Enabled}", habitId, enabled);
+
+                // Moving a habit onto a switched-off charity is refused; keeping the one it already has is fine.
+                var currentCharityId = await db.HabitVersions
+                    .Where(v => v.HabitId == habitId)
+                    .OrderByDescending(v => v.Version)
+                    .Select(v => v.CharityId)
+                    .FirstOrDefaultAsync();
+                if (versionRecord.CharityId != currentCharityId && await IsSwitchedOffCharity(versionRecord.CharityId))
+                {
+                    logger.LogWarning("Update habit refused for HabitId: {HabitId}: charity {CharityId} is switched off",
+                        habitId, versionRecord.CharityId);
+                    await transaction.RollbackAsync();
+                    return SwitchedOffCharity(versionRecord.CharityId);
+                }
 
                 // Atomically increment version and update enabled status using EF Core bulk update
                 var affectedRows = await db.Habits
