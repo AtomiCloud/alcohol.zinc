@@ -1,3 +1,23 @@
+## [1.45.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.44.1...v1.45.0) (2026-11-22)
+
+
+### ✨ Features ✨
+
+* decommission a charity so no more money flows to it ([7ebee5a](https://github.com/AtomiCloud/alcohol.zinc/commit/7ebee5af33c6a93028a2a9f238418186ce23efc6))
+
+
+### 🐛 Bug Fixes 🐛
+
+* check the hold after login, right before the confirm is sent ([de6147b](https://github.com/AtomiCloud/alcohol.zinc/commit/de6147bbef3d4e86db646350236b849d2ce6df50))
+* check the hold right before every confirm ([c5e04ce](https://github.com/AtomiCloud/alcohol.zinc/commit/c5e04ce7eab830081af6d71e69196347a129f4df))
+* never confirm a decommissioned charity's payment ([2b9f103](https://github.com/AtomiCloud/alcohol.zinc/commit/2b9f103cb5287df91c02fbd2e19e6f56d6444bd5))
+* never lose a charity credit when two workers charge at once ([831ba7b](https://github.com/AtomiCloud/alcohol.zinc/commit/831ba7bd01c48a836ffee21f0071c47d216efddc))
+
+
+### 🧪 Tests 🧪
+
+* prove MarkCharged forgets its cached balance ([a843cb4](https://github.com/AtomiCloud/alcohol.zinc/commit/a843cb46af567abb0ebd094f84565294cb969be3))
+
 ## [1.44.1](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.44.0...v1.44.1) (2026-11-22)
 
 
