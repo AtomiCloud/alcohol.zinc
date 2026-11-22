@@ -61,6 +61,7 @@ namespace App.Migrations
             // would need either deleting those money records or pointing them at a fake user/execution.
             // Neither is acceptable, so the rollback stops here and changes nothing.
             migrationBuilder.Sql(@"
+LOCK TABLE ""Penalties"" IN SHARE MODE; -- no detach can commit between this check and the DDL
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM ""Penalties"" WHERE ""UserId"" IS NULL OR ""HabitExecutionId"" IS NULL) THEN
