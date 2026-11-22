@@ -157,18 +157,22 @@ namespace App.Modules.Charities.Data
                 // reads it FOR SHARE in the same transaction as its write, so the two serialize: either the
                 // choice commits first and its default is cleared below, or this commits first and the
                 // choice sees the charity switched off and is refused.
-                var data = (await db.Charities
-                        .FromSqlRaw(@"SELECT * FROM ""Charities"" WHERE ""Id"" = {0} FOR UPDATE", id)
-                        .ToListAsync())
-                    .FirstOrDefault();
-                if (data == null)
+                var locked = await db.Database
+                    .SqlQuery<Guid>($@"SELECT ""Id"" AS ""Value"" FROM ""Charities"" WHERE ""Id"" = {id} FOR UPDATE")
+                    .ToListAsync();
+                if (locked.Count == 0)
                 {
                     logger.LogWarning("Charity not found for delete, Id: {Id}", id);
                     return (Unit?)null;
                 }
 
-                data.DeletedAt ??= DateTime.UtcNow;
-                await db.SaveChangesAsync();
+                // Written straight to the database (not through a tracked entity, which could hold a value
+                // from an earlier, rolled-back attempt on this context). Keeps the first switch-off time.
+                await db.Charities
+                    .Where(c => c.Id == id && c.DeletedAt == null)
+                    .ExecuteUpdateAsync(s => s.SetProperty(c => c.DeletedAt, DateTime.UtcNow));
+                var tracked = db.Charities.Local.FirstOrDefault(c => c.Id == id);
+                if (tracked != null) db.Entry(tracked).State = EntityState.Detached;
 
                 var clearedDefaults = await db.Configurations
                     .Where(c => c.DefaultCharityId == id)

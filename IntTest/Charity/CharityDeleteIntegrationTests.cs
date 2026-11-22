@@ -257,6 +257,28 @@ public class CharityDeleteIntegrationTests : IAsyncLifetime
     (await _db.Charities.AsNoTracking().SingleAsync(c => c.Id == target)).DeletedAt.Should().NotBeNull();
   }
 
+  [SkippableFact]
+  public async Task Delete_RetriedAfterARolledBackAttempt_OnTheSameContext_StillSwitchesOff()
+  {
+    // A first attempt inside a caller's scope rolls back. Retrying on the same context must not trust
+    // anything that attempt left in memory: the charity really ends up switched off.
+    Skip.IfNot(_enabled, "requires ZINC_DELETE_TEST_DB (a Postgres host)");
+
+    var (target, _) = await SeedTwoCharitiesWithHistory();
+    _db.ChangeTracker.Clear();
+    _ = await _db.Charities.SingleAsync(c => c.Id == target); // tracked by this context
+
+    using (new System.Transactions.TransactionScope(System.Transactions.TransactionScopeAsyncFlowOption.Enabled))
+    {
+      (await Charities().Delete(target)).Get().Should().NotBeNull();
+      // no Complete(): rolled back
+    }
+    (await _db.Charities.AsNoTracking().SingleAsync(c => c.Id == target)).DeletedAt.Should().BeNull("rolled back");
+
+    (await Charities().Delete(target)).Get().Should().NotBeNull();
+    (await _db.Charities.AsNoTracking().SingleAsync(c => c.Id == target)).DeletedAt.Should().NotBeNull();
+  }
+
   private static HabitVersionRecord Version(Guid charityId) => new()
   {
     CharityId = charityId,
