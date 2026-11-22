@@ -135,7 +135,7 @@ public class PenaltyService(
   //  - A payment intent exists (an earlier attempt created it, and may have settled before the worker
   //    could record it): look it up WITHOUT confirming and settle the ledger from the provider's answer:
   //      SUCCEEDED                          -> Charged (MarkCharged credits the charity exactly once);
-  //      CANCELLED / REQUIRES_PAYMENT_METHOD -> Skipped (definitively unpaid; we will never confirm it);
+  //      CANCELLED                          -> Skipped (definitively unpaid);
   //      anything else, or a lookup error   -> retried on later drains; after maxAttempts it is marked
   //                                            Failed with a note to reconcile with the provider.
   // No email: there is no user to send it to.
@@ -151,7 +151,9 @@ public class PenaltyService(
       var intent = lookup.Get();
       if (intent.Status == "SUCCEEDED")
         return await repo.MarkCharged(p.Id, intent.Id).Then(_ => 1, Errors.MapAll);
-      if (intent.Status is "CANCELLED" or "REQUIRES_PAYMENT_METHOD")
+      // Only a cancelled intent is definitively unpaid. REQUIRES_PAYMENT_METHOD can still be confirmed
+      // (e.g. by a worker that claimed this row before the deletion), so it stays under reconciliation.
+      if (intent.Status == "CANCELLED")
         return await repo.MarkSkipped(p.Id).Then(_ => 1, Errors.MapAll);
     }
 

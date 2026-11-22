@@ -233,7 +233,8 @@ public class DeleteAllRemnantsIntegrationTests : IAsyncLifetime
 
   [SkippableTheory]
   [InlineData("SUCCEEDED", PenaltyStatus.Charged, 300)]
-  [InlineData("REQUIRES_PAYMENT_METHOD", PenaltyStatus.Skipped, 0)]
+  [InlineData("CANCELLED", PenaltyStatus.Skipped, 0)]
+  [InlineData("REQUIRES_PAYMENT_METHOD", PenaltyStatus.Pending, 0)]  // still confirmable: retried later
   [InlineData("REQUIRES_CUSTOMER_ACTION", PenaltyStatus.Pending, 0)] // still unsettled: retried later
   [InlineData(null, PenaltyStatus.Pending, 0)]                       // lookup error: retried later
   public async Task DetachedPenaltyWithPaymentIntent_IsReconciledByLookup_NeverCharged(
@@ -309,11 +310,14 @@ public class DeleteAllRemnantsIntegrationTests : IAsyncLifetime
 
     (await workerA.MarkCharged(pendingA, "int_a")).IsSuccess().Should().BeTrue();
 
+    // B still tracks the row as Processing from its claim: its MarkCharged must re-read the locked row,
+    // see Charged, and not credit again.
+    (await workerB.MarkCharged(pendingA, "int_b")).IsSuccess().Should().BeTrue();
+
     (await workerB.MarkSkipped(pendingA)).IsSuccess().Should().BeTrue();
     (await workerB.MarkFailed(pendingA, "late")).IsSuccess().Should().BeTrue();
     (await workerB.Bump(pendingA, "late")).IsSuccess().Should().BeTrue();
     (await workerB.MarkPending(pendingA, "int_b", 2)).IsSuccess().Should().BeTrue();
-    (await workerB.MarkCharged(pendingA, "int_b")).IsSuccess().Should().BeTrue();
 
     _db.ChangeTracker.Clear();
     var row = await _db.Penalties.AsNoTracking().SingleAsync(p => p.Id == pendingA);

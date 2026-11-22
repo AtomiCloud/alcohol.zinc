@@ -232,7 +232,6 @@ public class PenaltyServiceTests
 
   [Theory]
   [InlineData("CANCELLED")]
-  [InlineData("REQUIRES_PAYMENT_METHOD")]
   public async Task Detached_IntentDefinitivelyUnpaid_MarksSkipped_WithoutCharging(string status)
   {
     var p = DetachedWithIntent();
@@ -248,6 +247,7 @@ public class PenaltyServiceTests
   }
 
   [Theory]
+  [InlineData("REQUIRES_PAYMENT_METHOD")] // still confirmable
   [InlineData("REQUIRES_CUSTOMER_ACTION")]
   [InlineData("PENDING")]
   [InlineData(null)] // lookup error
