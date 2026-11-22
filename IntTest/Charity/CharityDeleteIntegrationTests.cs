@@ -38,6 +38,7 @@ namespace IntTest.Charity;
 public class CharityDeleteIntegrationTests : IAsyncLifetime
 {
   private MainDbContext _db = null!;
+  private StaticOptionsMonitor<Dictionary<string, DatabaseOption>> _monitor = null!;
   private bool _enabled;
 
   public async Task InitializeAsync()
@@ -56,9 +57,9 @@ public class CharityDeleteIntegrationTests : IAsyncLifetime
       AutoMigrate = false,
       Timeout = 30,
     };
-    var monitor = new StaticOptionsMonitor<Dictionary<string, DatabaseOption>>(
+    _monitor = new StaticOptionsMonitor<Dictionary<string, DatabaseOption>>(
       new Dictionary<string, DatabaseOption> { [MainDbContext.Key] = opt });
-    _db = new MainDbContext(monitor, NullLoggerFactory.Instance);
+    _db = new MainDbContext(_monitor, NullLoggerFactory.Instance);
     await _db.Database.EnsureDeletedAsync();
     await _db.Database.EnsureCreatedAsync();
   }
@@ -169,6 +170,91 @@ public class CharityDeleteIntegrationTests : IAsyncLifetime
       new ConfigurationRecord { Timezone = "Asia/Singapore", DefaultCharityId = target });
     setDefault.IsSuccess().Should().BeFalse();
     setDefault.FailureOrDefault().Should().BeOfType<InvalidRequestException>();
+  }
+
+  [SkippableFact]
+  public async Task StaleMetadataSave_AdminEditOrPledgeSync_NeverSwitchesACharityBackOn()
+  {
+    // A context that read the charity before it was deleted, then saves metadata (admin edit or the
+    // Pledge sync), must not write DeletedAt = null back.
+    Skip.IfNot(_enabled, "requires ZINC_DELETE_TEST_DB (a Postgres host)");
+
+    var (target, _) = await SeedTwoCharitiesWithHistory();
+    _db.ExternalIds.Add(new ExternalIdData { CharityId = target, Source = "pledge", ExternalKey = "org_target" });
+    await _db.SaveChangesAsync();
+    _db.ChangeTracker.Clear();
+
+    await using var stale = new MainDbContext(_monitor, NullLoggerFactory.Instance);
+    (await stale.Charities.SingleAsync(c => c.Id == target)).DeletedAt.Should().BeNull(); // tracked, pre-delete
+
+    (await Charities().Delete(target)).Get().Should().NotBeNull();
+
+    var staleRepo = new CharityRepository(stale, NullLogger<CharityRepository>.Instance);
+    (await staleRepo.Update(target, new CharityRecord { Name = "Renamed" })).IsSuccess().Should().BeTrue();
+    var synced = await staleRepo.BulkUpsert([
+      new BulkUpsertCharity
+      {
+        Charity = new CharityRecord { Name = "Renamed by sync" },
+        ExternalId = new ExternalIdRecord { Source = "pledge", ExternalKey = "org_target" },
+        CauseKeys = [],
+      }
+    ]);
+    synced.IsSuccess().Should().BeTrue();
+    synced.Get().CharitiesCreated.Should().Be(0, "the sync matches the existing charity, no duplicate");
+
+    _db.ChangeTracker.Clear();
+    var row = await _db.Charities.AsNoTracking().SingleAsync(c => c.Id == target);
+    row.Name.Should().Be("Renamed by sync");
+    row.DeletedAt.Should().NotBeNull("metadata saves never switch a charity back on");
+  }
+
+  [SkippableFact]
+  public async Task Delete_WaitsForAnInFlightDefaultChoice_ThenClearsIt()
+  {
+    // A user is choosing the charity as their default (transaction open) when an admin deletes it.
+    // The delete must wait for that choice to commit and then clear it, never leave a default that
+    // points at a switched-off charity.
+    Skip.IfNot(_enabled, "requires ZINC_DELETE_TEST_DB (a Postgres host)");
+
+    var (target, _) = await SeedTwoCharitiesWithHistory();
+    _db.ChangeTracker.Clear();
+
+    await using var userCtx = new MainDbContext(_monitor, NullLoggerFactory.Instance);
+    await using var userTx = await userCtx.Database.BeginTransactionAsync();
+    var configs = new ConfigurationRepository(userCtx, NullLogger<ConfigurationRepository>.Instance);
+    var cfgId = await userCtx.Configurations.Where(c => c.UserId == "user-other").Select(c => c.Id).SingleAsync();
+    (await configs.Update(cfgId, "user-other", new ConfigurationRecord { Timezone = "UTC", DefaultCharityId = target }))
+      .IsSuccess().Should().BeTrue();
+
+    await using var adminCtx = new MainDbContext(_monitor, NullLoggerFactory.Instance);
+    var delete = new CharityRepository(adminCtx, NullLogger<CharityRepository>.Instance).Delete(target);
+    await Task.Delay(500);
+    delete.IsCompleted.Should().BeFalse("the delete waits on the charity row the user's choice holds");
+
+    await userTx.CommitAsync();
+    (await delete).Get().Should().NotBeNull();
+
+    _db.ChangeTracker.Clear();
+    (await _db.Configurations.AsNoTracking().SingleAsync(c => c.UserId == "user-other")).DefaultCharityId
+      .Should().BeNull("the delete ran after the choice committed and cleared it");
+  }
+
+  [SkippableFact]
+  public async Task Delete_InsideACallersTransactionScope_Works()
+  {
+    Skip.IfNot(_enabled, "requires ZINC_DELETE_TEST_DB (a Postgres host)");
+
+    var (target, _) = await SeedTwoCharitiesWithHistory();
+    _db.ChangeTracker.Clear();
+
+    using (var scope = new System.Transactions.TransactionScope(System.Transactions.TransactionScopeAsyncFlowOption.Enabled))
+    {
+      (await Charities().Delete(target)).Get().Should().NotBeNull();
+      scope.Complete();
+    }
+
+    _db.ChangeTracker.Clear();
+    (await _db.Charities.AsNoTracking().SingleAsync(c => c.Id == target)).DeletedAt.Should().NotBeNull();
   }
 
   private static HabitVersionRecord Version(Guid charityId) => new()

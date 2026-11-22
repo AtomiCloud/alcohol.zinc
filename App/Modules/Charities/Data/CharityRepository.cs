@@ -1,3 +1,4 @@
+using System.Transactions;
 using App.Error.V1;
 using App.StartUp.Database;
 using App.Utility;
@@ -120,6 +121,8 @@ namespace App.Modules.Charities.Data
                 }
                 data = data.ToData(record);
                 var updated = db.Charities.Update(data);
+                // Metadata edits never touch the switched-off flag: a stale save must not undo a Delete.
+                updated.Property(x => x.DeletedAt).IsModified = false;
                 await db.SaveChangesAsync();
 
                 logger.LogInformation("Charity updated for Id: {Id}", id);
@@ -141,26 +144,37 @@ namespace App.Modules.Charities.Data
         // an idempotent success.
         public async Task<Result<Unit?>> Delete(Guid id)
         {
-            await using var transaction = await db.Database.BeginTransactionAsync();
+            // Own transaction only when the caller has none (an ambient TransactionScope cannot nest one).
+            // Disposing it uncommitted rolls everything back.
+            await using var ownTx = Transaction.Current == null && db.Database.CurrentTransaction == null
+                ? await db.Database.BeginTransactionAsync()
+                : null;
             try
             {
                 logger.LogInformation("Switching off (soft-deleting) Charity Id: {Id}", id);
 
-                var data = await db.Charities.FirstOrDefaultAsync(x => x.Id == id);
+                // Lock the charity row FOR UPDATE. Choosing a charity (habit create/edit, default charity)
+                // reads it FOR SHARE in the same transaction as its write, so the two serialize: either the
+                // choice commits first and its default is cleared below, or this commits first and the
+                // choice sees the charity switched off and is refused.
+                var data = (await db.Charities
+                        .FromSqlRaw(@"SELECT * FROM ""Charities"" WHERE ""Id"" = {0} FOR UPDATE", id)
+                        .ToListAsync())
+                    .FirstOrDefault();
                 if (data == null)
                 {
                     logger.LogWarning("Charity not found for delete, Id: {Id}", id);
-                    await transaction.RollbackAsync();
                     return (Unit?)null;
                 }
+
+                data.DeletedAt ??= DateTime.UtcNow;
+                await db.SaveChangesAsync();
 
                 var clearedDefaults = await db.Configurations
                     .Where(c => c.DefaultCharityId == id)
                     .ExecuteUpdateAsync(s => s.SetProperty(c => c.DefaultCharityId, (Guid?)null));
 
-                data.DeletedAt ??= DateTime.UtcNow;
-                await db.SaveChangesAsync();
-                await transaction.CommitAsync();
+                if (ownTx != null) await ownTx.CommitAsync();
 
                 logger.LogInformation(
                     "Charity switched off for Id: {Id}; cleared {Count} default-charity settings", id, clearedDefaults);
@@ -170,7 +184,6 @@ namespace App.Modules.Charities.Data
             catch (Exception e)
             {
                 logger.LogError(e, "Failed to delete Charity Id: {Id}", id);
-                await transaction.RollbackAsync();
                 throw;
             }
         }
@@ -427,6 +440,9 @@ namespace App.Modules.Charities.Data
                 if (charitiesToUpdate.Count > 0)
                 {
                     db.Charities.UpdateRange(charitiesToUpdate);
+                    // Sync never touches the switched-off flag: a stale save must not undo a Delete.
+                    foreach (var c in charitiesToUpdate)
+                        db.Entry(c).Property(x => x.DeletedAt).IsModified = false;
                 }
                 await db.SaveChangesAsync(ct);
 

@@ -85,6 +85,7 @@ namespace App.Migrations
             // charities back into search and restore ON DELETE CASCADE, so a later hard delete would
             // erase their penalties, balances, payouts and habit history. The rollback changes nothing.
             migrationBuilder.Sql(@"
+LOCK TABLE ""Charities"" IN SHARE MODE; -- no switch-off can commit between this check and the DDL
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM ""Charities"" WHERE ""DeletedAt"" IS NOT NULL) THEN
