@@ -1,6 +1,11 @@
+using System.Data.Common;
+using System.Security.Claims;
+using App.Error.V1;
+using App.Modules.Friend.API.V1;
 using App.Modules.Friend.Data;
 using App.Modules.FriendStake.Data;
 using App.Modules.Habit.Data;
+using App.Modules.Notification.Data;
 using App.Modules.Users.Data;
 using App.StartUp.Database;
 using CSharp_Result;
@@ -9,7 +14,10 @@ using Domain.Friend;
 using Domain.Notification;
 using EntityFramework.Exceptions.Common;
 using IntTest.Penalty;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
@@ -65,6 +73,22 @@ public class FriendIntegrationTests : IAsyncLifetime
 
   private FriendService Service(IInboxService inbox) => new(Repo(), inbox, NullLogger<FriendService>.Instance);
 
+  private static FriendService Service(MainDbContext db) => new(
+    new FriendRepository(db, NullLogger<FriendRepository>.Instance),
+    new InboxService(new InboxRepository(db, NullLogger<InboxRepository>.Instance)),
+    NullLogger<FriendService>.Instance);
+
+  private static FriendController Controller(IFriendService service, string caller) => new(service, null!, new())
+  {
+    ControllerContext = new ControllerContext
+    {
+      HttpContext = new DefaultHttpContext
+      {
+        User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name, caller)], "test"))
+      }
+    }
+  };
+
   private async Task<string> SeedUser(string username)
   {
     var userId = $"user-{Guid.NewGuid():N}";
@@ -90,8 +114,346 @@ public class FriendIntegrationTests : IAsyncLifetime
   private async Task<List<(string, string)>> FriendshipRows() =>
     (await _db.Friendships.AsNoTracking().ToListAsync()).Select(x => (x.UserId, x.FriendUserId)).ToList();
 
+  [SkippableTheory]
+  [InlineData(true)]
+  [InlineData(false)]
+  public async Task PairOnlyMutation_RequiresOccurrence_WithoutWrites(bool accept)
+  {
+    Skip.If(_conn == null, SkipReason);
+    var alice = await SeedUser("alice");
+    var bob = await SeedUser("bob");
+    var service = Service(new RecordingInbox());
+    await service.SendRequest(alice, bob);
+    var id = await _db.FriendRequests.Select(x => x.Id).SingleAsync();
+
+    var failed = accept
+      ? (await service.Accept(bob, alice)).IsFailure()
+      : (await service.DeleteRequest(bob, alice)).IsFailure();
+
+    failed.Should().BeTrue("pair-only callers must update rather than resolve an unidentified occurrence");
+    (await _db.FriendRequests.AsNoTracking().Select(x => x.Id).SingleAsync()).Should().Be(id);
+    (await _db.Friendships.CountAsync()).Should().Be(0);
+  }
+
   [SkippableFact]
-  public async Task RequestThenAccept_BothAreFriends_RequestGone_OneNotificationEachWay()
+  public async Task DeclineResendAccept_FreshInboxKeepsBothOutcomes_StaleIdCannotConsumeNewRequest()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var alice = await SeedUser("alice");
+    var bob = await SeedUser("bob");
+    var service = Service(_db);
+    await service.SendRequest(alice, bob);
+    var first = (await service.ListRequests(bob)).Get().Incoming.Single();
+    var declined = (await service.ResolveRequest(bob, first.Id, "decline")).Get();
+    await service.SendRequest(alice, bob);
+    var second = (await service.ListRequests(bob)).Get().Incoming.Single();
+    second.Id.Should().NotBe(first.Id);
+
+    (await service.ResolveRequest(bob, first.Id, "accept")).FailureOrDefault()
+      .Should().BeOfType<FriendRequestException>().Which.Error.Should().Be(FriendRequestError.Resolved);
+    (await service.ResolveRequest(bob, Guid.NewGuid(), "accept")).FailureOrDefault().Should().BeOfType<NotFoundException>();
+    (await service.GetRequest(bob, first.Id)).Get().Should().Be(declined);
+    (await service.ListRequests(bob)).Get().Incoming.Single().Id.Should().Be(second.Id);
+    (await service.AreFriends(alice, bob)).Get().Should().BeFalse();
+
+    var accepted = (await service.ResolveRequest(bob, second.Id, "accept")).Get();
+    accepted.ResolvedAtUtc.Should().NotBeNull();
+    await service.Remove(alice, bob);
+    (await service.ResolveRequest(bob, second.Id, "accept")).Get().Should().Be(accepted);
+    (await service.AreFriends(alice, bob)).Get().Should().BeFalse("a retry must not recreate an ended friendship");
+
+    await using var fresh = PenaltyIntegrationTests.NewContext(_conn!);
+    var inbox = new InboxService(new InboxRepository(fresh, NullLogger<InboxRepository>.Instance));
+    var page = (await inbox.Search(new InboxSearch { UserId = bob })).Get();
+    page.Select(x => (x.FriendRequest!.RequestId, x.FriendRequest.Status)).Should()
+      .BeEquivalentTo([(first.Id, "declined"), (second.Id, "accepted")]);
+    page.Should().OnlyContain(x => x.Record.Kind == InboxKinds.FriendRequestResolved && x.ReadAtUtc == null);
+    page.Select(x => x.CreatedAtUtc).Should().BeInDescendingOrder();
+    var rows = await fresh.FriendRequests.AsNoTracking().OrderBy(x => x.CreatedAtUtc).ToListAsync();
+    rows.Select(x => (x.Id, x.Status)).Should().Equal(
+      (first.Id, FriendRequestStatus.Declined), (second.Id, FriendRequestStatus.Accepted));
+    (await fresh.InboxNotifications.AsNoTracking().Where(x => x.UserId == bob).ToListAsync())
+      .Should().OnlyContain(x => x.Kind == InboxKinds.FriendRequest && x.ReadAtUtc == null);
+    (await fresh.InboxNotifications.CountAsync(x => x.UserId == alice && x.Kind == InboxKinds.FriendAccepted))
+      .Should().Be(1);
+  }
+
+  [SkippableTheory]
+  [InlineData("sender", "accept", 403, typeof(FriendRequestWrongRole))]
+  [InlineData("sender", "decline", 403, typeof(FriendRequestWrongRole))]
+  [InlineData("recipient", "cancel", 403, typeof(FriendRequestWrongRole))]
+  [InlineData("outsider", "accept", 404, typeof(EntityNotFound))]
+  public async Task Resolve_PublicProblemMatrix_WritesNothing(string actor, string decision, int status, Type problem)
+  {
+    Skip.If(_conn == null, SkipReason);
+    var alice = await SeedUser("alice");
+    var bob = await SeedUser("bob");
+    var outsider = await SeedUser("outsider");
+    var service = Service(_db);
+    await service.SendRequest(alice, bob);
+    var id = (await service.ListRequests(bob)).Get().Incoming.Single().Id;
+    var caller = actor == "sender" ? alice : actor == "recipient" ? bob : outsider;
+    var controller = Controller(service, caller);
+    var response = await controller.ResolveRequest(caller, id, new ResolveFriendRequestReq { Decision = decision });
+    ((StatusCodeResult)response.Result!).StatusCode.Should().Be(status);
+    controller.HttpContext.Items["DomainProblemContext"].Should().BeOfType(problem);
+    (await service.GetRequest(bob, id)).Get().Status.Should().Be(FriendRequestStatus.Pending);
+    (await _db.Friendships.CountAsync()).Should().Be(0);
+  }
+
+  [SkippableTheory]
+  [InlineData(true)]
+  [InlineData(false)]
+  public async Task LegacyController_ReturnsDefinedUpdateRequired409_AndHonorsGuard(bool accept)
+  {
+    Skip.If(_conn == null, SkipReason);
+    var alice = await SeedUser("alice");
+    var bob = await SeedUser("bob");
+    var service = Service(_db);
+    await service.SendRequest(alice, bob);
+    var controller = Controller(service, bob);
+    var response = accept ? (await controller.Accept(bob, alice)).Result! : await controller.DeleteRequest(bob, alice);
+    ((StatusCodeResult)response).StatusCode.Should().Be(409);
+    var problem = (FriendRequestIdRequired)controller.HttpContext.Items["DomainProblemContext"]!;
+    problem.Id.Should().Be("friend_request_id_required");
+    problem.Detail.Should().Be("Update LazyTax to respond to this friend request.");
+    var forbidden = accept ? (await controller.Accept(alice, bob)).Result! : await controller.DeleteRequest(alice, bob);
+    ((StatusCodeResult)forbidden).StatusCode.Should().Be(403);
+    (await service.ListRequests(bob)).Get().Incoming.Should().HaveCount(1);
+    (await _db.Friendships.CountAsync()).Should().Be(0);
+  }
+
+  // Hold the first transactional occurrence read until both readers have their snapshots.
+  // Correct pair locks prevent the second read until the first commits, so the bounded wait
+  // opens for that case. Without serialization both decisions see Pending and both succeed.
+  private sealed class OccurrenceGate : DbCommandInterceptor
+  {
+    private readonly TaskCompletionSource open = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly HashSet<Guid> seen = [];
+
+    public override async ValueTask<DbDataReader> ReaderExecutedAsync(DbCommand command,
+      CommandExecutedEventData eventData, DbDataReader result, CancellationToken cancellationToken = default)
+    {
+      if (command.CommandText.Contains("FROM \"FriendRequests\"") && eventData.Context?.Database.CurrentTransaction != null)
+      {
+        bool first;
+        lock (seen)
+        {
+          first = seen.Add(eventData.Context.ContextId.InstanceId);
+          if (seen.Count == 2) open.TrySetResult();
+        }
+        if (first)
+        {
+          await Task.WhenAny(open.Task, Task.Delay(TimeSpan.FromSeconds(1.5), cancellationToken));
+          open.TrySetResult();
+        }
+      }
+      return result;
+    }
+  }
+
+  [SkippableFact]
+  public async Task Accept_WhileInboxForeignKeyLocksAreHeld_PersistsOutcomeFriendshipAndNotice()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var sender = await SeedUser("alice");
+    var recipient = await SeedUser("bob");
+    await Service(_db).SendRequest(sender, recipient);
+    var request = (await Service(_db).ListRequests(recipient)).Get().Incoming.Single();
+
+    await using var posting = PenaltyIntegrationTests.NewContext(_conn!);
+    await using var notification = await posting.Database.BeginTransactionAsync();
+    // The real INSERT must complete both Users FK KEY SHARE checks before acceptance starts.
+    // Keep its transaction open as a barrier: those locks remain held throughout acceptance.
+    (await new InboxService(new InboxRepository(posting, NullLogger<InboxRepository>.Instance))
+      .Post(sender, new InboxNotificationRecord
+      {
+        Kind = InboxKinds.FriendMissed, Title = "Concurrent notice", Body = "Another in-flight delivery",
+        ActorUserId = recipient
+      })).IsSuccess().Should().BeTrue();
+    await using (var resolving = PenaltyIntegrationTests.NewContext(_conn!))
+    {
+      var result = await Service(resolving).ResolveRequest(recipient, request.Id, "accept");
+      result.IsSuccess().Should().BeTrue("completed foreign-key checks must not block a pair decision; failure was {0}",
+        result.FailureOrDefault()?.GetType().Name);
+      result.Get().Status.Should().Be(FriendRequestStatus.Accepted);
+    }
+    await notification.CommitAsync();
+
+    await using var fresh = PenaltyIntegrationTests.NewContext(_conn!);
+    (await new InboxService(new InboxRepository(fresh, NullLogger<InboxRepository>.Instance))
+      .Search(new InboxSearch { UserId = sender })).Get().Where(x => x.Record.Kind == InboxKinds.FriendAccepted)
+      .Should().ContainSingle().Which.Record.ActorUserId.Should().Be(recipient);
+    var retained = (await Service(fresh).GetRequest(recipient, request.Id)).Get();
+    retained.Status.Should().Be(FriendRequestStatus.Accepted);
+    retained.CreatedAtUtc.Should().Be(request.CreatedAtUtc);
+    retained.ResolvedAtUtc.Should().NotBeNull();
+    (await Service(fresh).ListFriends(sender)).Get().Select(x => x.Friend.UserId).Should().Equal(recipient);
+    (await Service(fresh).ListFriends(recipient)).Get().Select(x => x.Friend.UserId).Should().Equal(sender);
+  }
+
+  [SkippableFact]
+  public async Task ConcurrentAcceptDecline_OneRetainedWinner_OneConflict()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var alice = await SeedUser("alice");
+    var bob = await SeedUser("bob");
+    var service = Service(_db);
+    await service.SendRequest(alice, bob);
+    var id = (await service.ListRequests(bob)).Get().Incoming.Single().Id;
+    var gate = new OccurrenceGate();
+    var results = await Task.WhenAll(new[] { "accept", "decline" }.Select(async decision =>
+    {
+      await using var db = PenaltyIntegrationTests.NewContext(_conn!, gate);
+      return await Service(db).ResolveRequest(bob, id, decision);
+    }));
+    var winner = results.Single(x => x.IsSuccess()).Get();
+    results.Single(x => x.IsFailure()).FailureOrDefault().Should().BeOfType<FriendRequestException>()
+      .Which.Error.Should().Be(FriendRequestError.Resolved);
+    await using var fresh = PenaltyIntegrationTests.NewContext(_conn!);
+    (await Service(fresh).GetRequest(bob, id)).Get().Should().Be(winner);
+    (await fresh.FriendRequests.CountAsync()).Should().Be(1);
+    (await fresh.Friendships.CountAsync()).Should().Be(winner.Status == FriendRequestStatus.Accepted ? 2 : 0);
+    (await fresh.InboxNotifications.CountAsync(x => x.Kind == InboxKinds.FriendAccepted))
+      .Should().Be(winner.Status == FriendRequestStatus.Accepted ? 1 : 0);
+  }
+
+  [SkippableTheory]
+  [InlineData(false)]
+  [InlineData(true)]
+  public async Task OppositeSend_RacingSendOrAccept_OneAcceptedOccurrenceAndNotice(bool explicitAccept)
+  {
+    Skip.If(_conn == null, SkipReason);
+    var alice = await SeedUser("alice");
+    var bob = await SeedUser("bob");
+    Guid id = default;
+    if (explicitAccept)
+    {
+      await Service(_db).SendRequest(alice, bob);
+      id = (await Service(_db).ListRequests(bob)).Get().Incoming.Single().Id;
+    }
+    var gate = new OccurrenceGate();
+    await Task.WhenAll(Enumerable.Range(0, 2).Select(async i =>
+    {
+      await using var db = PenaltyIntegrationTests.NewContext(_conn!, gate);
+      if (explicitAccept && i == 0) (await Service(db).ResolveRequest(bob, id, "accept")).Get();
+      else (await Service(db).SendRequest(i == 0 ? alice : bob, i == 0 ? bob : alice)).Get();
+    }));
+    await using var fresh = PenaltyIntegrationTests.NewContext(_conn!);
+    (await fresh.FriendRequests.Select(x => x.Status).SingleAsync()).Should().Be(FriendRequestStatus.Accepted);
+    (await fresh.Friendships.CountAsync()).Should().Be(2);
+    (await fresh.InboxNotifications.CountAsync(x => x.Kind == InboxKinds.FriendAccepted)).Should().Be(1);
+    var notes = (await new InboxService(new InboxRepository(fresh, NullLogger<InboxRepository>.Instance))
+      .Search(new InboxSearch { UserId = bob })).Get();
+    notes.Where(x => x.FriendRequest != null).Should().OnlyContain(x => x.FriendRequest!.Status == "accepted");
+  }
+
+  [SkippableTheory]
+  [InlineData(false, false)]
+  [InlineData(false, true)]
+  [InlineData(true, false)]
+  [InlineData(true, true)]
+  public async Task MigratedOppositePending_NewAcceptanceReconcilesOnlyNow_RetryLeavesResendAlone(
+    bool otherDirection, bool explicitAccept)
+  {
+    Skip.If(_conn == null, SkipReason);
+    await using var db = PenaltyIntegrationTests.NewContext(
+      string.Join(';', _conn!.Split(';').Where(p => !p.Trim().StartsWith("Database=", StringComparison.OrdinalIgnoreCase)))
+      + ";Database=friends_occurrence_migrate_test");
+    await db.Database.EnsureDeletedAsync();
+    try
+    {
+      var migrator = db.GetInfrastructure().GetRequiredService<IMigrator>();
+      await migrator.MigrateAsync("20261113065122_HabitSortOrder");
+      var actor = otherDirection ? "z" : "A";
+      var other = otherDirection ? "A" : "z";
+      db.Users.AddRange(new UserData { Id = actor, Username = actor, Email = "a@test.local" },
+        new UserData { Id = other, Username = other, Email = "b@test.local" });
+      await db.SaveChangesAsync();
+      var incoming = Guid.NewGuid();
+      var outgoing = Guid.NewGuid();
+      var created = new DateTime(2026, 11, 1, 0, 0, 0, DateTimeKind.Utc);
+      await db.Database.ExecuteSqlAsync($"""
+        INSERT INTO "FriendRequests" ("Id", "FromUserId", "ToUserId", "CreatedAtUtc") VALUES
+          ({incoming}, {other}, {actor}, {created}), ({outgoing}, {actor}, {other}, {created});
+        """);
+      await migrator.MigrateAsync();
+      var migrated = await db.FriendRequests.AsNoTracking().ToListAsync();
+      migrated.Select(x => x.Id).Should().BeEquivalentTo([incoming, outgoing]);
+      migrated.Should().OnlyContain(x => x.Status == FriendRequestStatus.Pending && x.ResolvedAtUtc == null && x.CreatedAtUtc == created);
+      var before = DateTime.UtcNow;
+      var service = Service(db);
+      if (explicitAccept) (await service.ResolveRequest(actor, incoming, "accept")).Get();
+      else (await service.SendRequest(actor, other)).Get().Should().Be(FriendRelation.Friend);
+      var accepted = (await service.GetRequest(actor, incoming)).Get();
+      var cancelled = (await service.GetRequest(actor, outgoing)).Get();
+      accepted.Status.Should().Be(FriendRequestStatus.Accepted);
+      cancelled.Status.Should().Be(FriendRequestStatus.Cancelled);
+      accepted.ResolvedAtUtc.Should().BeOnOrAfter(before.AddTicks(-10)).And.BeOnOrBefore(DateTime.UtcNow);
+      cancelled.ResolvedAtUtc.Should().Be(accepted.ResolvedAtUtc);
+      (await db.Friendships.CountAsync()).Should().Be(2);
+      (await service.ResolveRequest(other, outgoing, "accept")).FailureOrDefault()
+        .Should().BeOfType<FriendRequestException>().Which.Error.Should().Be(FriendRequestError.Resolved);
+      await service.Remove(actor, other);
+      await service.SendRequest(actor, other);
+      var resend = (await service.ListRequests(actor)).Get().Outgoing.Single();
+      (await service.ResolveRequest(actor, incoming, "accept")).Get().Should().Be(accepted);
+      (await service.GetRequest(actor, resend.Id)).Get().Status.Should().Be(FriendRequestStatus.Pending);
+      (await db.Friendships.CountAsync()).Should().Be(0);
+      (await db.InboxNotifications.CountAsync(x => x.Kind == InboxKinds.FriendAccepted)).Should().Be(1);
+    }
+    finally
+    {
+      await db.Database.EnsureDeletedAsync();
+    }
+  }
+
+  [SkippableFact]
+  public async Task LegacyOppositePending_ConcurrentAccepts_OnlyFirstAcceptsAndReconciles()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var alice = await SeedUser("alice");
+    var bob = await SeedUser("bob");
+    var aToB = new FriendRequestData { FromUserId = alice, ToUserId = bob };
+    var bToA = new FriendRequestData { FromUserId = bob, ToUserId = alice };
+    _db.FriendRequests.AddRange(aToB, bToA);
+    await _db.SaveChangesAsync();
+    var gate = new OccurrenceGate();
+    var results = await Task.WhenAll(new[] { (bob, aToB.Id), (alice, bToA.Id) }.Select(async pair =>
+    {
+      await using var db = PenaltyIntegrationTests.NewContext(_conn!, gate);
+      return await Service(db).ResolveRequest(pair.Item1, pair.Id, "accept");
+    }));
+    results.Count(x => x.IsSuccess()).Should().Be(1);
+    results.Single(x => x.IsFailure()).FailureOrDefault().Should().BeOfType<FriendRequestException>()
+      .Which.Error.Should().Be(FriendRequestError.Resolved);
+    var rows = await _db.FriendRequests.AsNoTracking().ToListAsync();
+    rows.Select(x => x.Status).Should().BeEquivalentTo([FriendRequestStatus.Accepted, FriendRequestStatus.Cancelled]);
+    rows.Select(x => x.ResolvedAtUtc).Distinct().Should().HaveCount(1);
+    (await _db.Friendships.CountAsync()).Should().Be(2);
+    (await _db.InboxNotifications.CountAsync(x => x.Kind == InboxKinds.FriendAccepted)).Should().Be(1);
+  }
+
+  [SkippableTheory]
+  [InlineData("decline")]
+  [InlineData("cancel")]
+  public async Task OppositePending_DeclineOrCancel_ResolvesOnlyAddressedOccurrence(string decision)
+  {
+    Skip.If(_conn == null, SkipReason);
+    var alice = await SeedUser("alice");
+    var bob = await SeedUser("bob");
+    var aToB = new FriendRequestData { FromUserId = alice, ToUserId = bob };
+    var bToA = new FriendRequestData { FromUserId = bob, ToUserId = alice };
+    _db.FriendRequests.AddRange(aToB, bToA);
+    await _db.SaveChangesAsync();
+    var service = Service(_db);
+    (await service.ResolveRequest(decision == "decline" ? bob : alice, aToB.Id, decision)).Get();
+    (await service.GetRequest(alice, bToA.Id)).Get().Status.Should().Be(FriendRequestStatus.Pending);
+    (await _db.Friendships.CountAsync()).Should().Be(0);
+  }
+
+  [SkippableFact]
+  public async Task RequestThenAccept_BothAreFriends_OutcomeRetained_OneNotificationEachWay()
   {
     Skip.If(_conn == null, SkipReason);
     var alice = await SeedUser("alice");
@@ -106,13 +468,15 @@ public class FriendIntegrationTests : IAsyncLifetime
     bobRequests.Outgoing.Should().BeEmpty();
     (await service.ListRequests(alice)).Get().Outgoing.Select(r => r.To.Username).Should().Equal("bob");
 
-    var friendship = (await service.Accept(bob, alice)).Get();
+    var requestId = bobRequests.Incoming.Single().Id;
+    var acceptedState = (await service.ResolveRequest(bob, requestId, "accept")).Get();
 
-    friendship!.Friend.Should().Be(new FriendUser(alice, "alice"));
+    acceptedState.Status.Should().Be(FriendRequestStatus.Accepted);
     (await service.ListFriends(alice)).Get().Select(f => f.Friend.Username).Should().Equal("bob");
     (await service.ListFriends(bob)).Get().Select(f => f.Friend.Username).Should().Equal("alice");
     (await FriendshipRows()).Should().BeEquivalentTo([(alice, bob), (bob, alice)]);
-    (await _db.FriendRequests.CountAsync()).Should().Be(0);
+    (await _db.FriendRequests.CountAsync()).Should().Be(1);
+    (await service.ListRequests(bob)).Get().Incoming.Should().BeEmpty();
     (await service.AreFriends(bob, alice)).Get().Should().BeTrue();
 
     inbox.Posts.Should().HaveCount(2);
@@ -121,14 +485,15 @@ public class FriendIntegrationTests : IAsyncLifetime
     request.Record.Kind.Should().Be(InboxKinds.FriendRequest);
     request.Record.Body.Should().Be("alice wants to be friends");
     request.Record.ActorUserId.Should().Be(alice);
-    request.Record.Data.Should().Be($$"""{"fromUserId":"{{alice}}"}""");
+    request.Record.Data.Should().Be($$"""{"requestId":"{{requestId}}","fromUserId":"{{alice}}"}""");
+    request.Record.FriendRequestId.Should().Be(requestId);
+    request.Record.DedupeKey.Should().Be($"friend_request:{requestId}");
     var accepted = inbox.Posts[1];
     accepted.UserId.Should().Be(alice);
     accepted.Record.Kind.Should().Be(InboxKinds.FriendAccepted);
     accepted.Record.ActorUserId.Should().Be(bob);
 
-    // Accepting again: no request any more.
-    (await service.Accept(bob, alice)).Get().Should().BeNull();
+    (await service.ResolveRequest(bob, requestId, "accept")).Get().Should().Be(acceptedState);
     inbox.Posts.Should().HaveCount(2);
   }
 
@@ -146,7 +511,7 @@ public class FriendIntegrationTests : IAsyncLifetime
 
     relation.Should().Be(FriendRelation.Friend);
     (await FriendshipRows()).Should().BeEquivalentTo([(alice, bob), (bob, alice)]);
-    (await _db.FriendRequests.CountAsync()).Should().Be(0);
+    (await _db.FriendRequests.Select(x => x.Status).SingleAsync()).Should().Be(FriendRequestStatus.Accepted);
     inbox.Posts.Select(p => (p.UserId, p.Record.Kind)).Should()
       .Equal((bob, InboxKinds.FriendRequest), (alice, InboxKinds.FriendAccepted));
   }
@@ -167,12 +532,12 @@ public class FriendIntegrationTests : IAsyncLifetime
     inbox.Posts.Should().HaveCount(1);
 
     await service.SendRequest(alice, carol);
-    await service.Accept(carol, alice);
+    await service.ResolveRequest(carol, (await service.ListRequests(carol)).Get().Incoming.Single().Id, "accept");
     var before = inbox.Posts.Count;
     (await service.SendRequest(alice, carol)).Get().Should().Be(FriendRelation.Friend);
     (await service.SendRequest(carol, alice)).Get().Should().Be(FriendRelation.Friend);
     inbox.Posts.Should().HaveCount(before);
-    (await _db.FriendRequests.CountAsync(r => r.FromUserId == carol || r.ToUserId == carol)).Should().Be(0);
+    (await service.ListRequests(carol)).Get().Incoming.Should().BeEmpty();
   }
 
   [SkippableFact]
@@ -188,7 +553,7 @@ public class FriendIntegrationTests : IAsyncLifetime
   }
 
   [SkippableFact]
-  public async Task DeclineAndCancel_DeleteTheRequestSilently()
+  public async Task DeclineAndCancel_RetainOutcomesSilently()
   {
     Skip.If(_conn == null, SkipReason);
     var alice = await SeedUser("alice");
@@ -199,13 +564,15 @@ public class FriendIntegrationTests : IAsyncLifetime
     await service.SendRequest(alice, bob);
     await service.SendRequest(alice, carol);
 
-    (await service.DeleteRequest(bob, alice)).Get().Should().NotBeNull("bob declines");
-    (await service.DeleteRequest(alice, carol)).Get().Should().NotBeNull("alice cancels");
-    (await service.DeleteRequest(alice, carol)).Get().Should().BeNull("already gone");
+    var bobId = (await service.ListRequests(bob)).Get().Incoming.Single().Id;
+    var carolId = (await service.ListRequests(carol)).Get().Incoming.Single().Id;
+    (await service.ResolveRequest(bob, bobId, "decline")).Get().Status.Should().Be(FriendRequestStatus.Declined);
+    (await service.ResolveRequest(alice, carolId, "cancel")).Get().Status.Should().Be(FriendRequestStatus.Cancelled);
+    (await service.ResolveRequest(alice, carolId, "cancel")).Get().Status.Should().Be(FriendRequestStatus.Cancelled);
 
-    (await _db.FriendRequests.CountAsync()).Should().Be(0);
+    (await _db.FriendRequests.CountAsync()).Should().Be(2);
     (await _db.Friendships.CountAsync()).Should().Be(0);
-    (await service.Accept(bob, alice)).Get().Should().BeNull();
+    (await service.ResolveRequest(bob, bobId, "accept")).FailureOrDefault().Should().BeOfType<FriendRequestException>();
     inbox.Posts.Should().HaveCount(2, "only the two requests notified");
   }
 
@@ -218,9 +585,9 @@ public class FriendIntegrationTests : IAsyncLifetime
     var carol = await SeedUser("carol");
     var service = Service(new RecordingInbox());
     await service.SendRequest(alice, bob);
-    await service.Accept(bob, alice);
+    await service.ResolveRequest(bob, (await service.ListRequests(bob)).Get().Incoming.Single().Id, "accept");
     await service.SendRequest(alice, carol);
-    await service.Accept(carol, alice);
+    await service.ResolveRequest(carol, (await service.ListRequests(carol)).Get().Incoming.Single().Id, "accept");
 
     var aliceHabit = await SeedHabit(alice);
     var bobHabit = await SeedHabit(bob);
@@ -254,7 +621,7 @@ public class FriendIntegrationTests : IAsyncLifetime
     await SeedUser("bob");
     var service = Service(new RecordingInbox());
     await service.SendRequest(me, friend);
-    await service.Accept(friend, me);
+    await service.ResolveRequest(friend, (await service.ListRequests(friend)).Get().Incoming.Single().Id, "accept");
     await service.SendRequest(me, outgoing);
     await service.SendRequest(incoming, me);
 
@@ -437,7 +804,8 @@ public class FriendIntegrationTests : IAsyncLifetime
 
     (await failing.SendRequest(alice, bob)).Get().Should().Be(FriendRelation.Outgoing);
     (await _db.FriendRequests.CountAsync()).Should().Be(1);
-    (await throwing.Accept(bob, alice)).Get().Should().NotBeNull();
+    (await throwing.ResolveRequest(bob, (await failing.ListRequests(bob)).Get().Incoming.Single().Id, "accept"))
+      .Get().Status.Should().Be(FriendRequestStatus.Accepted);
     (await failing.AreFriends(alice, bob)).Get().Should().BeTrue();
 
     var invite = (await throwing.GetOrCreateInvite(alice)).Get();

@@ -75,6 +75,25 @@ public class FriendController(
     return this.ReturnResult(result);
   }
 
+  [Authorize, HttpGet("{userId}/requests/{requestId:guid}")]
+  public async Task<ActionResult<FriendRequestStateRes>> GetRequest(string userId, Guid requestId)
+  {
+    var result = await this.GuardAsync(userId)
+      .ThenAwait(_ => service.GetRequest(userId, requestId))
+      .Then(r => r.ToRes(), Errors.MapNone);
+    return this.ReturnResult(result);
+  }
+
+  [Authorize, HttpPost("{userId}/requests/{requestId:guid}/resolve")]
+  public async Task<ActionResult<FriendRequestStateRes>> ResolveRequest(string userId, Guid requestId,
+    [FromBody] ResolveFriendRequestReq req)
+  {
+    var result = await this.GuardAsync(userId)
+      .ThenAwait(_ => service.ResolveRequest(userId, requestId, req.Decision))
+      .Then(r => r.ToRes(), Errors.MapNone);
+    return this.ReturnResult(result);
+  }
+
   [Authorize, HttpPost("{userId}/requests/{fromUserId}/accept")]
   public async Task<ActionResult<FriendRes>> Accept(string userId, string fromUserId)
   {

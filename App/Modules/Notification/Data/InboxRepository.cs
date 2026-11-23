@@ -17,7 +17,10 @@ public class InboxRepository(MainDbContext db, ILogger<InboxRepository> logger) 
     {
       db.InboxNotifications.Add(data);
       await db.SaveChangesAsync();
-      return data.ToPrincipal();
+      if (data.FriendRequestId == null) return data.ToPrincipal();
+      // Read the current outcome even when this context previously loaded the Pending row.
+      return (await db.InboxNotifications.AsNoTracking().Include(x => x.FriendRequest)
+        .SingleAsync(x => x.Id == data.Id)).ToPrincipal();
     }
     catch (UniqueConstraintException) when (record.DedupeKey != null)
     {
@@ -25,7 +28,7 @@ public class InboxRepository(MainDbContext db, ILogger<InboxRepository> logger) 
       db.Entry(data).State = EntityState.Detached;
       try
       {
-        var existing = await db.InboxNotifications.AsNoTracking()
+        var existing = await db.InboxNotifications.AsNoTracking().Include(x => x.FriendRequest)
           .Where(x => x.UserId == userId && x.DedupeKey == record.DedupeKey)
           .FirstAsync();
         logger.LogInformation("Inbox notification deduped for UserId={UserId} DedupeKey={DedupeKey} Id={Id}",
@@ -59,6 +62,7 @@ public class InboxRepository(MainDbContext db, ILogger<InboxRepository> logger) 
         .ThenByDescending(x => x.Id)
         .Skip(search.Skip)
         .Take(search.Limit)
+        .Include(x => x.FriendRequest)
         .ToListAsync();
       return data.Select(x => x.ToPrincipal()).ToList();
     }

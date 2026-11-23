@@ -1,8 +1,10 @@
+using App.Modules.Friend.Data;
 using App.Modules.Notification.Data;
 using App.Modules.Users.Data;
 using App.StartUp.Database;
 using CSharp_Result;
 using Domain.Exceptions;
+using Domain.Friend;
 using Domain.Notification;
 using IntTest.Penalty;
 using Microsoft.EntityFrameworkCore;
@@ -69,6 +71,53 @@ public class InboxIntegrationTests : IAsyncLifetime
   private async Task<List<string>> Titles(string userId, bool unreadOnly = false, int limit = 20, int skip = 0) =>
     (await Service().Search(new InboxSearch { UserId = userId, UnreadOnly = unreadOnly, Limit = limit, Skip = skip }))
     .Get().Select(n => n.Record.Title).ToList();
+
+  [SkippableFact]
+  public async Task FriendRequestProjection_TrustsOnlyLinkedParticipants_LegacyNeverInfersFriendship()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var recipient = await SeedUser();
+    var sender = await SeedUser();
+    var outsider = await SeedUser();
+    var request = new FriendRequestData { FromUserId = sender, ToUserId = recipient };
+    _db.FriendRequests.Add(request);
+    _db.Friendships.AddRange(
+      new FriendshipData { UserId = sender, FriendUserId = recipient },
+      new FriendshipData { UserId = recipient, FriendUserId = sender });
+    await _db.SaveChangesAsync();
+    var note = new InboxNotificationRecord
+    {
+      Kind = InboxKinds.FriendRequest, Title = "Request", Body = "Request", ActorUserId = sender,
+      Data = $$"""{"fromUserId":"{{sender}}"}"""
+    };
+    var legacy = (await Service().Post(recipient, note)).Get();
+    var linked = (await Service().Post(recipient, note with { FriendRequestId = request.Id })).Get();
+    var wrongActor = (await Service().Post(recipient, note with { FriendRequestId = request.Id, ActorUserId = outsider })).Get();
+    var wrongRecipient = (await Service().Post(outsider, note with { FriendRequestId = request.Id })).Get();
+
+    await using var fresh = PenaltyIntegrationTests.NewContext(_conn!);
+    var inbox = new InboxService(new InboxRepository(fresh, NullLogger<InboxRepository>.Instance));
+    var page = (await inbox.Search(new InboxSearch { UserId = recipient })).Get();
+    page.Single(x => x.Id == legacy.Id).FriendRequest.Should().Be(new InboxFriendRequest(null, "unavailable", null));
+    page.Single(x => x.Id == wrongActor.Id).FriendRequest.Should().Be(new InboxFriendRequest(null, "unavailable", null));
+    page.Single(x => x.Id == linked.Id).FriendRequest.Should().Be(new InboxFriendRequest(request.Id, "pending", null));
+    page.Single(x => x.Id == legacy.Id).Record.Kind.Should().Be(InboxKinds.FriendRequestResolved);
+    (await inbox.Search(new InboxSearch { UserId = outsider })).Get().Single(x => x.Id == wrongRecipient.Id)
+      .FriendRequest.Should().Be(new InboxFriendRequest(null, "unavailable", null));
+
+    // A delayed post reads the retained outcome; neither posting nor GET can reopen the request.
+    var resolved = new DateTime(2026, 11, 15, 8, 0, 0, DateTimeKind.Utc);
+    await _db.FriendRequests.Where(x => x.Id == request.Id).ExecuteUpdateAsync(s => s
+      .SetProperty(x => x.Status, FriendRequestStatus.Cancelled).SetProperty(x => x.ResolvedAtUtc, resolved));
+    var delayed = (await inbox.Post(recipient, note with { FriendRequestId = request.Id })).Get();
+    delayed.FriendRequest.Should().Be(new InboxFriendRequest(request.Id, "cancelled", resolved));
+    delayed.Record.Kind.Should().Be(InboxKinds.FriendRequestResolved);
+    // Deleting the occurrence nulls the link, never deletes or reactivates the notice.
+    await _db.FriendRequests.Where(x => x.Id == request.Id).ExecuteDeleteAsync();
+    var after = (await inbox.Search(new InboxSearch { UserId = recipient })).Get();
+    after.Should().HaveCount(4).And.OnlyContain(x => x.Record.Kind == InboxKinds.FriendRequestResolved);
+    after.Should().OnlyContain(x => x.FriendRequest == new InboxFriendRequest(null, "unavailable", null));
+  }
 
   [SkippableFact]
   public async Task Post_SameDedupeKeyTwice_RecordsOnceAndReturnsTheFirst()
@@ -184,7 +233,14 @@ public class InboxIntegrationTests : IAsyncLifetime
     var jimmy = await SeedUser();
     var sam = await SeedUser();
     var inbox = Service();
-    await inbox.Post(recipient, Note("jimmy wants to be friends", jimmy));
+    var request = new FriendRequestData { FromUserId = jimmy, ToUserId = recipient,
+      Status = FriendRequestStatus.Declined, ResolvedAtUtc = DateTime.UtcNow };
+    _db.FriendRequests.Add(request);
+    await _db.SaveChangesAsync();
+    await inbox.Post(recipient, Note("jimmy wants to be friends", jimmy) with
+    {
+      Kind = InboxKinds.FriendRequest, FriendRequestId = request.Id
+    });
     await inbox.Post(recipient, Note("jimmy missed Run today", jimmy, "missed:1"));
     await inbox.Post(recipient, Note("sam missed Run today", sam));
     await inbox.Post(recipient, Note("system"));
@@ -197,6 +253,7 @@ public class InboxIntegrationTests : IAsyncLifetime
     (await Titles(recipient)).Should().BeEquivalentTo("sam missed Run today", "system");
     (await inbox.UnreadCount(recipient)).Get().Should().Be(2);
     (await _db.InboxNotifications.AnyAsync(x => x.UserId == jimmy || x.ActorUserId == jimmy)).Should().BeFalse();
+    (await _db.FriendRequests.AnyAsync(x => x.Id == request.Id)).Should().BeFalse();
     (await _db.InboxNotifications.CountAsync(x => x.ActorUserId == sam)).Should().Be(1);
   }
 

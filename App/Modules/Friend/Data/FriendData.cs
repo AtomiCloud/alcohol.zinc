@@ -1,9 +1,10 @@
 using System.ComponentModel.DataAnnotations;
 using App.Modules.Users.Data;
+using Domain.Friend;
 
 namespace App.Modules.Friend.Data;
 
-// A pending request from FromUserId to ToUserId. Accepting or declining deletes it.
+// An immutable request occurrence; terminal outcomes survive unfriend and resend.
 public class FriendRequestData
 {
   [Key]
@@ -18,6 +19,8 @@ public class FriendRequestData
   public virtual UserData? To { get; set; }
 
   public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+  public FriendRequestStatus Status { get; set; }
+  public DateTime? ResolvedAtUtc { get; set; }
 }
 
 // One row per direction: a friendship between A and B is (A, B) and (B, A).
