@@ -16,5 +16,8 @@ public interface IPaymentGateway
   // Payment intent operations
   Task<Result<PaymentIntentResult>> CreatePaymentIntentAsync(CreatePaymentIntentRequest request);
   Task<Result<PaymentIntentResult>> RetrievePaymentIntentAsync(string paymentIntentId);
-  Task<Result<PaymentIntentResult>> ConfirmPaymentIntentAsync(string paymentIntentId, string paymentConsentId, string customerId);
+  // beforeSend: invoked after authentication, immediately before the confirm request is sent. It may
+  // throw to stop the confirm (nothing is sent, no money moves).
+  Task<Result<PaymentIntentResult>> ConfirmPaymentIntentAsync(string paymentIntentId, string paymentConsentId, string customerId,
+    Func<Task>? beforeSend = null);
 }

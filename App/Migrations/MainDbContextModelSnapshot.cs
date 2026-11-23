@@ -78,6 +78,12 @@ namespace App.Migrations
                         .IsRequired()
                         .HasColumnType("text[]");
 
+                    b.Property<DateTime?>("DecommissionedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("LogoUrl")
                         .HasMaxLength(512)
                         .HasColumnType("character varying(512)");
@@ -852,7 +858,7 @@ namespace App.Migrations
                     b.Property<Guid?>("DisbursementId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("HabitExecutionId")
+                    b.Property<Guid?>("HabitExecutionId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("LastError")
@@ -870,7 +876,6 @@ namespace App.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("UserId")
-                        .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
@@ -1323,7 +1328,7 @@ namespace App.Migrations
                     b.HasOne("App.Modules.Charities.Data.CharityData", "Charity")
                         .WithMany()
                         .HasForeignKey("DefaultCharityId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Charity");
                 });
@@ -1333,7 +1338,7 @@ namespace App.Migrations
                     b.HasOne("App.Modules.Charities.Data.CharityData", "Charity")
                         .WithMany()
                         .HasForeignKey("CharityId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Charity");
@@ -1433,7 +1438,7 @@ namespace App.Migrations
                     b.HasOne("App.Modules.Charities.Data.CharityData", "Charity")
                         .WithMany()
                         .HasForeignKey("CharityId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("App.Modules.Habit.Data.HabitData", "Habit")
                         .WithMany("Versions")
@@ -1499,7 +1504,7 @@ namespace App.Migrations
                     b.HasOne("App.Modules.Charities.Data.CharityData", "Charity")
                         .WithMany()
                         .HasForeignKey("CharityId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Charity");
@@ -1510,7 +1515,7 @@ namespace App.Migrations
                     b.HasOne("App.Modules.Charities.Data.CharityData", "Charity")
                         .WithMany()
                         .HasForeignKey("CharityId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("App.Modules.Disbursement.Data.DisbursementData", null)
@@ -1521,14 +1526,12 @@ namespace App.Migrations
                     b.HasOne("App.Modules.HabitExecution.Data.HabitExecutionData", "HabitExecution")
                         .WithMany()
                         .HasForeignKey("HabitExecutionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("App.Modules.Users.Data.UserData", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Charity");
 

@@ -56,6 +56,14 @@ public class DisbursementService(
 
   private async Task<Result<int>> DonateOne(ClaimedPayout c, DonorIdentity donor)
   {
+    // The charity may have been decommissioned after this payout was claimed. Nothing has been sent yet,
+    // so release the claim (the penalties go back to pending payout, where the claim now skips them):
+    // the money stays held, recorded under the charity.
+    var stopped = await repo.IsPayoutStopped(c.CharityId);
+    if (!stopped.IsSuccess()) return stopped.FailureOrDefault()!;
+    if (stopped.Get())
+      return await repo.MarkFailed(c.DisbursementId, "charity decommissioned; payout stopped").Then(_ => 0, Errors.MapAll);
+
     var req = new DonationRequest
     {
       OrganizationId = c.PledgeOrganizationId,

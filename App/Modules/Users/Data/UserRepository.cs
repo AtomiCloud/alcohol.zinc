@@ -169,6 +169,13 @@ public class UserRepository(MainDbContext db, ILogger<UserRepository> logger) : 
     {
       logger.LogInformation("Deleting all remnants for User '{Id}'", id);
 
+      // The purge issues one immediate UPDATE (penalty detach) before the final SaveChanges. The service
+      // runs it inside a transaction (TransactionManager); a direct call gets its own, so a failure part-way
+      // never leaves penalties detached from a user who still exists.
+      await using var ownTx = Transaction.Current == null && db.Database.CurrentTransaction == null
+        ? await db.Database.BeginTransactionAsync()
+        : null;
+
       // Check if user exists
       var user = await db.Users
         .Where(x => x.Id == id)
@@ -268,8 +275,8 @@ public class UserRepository(MainDbContext db, ILogger<UserRepository> logger) : 
         db.FreezeConsumptions.RemoveRange(freezeConsumptions);
       }
 
-      // Anonymize-retain the donation/charge ledger (penalty charges + charity donations).
-      AnonymizePenaltyLedger(id);
+      // Detach-retain the penalty ledger (the money record): never deleted with the user.
+      await this.DetachPenaltyLedger(id);
 
       // Delete configuration if exists
       var configuration = await db.Configurations
@@ -299,6 +306,7 @@ public class UserRepository(MainDbContext db, ILogger<UserRepository> logger) : 
 
       // Save all changes
       await db.SaveChangesAsync();
+      if (ownTx != null) await ownTx.CommitAsync();
       logger.LogInformation("Successfully deleted all remnants for User '{Id}'", id);
 
       return new Unit();
@@ -310,21 +318,32 @@ public class UserRepository(MainDbContext db, ILogger<UserRepository> logger) : 
     }
   }
 
-  // ── Penalty anonymize-retain seam ─────────────────────────────────────────────────────────────
-  // The Penalty module (PenaltyData / CharityBalanceData) does NOT exist on `main` yet — it lives on
-  // the unmerged `Yek-Khan/habit-penalty-feature` branch — so there are no penalty rows to act on and
-  // this is intentionally a no-op for now (safe: zero penalty PII exists on this branch).
+  // ── Penalty detach-retain ─────────────────────────────────────────────────────────────────────
+  // A penalty row is the money ledger: what was charged, to which charity, under which payment intent.
+  // Account deletion must DETACH the person from it, not erase it. Two links point at the user's data:
+  //   - Penalties.UserId           -> Users           (the person)
+  //   - Penalties.HabitExecutionId -> HabitExecutions (deleted explicitly by this purge)
+  // Both are nulled here, before the deletes below, so the rows survive (the FKs are also ON DELETE SET
+  // NULL as a database backstop for any other delete path). Everything else on the row is kept.
   //
-  // TODO(account-deletion): when the Penalty module merges to main, ANONYMIZE-RETAIN here instead of
-  // hard-deleting. For every PenaltyData row where UserId == id:
-  //   - set UserId = a sentinel (e.g. "deleted-user") to DETACH the person from the financial record;
-  //   - KEEP AmountCents, Currency, CharityId, CreatedAt and PaymentIntentId (accounting/legal record);
-  //   - do NOT delete the row; CharityBalanceData holds no user PII and stays untouched.
-  // It must mutate tracked entities so the single SaveChangesAsync below (same transaction) persists it.
-  // A skipped unit test already asserts the expected behavior — un-skip it once the module exists.
-  private void AnonymizePenaltyLedger(string id)
+  // Only the two links are written, in one set-based UPDATE, never the status: a concurrent penalty
+  // drain may be settling one of these rows right now, and a status written from an earlier read could
+  // overwrite its result. The penalty worker closes detached rows itself when it next claims them
+  // (Skipped, or Failed for reconciliation when a payment intent already exists), and refuses to save
+  // a new payment intent on a detached row, so nothing is confirmed after detachment.
+  // Runs inside the caller's transaction (UserService.DeleteAllRemnants / DeleteAccount).
+  private async Task DetachPenaltyLedger(string id)
   {
-    logger.LogDebug(
-      "Penalty anonymize-retain seam for User '{Id}': no-op until the Penalty module merges to main", id);
+    var detached = await db.Penalties
+      .Where(p => p.UserId == id
+                  || db.HabitExecutions.Any(e => e.Id == p.HabitExecutionId
+                                                 && db.HabitVersions.Any(v => v.Id == e.HabitVersionId
+                                                                              && db.Habits.Any(h => h.Id == v.HabitId && h.UserId == id))))
+      .ExecuteUpdateAsync(s => s
+        .SetProperty(p => p.UserId, (string?)null)
+        .SetProperty(p => p.HabitExecutionId, (Guid?)null)
+        .SetProperty(p => p.UpdatedAt, DateTime.UtcNow));
+    if (detached > 0)
+      logger.LogInformation("Detached {Count} penalty records from User '{Id}' (retained, not deleted)", detached, id);
   }
 }

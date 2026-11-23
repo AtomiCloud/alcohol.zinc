@@ -291,11 +291,15 @@ public sealed class FakeSubscriptionPaymentService : IPaymentService
     return Task.FromResult<Result<bool>>(this.HasConsent);
   }
 
+  public Task<Result<PaymentIntentResult>> RetrievePaymentIntentAsync(string paymentIntentId)
+    => throw new NotImplementedException();
+
   public async Task<Result<PaymentIntentResult>> ChargeStoredConsentAsync(
     string userId, Money amount, string description,
     string? idempotencyKey = null, string? existingIntentId = null,
     Func<string, Task>? onIntentCreated = null,
-    ConsentPurpose purpose = ConsentPurpose.Penalty)
+    ConsentPurpose purpose = ConsentPurpose.Penalty,
+    Func<Task>? beforeConfirm = null)
   {
     ChargeCalls.Add((userId, amount, description, idempotencyKey, existingIntentId, purpose));
     if (_emitIntentId != null && onIntentCreated != null)

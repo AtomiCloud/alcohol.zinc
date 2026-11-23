@@ -33,9 +33,23 @@ public sealed class FakePenaltyRepository(params PenaltyPrincipal[] pending) : I
   public Task<Result<List<PenaltyPrincipal>>> GetPending(int batchSize)
     => Task.FromResult<Result<List<PenaltyPrincipal>>>(_pending.Take(batchSize).ToList());
 
-  public Task<Result<Unit>> MarkCharged(Guid id, string paymentIntentId)
+  // What MarkCharged reports: true = this call charged it; false = it was already Charged.
+  public bool MarkChargedCharges { get; init; } = true;
+
+  public Task<Result<bool>> MarkCharged(Guid id, string paymentIntentId)
   {
     MarkChargedCalls.Add((id, paymentIntentId));
+    return Task.FromResult<Result<bool>>(MarkChargedCharges);
+  }
+
+  // Simulates the penalty being put on hold before a confirm: EnsureChargeable throws.
+  public bool HeldBeforeConfirm { get; init; }
+  public int EnsureChargeableCalls { get; private set; }
+
+  public Task<Result<Unit>> EnsureChargeable(Guid id)
+  {
+    EnsureChargeableCalls++;
+    if (HeldBeforeConfirm) throw new PenaltyHeldException(id);
     return Task.FromResult<Result<Unit>>(new Unit());
   }
 
@@ -45,9 +59,16 @@ public sealed class FakePenaltyRepository(params PenaltyPrincipal[] pending) : I
     return Task.FromResult<Result<Unit>>(new Unit());
   }
 
+  // Simulates SetIntentId refusing (e.g. the penalty was put on hold by a decommission mid-charge).
+  // Thrown = the repository throws; Returned = it hands back a failed Result.
+  public Exception? SetIntentIdThrows { get; init; }
+  public Exception? SetIntentIdReturns { get; init; }
+
   public Task<Result<Unit>> SetIntentId(Guid id, string paymentIntentId)
   {
     SetIntentIdCalls.Add((id, paymentIntentId));
+    if (SetIntentIdThrows != null) throw SetIntentIdThrows;
+    if (SetIntentIdReturns != null) return Task.FromResult<Result<Unit>>(SetIntentIdReturns);
     return Task.FromResult<Result<Unit>>(new Unit());
   }
 
@@ -57,9 +78,25 @@ public sealed class FakePenaltyRepository(params PenaltyPrincipal[] pending) : I
     return Task.FromResult<Result<Unit>>(new Unit());
   }
 
-  public Task<Result<Unit>> MarkFailed(Guid id, string error)
+  // What MarkFailed reports: true = the row was marked; false = it was already final (e.g. Held).
+  public bool MarkFailedMarks { get; init; } = true;
+
+  public Task<Result<bool>> MarkFailed(Guid id, string error)
   {
     MarkFailedCalls.Add((id, error));
+    return Task.FromResult<Result<bool>>(MarkFailedMarks);
+  }
+
+  // Held rows with a payment intent, handed out for a look-up.
+  public List<PenaltyPrincipal> HeldToReconcile { get; init; } = [];
+  public List<(Guid Id, string Note)> NoteHeldCheckCalls { get; } = [];
+
+  public Task<Result<List<PenaltyPrincipal>>> GetHeldToReconcile(int batchSize, int maxChecks, TimeSpan olderThan)
+    => Task.FromResult<Result<List<PenaltyPrincipal>>>(HeldToReconcile.Take(batchSize).ToList());
+
+  public Task<Result<Unit>> NoteHeldCheck(Guid id, string note)
+  {
+    NoteHeldCheckCalls.Add((id, note));
     return Task.FromResult<Result<Unit>>(new Unit());
   }
 
@@ -92,6 +129,7 @@ public sealed class FakePaymentService : IPaymentService
   }
 
   public List<(string UserId, Money Amount, string Description)> ChargeCalls { get; } = [];
+  public int BeforeConfirmCalls { get; private set; }
 
   public static FakePaymentService Succeeds(string intentId)
     => WithStatus(intentId, "SUCCEEDED");
@@ -128,17 +166,36 @@ public sealed class FakePaymentService : IPaymentService
     })
     { ThrowOnFirstCall = ex };
 
+  // Retrieve-only lookup (reconciling a detached penalty's intent). Unset = a gateway error.
+  public Func<string, Result<PaymentIntentResult>>? Retrieve { get; private set; }
+
+  public FakePaymentService WithRetrieve(Func<string, Result<PaymentIntentResult>> retrieve)
+  {
+    Retrieve = retrieve;
+    return this;
+  }
+  public List<string> RetrieveCalls { get; } = [];
+
+  public Task<Result<PaymentIntentResult>> RetrievePaymentIntentAsync(string paymentIntentId)
+  {
+    RetrieveCalls.Add(paymentIntentId);
+    return Task.FromResult(Retrieve?.Invoke(paymentIntentId) ?? new Exception("retrieve not configured"));
+  }
+
   public async Task<Result<PaymentIntentResult>> ChargeStoredConsentAsync(
     string userId, Money amount, string description,
     string? idempotencyKey = null, string? existingIntentId = null,
     Func<string, Task>? onIntentCreated = null,
-    ConsentPurpose purpose = ConsentPurpose.Penalty)
+    ConsentPurpose purpose = ConsentPurpose.Penalty,
+    Func<Task>? beforeConfirm = null)
   {
     ChargeCalls.Add((userId, amount, description));
     if (ThrowOnFirstCall != null && _calls++ == 0)
       throw ThrowOnFirstCall;
     if (_emitIntentId != null && onIntentCreated != null)
       await onIntentCreated(_emitIntentId);
+    BeforeConfirmCalls++;
+    if (beforeConfirm != null) await beforeConfirm();
     return _charge(userId, amount, description);
   }
 

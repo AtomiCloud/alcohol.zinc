@@ -726,4 +726,48 @@ public class PenaltyIntegrationTests : IAsyncLifetime
     var hasBalance = await verify.CharityBalances.AsNoTracking().AnyAsync(x => x.CharityId == charityId);
     hasBalance.Should().BeFalse(); // no row created -> nothing accrued
   }
+
+  // Two drain workers (each with its own long-lived context) credit the SAME charity in turn: A, then
+  // B, then A again. A still tracks the balance row from its first credit; its second credit must add to
+  // the value in the database (which includes B's credit), not to its own stale copy. Before the fix the
+  // ledger lost B's credit: three 1.00 penalties charged, 2.00 accrued.
+  [SkippableFact]
+  public async Task MarkCharged_TwoWorkersAlternating_NeverLoseACharityCredit()
+  {
+    Skip.If(_conn == null, SkipReason);
+
+    var (userId, charityId) = await SeedUserAndCharity();
+    var ids = new List<Guid>();
+    for (var i = 0; i < 3; i++)
+    {
+      var execId = await SeedExecution(userId, charityId);
+      var id = Guid.NewGuid();
+      _db.Penalties.Add(new PenaltyData
+      {
+        Id = id, HabitExecutionId = execId, UserId = userId, CharityId = charityId, AmountCents = 100,
+        Currency = "USD", Status = (int)PenaltyStatus.Processing, Attempts = 0,
+      });
+      ids.Add(id);
+    }
+    await _db.SaveChangesAsync();
+
+    await using var ctxA = NewContext(_conn!);
+    await using var ctxB = NewContext(_conn!);
+    (await Repo(ctxA).MarkCharged(ids[0], "int_0")).IsSuccess().Should().BeTrue();
+    // A now tracks the balance row (100), as a worker context that read it would.
+    (await ctxA.CharityBalances.SingleAsync(b => b.CharityId == charityId && b.Currency == "USD"))
+      .AccruedCents.Should().Be(100);
+    (await Repo(ctxB).MarkCharged(ids[1], "int_1")).IsSuccess().Should().BeTrue();
+    (await Repo(ctxA).MarkCharged(ids[2], "int_2")).IsSuccess().Should().BeTrue();
+
+    // A's own context must not keep serving its stale copy after crediting.
+    (await ctxA.CharityBalances.SingleAsync(b => b.CharityId == charityId && b.Currency == "USD"))
+      .AccruedCents.Should().Be(300, "MarkCharged forgets its cached copy of the balance");
+
+    await using var check = NewContext(_conn!);
+    (await check.Penalties.CountAsync(p => p.CharityId == charityId && p.Status == (int)PenaltyStatus.Charged))
+      .Should().Be(3);
+    (await check.CharityBalances.AsNoTracking().SingleAsync(b => b.CharityId == charityId && b.Currency == "USD"))
+      .AccruedCents.Should().Be(300, "every charged penalty is credited exactly once");
+  }
 }

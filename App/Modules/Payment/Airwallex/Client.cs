@@ -226,12 +226,17 @@ public class AirwallexClient(
       });
   }
 
-  public Task<Result<AirwallexPaymentIntentRes>> ConfirmPaymentIntentAsync(string intentId, AirwallexConfirmPaymentIntentReq req)
+  public Task<Result<AirwallexPaymentIntentRes>> ConfirmPaymentIntentAsync(string intentId, AirwallexConfirmPaymentIntentReq req,
+    Func<Task>? beforeSend = null)
   {
     return authenticator
       .GetToken()
       .ThenAwait(async token =>
       {
+        // Last chance to stop the confirm: after authentication (which may wait on a token refresh),
+        // right before the request leaves. Throwing here sends nothing.
+        if (beforeSend != null) await beforeSend();
+
         var request = new HttpRequestMessage
         {
           Method = HttpMethod.Post,

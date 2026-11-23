@@ -1,8 +1,10 @@
+using System.Transactions;
 using App.Error.V1;
 using App.StartUp.Database;
 using App.Utility;
 using CSharp_Result;
 using Domain.Configuration;
+using Domain.Exceptions;
 using EntityFramework.Exceptions.Common;
 using Microsoft.EntityFrameworkCore;
 
@@ -10,6 +12,21 @@ namespace App.Modules.Configurations.Data
 {
     public class ConfigurationRepository(MainDbContext db, ILogger<ConfigurationRepository> logger) : IConfigurationRepository
     {
+        // A switched-off (deleted) charity cannot be newly chosen as the default charity.
+        // Reads the charity row FOR SHARE, so the lock is held until the caller's transaction ends and a
+        // concurrent CharityRepository.Delete (FOR UPDATE) waits for this choice, or this waits for it.
+        private async Task<bool> IsSwitchedOffCharity(Guid? charityId)
+        {
+            if (charityId is not { } id) return false;
+            var deletedAt = await db.Database
+                .SqlQuery<DateTime?>($@"SELECT ""DeletedAt"" AS ""Value"" FROM ""Charities"" WHERE ""Id"" = {id} FOR SHARE")
+                .ToListAsync();
+            return deletedAt is [not null];
+        }
+
+        private static InvalidRequestException SwitchedOffCharity(Guid? charityId) =>
+            new("DefaultCharityId", $"Charity {charityId} is no longer available");
+
         public async Task<Result<Configuration?>> GetByUserId(string userId)
         {
             try
@@ -92,13 +109,22 @@ namespace App.Modules.Configurations.Data
 
         public async Task<Result<ConfigurationPrincipal>> Create(string userId, ConfigurationRecord record)
         {
+            // The charity check reads the charity row FOR SHARE; it must share a transaction with the write so
+            // a concurrent charity Delete cannot slip in between. Own transaction only when the caller has none.
+            await using var ownTx = Transaction.Current == null && db.Database.CurrentTransaction == null
+                ? await db.Database.BeginTransactionAsync()
+                : null;
             try
             {
                 logger.LogInformation("Adding Configuration for UserId: {UserId}", userId);
 
+                if (await IsSwitchedOffCharity(record.DefaultCharityId))
+                    return SwitchedOffCharity(record.DefaultCharityId);
+
                 var data = record.ToData(Guid.NewGuid(), userId);
                 var r = db.Configurations.Add(data);
                 await db.SaveChangesAsync();
+                if (ownTx != null) await ownTx.CommitAsync();
 
                 logger.LogInformation("Configuration added with Id: {Id}", data.Id);
 
@@ -121,6 +147,11 @@ namespace App.Modules.Configurations.Data
 
         public async Task<Result<ConfigurationPrincipal?>> Update(Guid id, string userId, ConfigurationRecord record)
         {
+            // The charity check reads the charity row FOR SHARE; it must share a transaction with the write so
+            // a concurrent charity Delete cannot slip in between. Own transaction only when the caller has none.
+            await using var ownTx = Transaction.Current == null && db.Database.CurrentTransaction == null
+                ? await db.Database.BeginTransactionAsync()
+                : null;
             try
             { 
                 logger.LogInformation("Updating Configuration Id: {Id}, UserId: {UserId}", id, userId);
@@ -135,9 +166,13 @@ namespace App.Modules.Configurations.Data
                     return (ConfigurationPrincipal?)null;
                 }
 
+                if (record.DefaultCharityId != data.DefaultCharityId && await IsSwitchedOffCharity(record.DefaultCharityId))
+                    return SwitchedOffCharity(record.DefaultCharityId);
+
                 data.Timezone = record.Timezone;
                 data.DefaultCharityId = record.DefaultCharityId;
                 await db.SaveChangesAsync();
+                if (ownTx != null) await ownTx.CommitAsync();
 
                 logger.LogInformation("Configuration updated for Id: {Id}", id);
 

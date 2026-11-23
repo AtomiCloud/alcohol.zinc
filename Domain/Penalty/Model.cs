@@ -8,13 +8,20 @@ public enum PenaltyStatus
   Charged,
   Failed,
   Skipped,
-  Processing // claimed by a drain worker (atomic Pending->Processing lease); excluded from GetPending so concurrent drains cannot double-charge.
+  Processing, // claimed by a drain worker (atomic Pending->Processing lease); excluded from GetPending so concurrent drains cannot double-charge.
+  Held // its charity was decommissioned before the money was taken: kept as a record, never charged and never paid out, until someone decides what to do with it
 }
+
+// Thrown when a penalty can no longer take a payment because its charity was decommissioned while
+// the charge was in flight. Raised before the payment is confirmed, so no money moves.
+public class PenaltyHeldException(Guid penaltyId)
+  : InvalidOperationException($"Penalty {penaltyId} is on hold: its charity was decommissioned.");
 
 public record PenaltyRecord
 {
-  public required Guid HabitExecutionId { get; init; } // idempotency key (one penalty per execution)
-  public required string UserId { get; init; }
+  // Idempotency key (one penalty per execution). Null once the execution was deleted with its user.
+  public required Guid? HabitExecutionId { get; init; }
+  public required string? UserId { get; init; } // null once the user was deleted (detached ledger row)
   public required Guid CharityId { get; init; }
   public required Money Amount { get; init; } // NodaMoney.Money; reconstructed at read boundary from cents+currency
   public required PenaltyStatus Status { get; init; }

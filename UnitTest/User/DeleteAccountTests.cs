@@ -131,16 +131,6 @@ public class DeleteAccountTests
     repo.DeleteAllRemnantsCalls.Should().BeEmpty();
   }
 
-  [Fact(Skip = "Penalty module is not on main yet (lives on Yek-Khan/habit-penalty-feature). " +
-              "Un-skip once it merges: deletion must ANONYMIZE-RETAIN penalty/charity-donation rows " +
-              "(set UserId -> sentinel, keep amount/currency/charity/timestamp/PaymentIntentId), NOT delete them.")]
-  public void AnonymizeRetain_PenaltyLedger_KeepsFinancialRecordButStripsUser()
-  {
-    // Expected behavior to assert when Penalty exists:
-    //   - Penalty rows for the user are RETAINED (not deleted),
-    //   - their UserId is replaced with the deleted-user sentinel,
-    //   - AmountCents / Currency / CharityId / CreatedAt / PaymentIntentId are unchanged,
-    //   - CharityBalance (no user PII) is untouched.
-    throw new NotImplementedException();
-  }
+  // Penalty detach-retain on deletion is asserted against a real Postgres in
+  // IntTest/User/DeleteAllRemnantsIntegrationTests.cs (DeleteAllRemnants_KeepsPenaltyRecords_*).
 }

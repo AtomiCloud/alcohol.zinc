@@ -30,6 +30,21 @@ namespace App.Modules.Habit.Data
             return new InvalidRequestException("CharityId", $"Charity {charityId} does not exist");
         }
 
+        // A switched-off (deleted) charity cannot be newly chosen. A habit that already uses it keeps it.
+        // Reads the charity row FOR SHARE, so the lock is held until the caller's transaction ends and a
+        // concurrent CharityRepository.Delete (FOR UPDATE) waits for this choice, or this waits for it.
+        private async Task<bool> IsSwitchedOffCharity(Guid? charityId)
+        {
+            if (charityId is not { } id) return false;
+            var deletedAt = await db.Database
+                .SqlQuery<DateTime?>($@"SELECT ""DeletedAt"" AS ""Value"" FROM ""Charities"" WHERE ""Id"" = {id} FOR SHARE")
+                .ToListAsync();
+            return deletedAt is [not null];
+        }
+
+        private static InvalidRequestException SwitchedOffCharity(Guid? charityId) =>
+            new("CharityId", $"Charity {charityId} is no longer available");
+
         public async Task<Result<int>> CountHabitsForUser(string userId)
         {
             try
@@ -230,6 +245,14 @@ namespace App.Modules.Habit.Data
                     return new TierInsufficient(habits.Tier, habits.Key, habits.Limit).ToException();
                 }
 
+                if (await IsSwitchedOffCharity(versionRecord.CharityId))
+                {
+                    logger.LogWarning("Create habit refused for UserId: {UserId}: charity {CharityId} is switched off",
+                        userId, versionRecord.CharityId);
+                    await transaction.RollbackAsync();
+                    return SwitchedOffCharity(versionRecord.CharityId);
+                }
+
                 Guid resolvedRoutineId;
                 if (routineId != null)
                 {
@@ -329,6 +352,21 @@ namespace App.Modules.Habit.Data
                     .Where(x => x.Id == habitId)
                     .Select(x => x.Version)
                     .FirstAsync();
+
+                // Moving a habit onto a switched-off charity is refused; keeping the one it already has is
+                // fine. Decided here, after the increment above locked this habit row, so the "current"
+                // charity is the live one (a concurrent edit of the same habit waits) and not a stale read.
+                var currentCharityId = await db.HabitVersions
+                    .Where(v => v.HabitId == habitId && v.Version == currentVersion - 1)
+                    .Select(v => v.CharityId)
+                    .FirstOrDefaultAsync();
+                if (versionRecord.CharityId != currentCharityId && await IsSwitchedOffCharity(versionRecord.CharityId))
+                {
+                    logger.LogWarning("Update habit refused for HabitId: {HabitId}: charity {CharityId} is switched off",
+                        habitId, versionRecord.CharityId);
+                    await transaction.RollbackAsync();
+                    return SwitchedOffCharity(versionRecord.CharityId);
+                }
 
                 // Create new version record using mapper
                 var versionData = versionRecord.ToData(habitId, currentVersion);

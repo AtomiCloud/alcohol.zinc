@@ -1,3 +1,55 @@
+## [1.45.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.44.1...v1.45.0) (2026-11-22)
+
+
+### ✨ Features ✨
+
+* decommission a charity so no more money flows to it ([7ebee5a](https://github.com/AtomiCloud/alcohol.zinc/commit/7ebee5af33c6a93028a2a9f238418186ce23efc6))
+
+
+### 🐛 Bug Fixes 🐛
+
+* check the hold after login, right before the confirm is sent ([de6147b](https://github.com/AtomiCloud/alcohol.zinc/commit/de6147bbef3d4e86db646350236b849d2ce6df50))
+* check the hold right before every confirm ([c5e04ce](https://github.com/AtomiCloud/alcohol.zinc/commit/c5e04ce7eab830081af6d71e69196347a129f4df))
+* never confirm a decommissioned charity's payment ([2b9f103](https://github.com/AtomiCloud/alcohol.zinc/commit/2b9f103cb5287df91c02fbd2e19e6f56d6444bd5))
+* never lose a charity credit when two workers charge at once ([831ba7b](https://github.com/AtomiCloud/alcohol.zinc/commit/831ba7bd01c48a836ffee21f0071c47d216efddc))
+
+
+### 🧪 Tests 🧪
+
+* prove MarkCharged forgets its cached balance ([a843cb4](https://github.com/AtomiCloud/alcohol.zinc/commit/a843cb46af567abb0ebd094f84565294cb969be3))
+
+## [1.44.1](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.44.0...v1.44.1) (2026-11-22)
+
+
+### 🐛 Bug Fixes 🐛
+
+* deleting a charity switches it off instead of erasing it ([1d67d31](https://github.com/AtomiCloud/alcohol.zinc/commit/1d67d31fc7a49f44a4240b8adb1eacc481fc8882))
+* serialize charity switch-off with metadata saves and choices ([e4debf0](https://github.com/AtomiCloud/alcohol.zinc/commit/e4debf012ef089ff50374680a3e9897162cb7fee))
+* write the charity switch-off mark straight to the database ([9d1167d](https://github.com/AtomiCloud/alcohol.zinc/commit/9d1167d007140633661b687f2f72b00cf3895a62))
+
+## [1.44.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.43.3...v1.44.0) (2026-11-22)
+
+
+### 🐛 Bug Fixes 🐛
+
+* debt follows the penalty's real payment state ([6218056](https://github.com/AtomiCloud/alcohol.zinc/commit/6218056324008598fdd91e759d3c90e119bfba75))
+
+
+### 🧪 Tests 🧪
+
+* cover open debts over a mixed failure history ([463580f](https://github.com/AtomiCloud/alcohol.zinc/commit/463580f64ecf060d5f9b10c6a6fe421e257bd896))
+
+## [1.43.3](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.43.2...v1.43.3) (2026-11-22)
+
+
+### 🐛 Bug Fixes 🐛
+
+* close races between user deletion and the penalty drain ([e4dc827](https://github.com/AtomiCloud/alcohol.zinc/commit/e4dc827b18b37e43e19a86f2155634f1f53ff950))
+* keep penalty records when a user is deleted ([0d4f3d6](https://github.com/AtomiCloud/alcohol.zinc/commit/0d4f3d6e268177bca52e1adda39af92eefff07c1))
+* keep REQUIRES_PAYMENT_METHOD intents under reconciliation ([504e9bb](https://github.com/AtomiCloud/alcohol.zinc/commit/504e9bba27743eb43077c1308c49966ad3edaac2))
+* lock Penalties before the migration rollback guard ([39036ea](https://github.com/AtomiCloud/alcohol.zinc/commit/39036ea851affe32eea855a01f1a7be88367f2dc))
+* reconcile detached penalties and make Charged final ([d6cffd2](https://github.com/AtomiCloud/alcohol.zinc/commit/d6cffd2bf8cc2de9c947956f52d5f4eb8ac0482f))
+
 ## [1.43.2](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.43.1...v1.43.2) (2026-11-20)
 
 

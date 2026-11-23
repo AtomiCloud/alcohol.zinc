@@ -8,6 +8,7 @@ public static class InboxKinds
   public const string FriendRequest = "friend_request"; // Actor asked to be your friend
   public const string FriendAccepted = "friend_accepted"; // Actor accepted your request or invite
   public const string FriendMissed = "friend_missed"; // Actor missed a habit you watch
+  public const string CharityDecommissioned = "charity_decommissioned"; // A charity your habits give to no longer takes donations
 }
 
 public record InboxNotificationRecord
