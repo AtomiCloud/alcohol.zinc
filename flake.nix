@@ -8,7 +8,7 @@
     # registry
     nixpkgs.url = "nixpkgs/nixos-unstable";
     nixpkgs-2505.url = "nixpkgs/nixos-25.05";
-    atomipkgs.url = "github:AtomiCloud/nix-registry/v2";
+    atomipkgs.url = "github:AtomiCloud/nix-registry/v3";
 
   };
   outputs =
