@@ -83,6 +83,7 @@ Root Chart to a single Service
 | maindb.auth.database | string | `"alcohol-zinc"` |  |
 | maindb.auth.password | string | `"supersecret"` |  |
 | maindb.auth.username | string | `"admin"` |  |
+| maindb.image.repository | string | `"bitnamilegacy/postgresql"` |  |
 | maindb.nameOverride | string | `"zinc-maindb"` |  |
 | maindb.primary.persistence.enabled | bool | `false` |  |
 | mainstorage.apiIngress.enabled | bool | `true` |  |
@@ -90,6 +91,7 @@ Root Chart to a single Service
 | mainstorage.apiIngress.ingressClassName | string | `"traefik"` |  |
 | mainstorage.auth.rootPassword | string | `"supersecret"` |  |
 | mainstorage.auth.rootUser | string | `"admin"` |  |
+| mainstorage.image.repository | string | `"bitnamilegacy/minio"` |  |
 | mainstorage.ingress.enabled | bool | `true` |  |
 | mainstorage.ingress.hostname | string | `"console-mainstorage.zinc.alcohol.lapras.lvh.me"` |  |
 | mainstorage.ingress.ingressClassName | string | `"traefik"` |  |
