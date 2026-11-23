@@ -1,3 +1,10 @@
+## [1.45.1](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.45.0...v1.45.1) (2026-11-23)
+
+
+### 🐛 Bug Fixes 🐛
+
+* release the cloud.durian Strava redirect ([d3da62f](https://github.com/AtomiCloud/alcohol.zinc/commit/d3da62fc109cf1001e97660aac2f48c6beac9bdb)), closes [#107](https://github.com/AtomiCloud/alcohol.zinc/issues/107)
+
 ## [1.45.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.44.1...v1.45.0) (2026-11-22)
 
 
