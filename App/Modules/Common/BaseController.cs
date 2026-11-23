@@ -7,6 +7,7 @@ using App.StartUp.Services.Auth;
 using App.Utility;
 using CSharp_Result;
 using Domain.Exceptions;
+using Domain.Friend;
 using Domain.Proof;
 using Domain.Subscription;
 using Microsoft.AspNetCore.Mvc;
@@ -65,6 +66,12 @@ public class AtomiControllerBase(IAuthHelper h) : ControllerBase
       SubscriptionBusyException sbe => this.Error(HttpStatusCode.Conflict,
         new RenewalInProgress(sbe.UserId)),
       UserBusyException ube => this.Error(HttpStatusCode.Conflict, new UserBusy(ube.UserId)),
+      FriendRequestException fre => fre.Error switch
+      {
+        FriendRequestError.IdRequired => this.Error(HttpStatusCode.Conflict, new FriendRequestIdRequired()),
+        FriendRequestError.Resolved => this.Error(HttpStatusCode.Conflict, new FriendRequestResolved()),
+        _ => this.Error(HttpStatusCode.Forbidden, new FriendRequestWrongRole()),
+      },
       Auth.HandoffNotAvailableException hna => this.Error(HttpStatusCode.Forbidden,
         new HandoffNotAvailable(hna.Platform, hna.Storefront)),
       _ => throw new AggregateException("Unhandled Exception", e),

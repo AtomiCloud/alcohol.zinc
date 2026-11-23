@@ -448,7 +448,8 @@ namespace App.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -457,6 +458,14 @@ namespace App.Migrations
                         .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime?>("ResolvedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
 
                     b.Property<string>("ToUserId")
                         .IsRequired()
@@ -468,9 +477,13 @@ namespace App.Migrations
                     b.HasIndex("ToUserId");
 
                     b.HasIndex("FromUserId", "ToUserId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"Status\" = 0");
 
-                    b.ToTable("FriendRequests");
+                    b.ToTable("FriendRequests", t =>
+                        {
+                            t.HasCheckConstraint("CK_FriendRequests_Outcome", "\"Status\" BETWEEN 0 AND 3 AND ((\"Status\" = 0 AND \"ResolvedAtUtc\" IS NULL) OR (\"Status\" <> 0 AND \"ResolvedAtUtc\" IS NOT NULL))");
+                        });
                 });
 
             modelBuilder.Entity("App.Modules.Friend.Data.FriendshipData", b =>
@@ -706,6 +719,9 @@ namespace App.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
+                    b.Property<Guid?>("FriendRequestId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Kind")
                         .IsRequired()
                         .HasMaxLength(32)
@@ -727,6 +743,8 @@ namespace App.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ActorUserId");
+
+                    b.HasIndex("FriendRequestId");
 
                     b.HasIndex("UserId", "CreatedAtUtc");
 
@@ -1477,6 +1495,11 @@ namespace App.Migrations
                         .HasForeignKey("ActorUserId")
                         .OnDelete(DeleteBehavior.Cascade);
 
+                    b.HasOne("App.Modules.Friend.Data.FriendRequestData", "FriendRequest")
+                        .WithMany()
+                        .HasForeignKey("FriendRequestId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("App.Modules.Users.Data.UserData", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
@@ -1484,6 +1507,8 @@ namespace App.Migrations
                         .IsRequired();
 
                     b.Navigation("Actor");
+
+                    b.Navigation("FriendRequest");
 
                     b.Navigation("User");
                 });
