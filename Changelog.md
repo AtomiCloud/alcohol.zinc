@@ -1,3 +1,12 @@
+## [1.45.2](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.45.1...v1.45.2) (2026-11-23)
+
+
+### 🐛 Bug Fixes 🐛
+
+* allow friend notifications alongside pair decisions ([e263f82](https://github.com/AtomiCloud/alcohol.zinc/commit/e263f822074380d56669b628dffb035a552dcf90))
+* package migrator for its target architecture ([07ef425](https://github.com/AtomiCloud/alcohol.zinc/commit/07ef425e6a95b41f9971bbe9a986a2814dc79e93))
+* retain friend request occurrence outcomes ([82659cb](https://github.com/AtomiCloud/alcohol.zinc/commit/82659cb152f60c79a49fe392eb083cc8f6ce8009))
+
 ## [1.45.1](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.45.0...v1.45.1) (2026-11-23)
 
 
