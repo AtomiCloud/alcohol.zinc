@@ -18,6 +18,11 @@ startCluster="$(yq -r '.startCluster' "$file")"
 mode="$(yq -r '.type' "$file")"
 
 if [ "$fast" = 'true' ]; then
+  # fast mode reuses an existing cluster; create it once on a fresh machine
+  if [ "$startCluster" = 'true' ] && ! k3d cluster get "$landscape" >/dev/null 2>&1; then
+    ./scripts/local/create-k3d-cluster.sh "$file"
+    kubectl --context "k3d-$landscape" create ns "$platform"
+  fi
   kubectx "k3d-$landscape"
 else
   if [ "$startCluster" = 'true' ]; then
