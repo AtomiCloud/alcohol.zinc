@@ -177,6 +177,9 @@ migration:
 
 maindb:
   nameOverride: zinc-maindb
+  # Bitnami moved versioned tags off docker.io/bitnami; same image, frozen under bitnamilegacy.
+  image:
+    repository: bitnamilegacy/postgresql
   primary:
     persistence:
       enabled: false
@@ -187,6 +190,9 @@ maindb:
 
 mainstorage:
   nameOverride: zinc-mainstorage
+  # Bitnami moved versioned tags off docker.io/bitnami; same image, frozen under bitnamilegacy.
+  image:
+    repository: bitnamilegacy/minio
   persistence:
     enabled: false
     size: 10Gi
