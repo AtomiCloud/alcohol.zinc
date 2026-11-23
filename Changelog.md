@@ -1,3 +1,11 @@
+## [1.45.3](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.45.2...v1.45.3) (2026-11-23)
+
+
+### 🐛 Bug Fixes 🐛
+
+* create the dev cluster on the first fast-mode run ([fa26e46](https://github.com/AtomiCloud/alcohol.zinc/commit/fa26e46a80bc2d9caa45abbe037c863da22ddcdd))
+* pull local postgres and minio from bitnamilegacy ([838ee33](https://github.com/AtomiCloud/alcohol.zinc/commit/838ee332c078e0b9fa5a8864da53aad03cabf162))
+
 ## [1.45.2](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.45.1...v1.45.2) (2026-11-23)
 
 
