@@ -422,4 +422,109 @@ public class PenaltyRepository(MainDbContext db, ILogger<PenaltyRepository> logg
       throw;
     }
   }
+
+  public const string RequeuedReason = "requeued: penalty consent verified";
+
+  public async Task<Result<int>> RequeueUncharged(string userId)
+  {
+    var uncharged = new[] { (int)PenaltyStatus.Failed, (int)PenaltyStatus.Skipped };
+    await using var tx = await db.Database.BeginTransactionAsync();
+    try
+    {
+      // Lock their charities FOR SHARE, as EnqueuePending does, so a concurrent decommission either
+      // commits first (seen below: those rows go to Held) or waits for this to commit (and then holds
+      // the re-queued Pending rows itself). No re-queued row can slip past a decommission as Pending.
+      await db.Database.ExecuteSqlAsync($@"
+        SELECT 1 FROM ""Charities"" WHERE ""Id"" IN (
+          SELECT ""CharityId"" FROM ""Penalties""
+          WHERE ""UserId"" = {userId} AND ""Status"" IN ({uncharged[0]}, {uncharged[1]})
+        ) FOR SHARE");
+
+      // Detached rows (no execution) are closed for good: a deleted account's penalties are never charged.
+      var mine = db.Penalties.Where(p => p.UserId == userId && p.HabitExecutionId != null
+                                         && uncharged.Contains(p.Status));
+      var now = DateTime.UtcNow;
+      var held = await mine
+        .Where(p => db.Charities.Any(c => c.Id == p.CharityId && c.DecommissionedAt != null))
+        .ExecuteUpdateAsync(x => x
+          .SetProperty(p => p.Status, (int)PenaltyStatus.Held)
+          .SetProperty(p => p.Attempts, 0)
+          .SetProperty(p => p.LastError, HeldReason)
+          .SetProperty(p => p.UpdatedAt, now));
+      var requeued = await mine
+        .ExecuteUpdateAsync(x => x
+          .SetProperty(p => p.Status, (int)PenaltyStatus.Pending)
+          .SetProperty(p => p.Attempts, 0)
+          .SetProperty(p => p.LastError, RequeuedReason)
+          .SetProperty(p => p.UpdatedAt, now));
+      await tx.CommitAsync();
+      db.ChangeTracker.Clear();
+
+      if (requeued + held > 0)
+        logger.LogInformation("Re-queued {Requeued} uncharged penalties for UserId={UserId} ({Held} held)",
+          requeued, userId, held);
+      return requeued;
+    }
+    catch (Exception e)
+    {
+      logger.LogError(e, "RequeueUncharged failed for UserId={UserId}", userId);
+      throw;
+    }
+  }
+
+  public async Task<Result<List<OwedItem>>> ListOwed(string userId)
+  {
+    try
+    {
+      // The same days as the overview's totalDebt (StreakRepository.GetOpenDebtsForUser).
+      var rows = await (from he in db.HabitExecutions
+                        join hv in db.HabitVersions on he.HabitVersionId equals hv.Id
+                        join h in db.Habits on hv.HabitId equals h.Id
+                        where h.UserId == userId
+                              && he.Status == App.Modules.HabitExecution.Data.HabitExecutionStatusData.Failed
+                              && !db.Penalties.Any(p => p.HabitExecutionId == he.Id
+                                                        && (p.Status == (int)PenaltyStatus.Charged
+                                                            || p.Status == (int)PenaltyStatus.Held))
+                        let penalty = db.Penalties.FirstOrDefault(p => p.HabitExecutionId == he.Id)
+                        let charityId = penalty != null ? (Guid?)penalty.CharityId : hv.CharityId
+                        select new
+                        {
+                          he.Id,
+                          he.Date,
+                          hv.HabitId,
+                          hv.Task,
+                          hv.StakeCents,
+                          hv.RatioBasisPoints,
+                          hv.StakeCurrency,
+                          CharityId = charityId,
+                          CharityName = db.Charities.Where(c => c.Id == charityId).Select(c => c.Name).FirstOrDefault(),
+                          Status = penalty != null ? (int?)penalty.Status : null
+                        })
+        .AsNoTracking()
+        .ToListAsync();
+
+      return rows
+        .Select(r => (r, Cents: (long)r.StakeCents * r.RatioBasisPoints / 10_000L))
+        .Where(x => x.Cents > 0)
+        .OrderBy(x => x.r.Date).ThenBy(x => x.r.Task).ThenBy(x => x.r.Id)
+        .Select(x => new OwedItem
+        {
+          ExecutionId = x.r.Id,
+          HabitId = x.r.HabitId,
+          HabitName = x.r.Task,
+          LocalDate = x.r.Date,
+          Amount = x.Cents / 100m,
+          Currency = x.r.StakeCurrency,
+          CharityId = x.r.CharityId,
+          CharityName = x.r.CharityName,
+          Status = x.r.Status is { } st ? (PenaltyStatus)st : null
+        })
+        .ToList();
+    }
+    catch (Exception e)
+    {
+      logger.LogError(e, "ListOwed failed for UserId={UserId}", userId);
+      throw;
+    }
+  }
 }

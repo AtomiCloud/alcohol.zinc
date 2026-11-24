@@ -49,4 +49,14 @@ public interface IPenaltyRepository
   Task<Result<Unit>> MarkSkipped(Guid id);
 
   Task<Result<List<PenaltyPrincipal>>> Search(PenaltySearch search);
+
+  // The user's penalty consent became verified: their Skipped and Failed penalties go back to Pending
+  // with Attempts reset, so the drain charges them. The id (idempotency key) and any payment intent
+  // stay, so a Failed row with an intent is reconciled, never charged afresh. Rows whose charity was
+  // decommissioned go to Held instead. Charged, Held, Pending and Processing rows are never touched.
+  // Returns how many rows went back to Pending.
+  Task<Result<int>> RequeueUncharged(string userId);
+
+  // The user's owed days (see OwedItem), oldest first. Days without a money stake are left out.
+  Task<Result<List<OwedItem>>> ListOwed(string userId);
 }
