@@ -106,6 +106,10 @@ public sealed class FakePenaltyRepository(params PenaltyPrincipal[] pending) : I
     return Task.FromResult<Result<Unit>>(new Unit());
   }
 
+  public Task<Result<int>> RequeueUncharged(string userId) => throw new NotImplementedException();
+
+  public Task<Result<List<OwedItem>>> ListOwed(string userId) => throw new NotImplementedException();
+
   public Task<Result<List<PenaltyPrincipal>>> Search(PenaltySearch search)
     => Task.FromResult<Result<List<PenaltyPrincipal>>>(new List<PenaltyPrincipal>());
 }

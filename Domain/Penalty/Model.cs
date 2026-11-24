@@ -64,3 +64,33 @@ public record CharityBalancePrincipal
   public required CharityBalanceRecord Record { get; init; }
   public required DateTime UpdatedAt { get; init; }
 }
+
+// A missed habit day the user still owes: its execution failed and its penalty is not Charged (or Held,
+// which the user did not cause). Status is the penalty's, null while no penalty row exists yet.
+public record OwedItem
+{
+  public required Guid ExecutionId { get; init; }
+  public required Guid HabitId { get; init; }
+  public required string HabitName { get; init; }
+  public required DateOnly LocalDate { get; init; }
+  public required decimal Amount { get; init; }
+  public required string Currency { get; init; }
+  public required Guid? CharityId { get; init; }
+  public required string? CharityName { get; init; }
+  public required PenaltyStatus? Status { get; init; }
+
+  // Skipped: there was no verified card. Failed: every attempt failed. Either waits for the user to
+  // add or fix their card (which re-queues it); anything else is still being charged.
+  public OwedReason? CouldNotCharge => Status switch
+  {
+    PenaltyStatus.Skipped => OwedReason.NoCard,
+    PenaltyStatus.Failed => OwedReason.ChargeFailed,
+    _ => null
+  };
+}
+
+public enum OwedReason
+{
+  NoCard,
+  ChargeFailed
+}

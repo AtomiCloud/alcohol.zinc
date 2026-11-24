@@ -6,6 +6,7 @@ using App.Utility;
 using CSharp_Result;
 using Domain.Notification;
 using Domain.Payment;
+using Domain.Penalty;
 
 namespace App.Modules.Payment.Airwallex;
 
@@ -15,6 +16,7 @@ public class AirwallexWebhookService(
   AirwallexEventAdapter adapter,
   AirwallexHmacCalculator airwallexHmacCalculator,
   IEmailNotifier notifier,
+  IPenaltyRepository penalties,
   ILogger<AirwallexWebhookService> logger
 )
 {
@@ -68,8 +70,16 @@ public class AirwallexWebhookService(
 
     return paymentService
       .UpdatePaymentConsentAsync(customerId, consentId, status, purpose)
-      .ThenAwait(async customer =>
+      .ThenAwait(async Task<Result<Unit>> (customer) =>
       {
+        // A new card: penalties that could not be charged (no card, or every attempt failed) are
+        // charged again. A failure here fails the webhook, so Airwallex retries it (idempotent).
+        if (status == PaymentConsentStatus.Verified && customer != null && purpose == ConsentPurpose.Penalty)
+        {
+          var requeued = await penalties.RequeueUncharged(customer.Record.UserId);
+          if (requeued.IsFailure()) return requeued.FailureOrDefault()!;
+        }
+
         if (status == PaymentConsentStatus.Verified && customer != null)
           // Best-effort confirmation; webhook replays may duplicate it — acceptable
           // for a security notification.
