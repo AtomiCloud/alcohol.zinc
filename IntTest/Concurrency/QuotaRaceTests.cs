@@ -306,7 +306,7 @@ public class QuotaRaceTests : IAsyncLifetime
     var versionId = await SeedHabitVersion(userId, tz);
     var habitId = (await _db.HabitVersions.AsNoTracking().SingleAsync(v => v.Id == versionId)).HabitId;
     var date = Today(tz).AddDays(-2);
-    var (opens, deadline) = CheckWindow.For(date, TimeZoneInfo.FindSystemTimeZoneById(tz), new TimeOnly(23, 59));
+    var (opens, deadline) = CheckWindow.For(date, TimeZoneInfo.FindSystemTimeZoneById(tz));
     await new CheckRepository(_db, NullLogger<CheckRepository>.Instance)
       .CreatePending([new NewCheck(habitId, date, tz, opens, deadline)]);
     return habitId;
@@ -321,7 +321,7 @@ public class QuotaRaceTests : IAsyncLifetime
     {
       HabitId = habitId, CharityId = null, Version = 1, Task = "Run 5 km",
       DaysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
-      NotificationTime = new TimeOnly(19, 0), DeadlineTime = new TimeOnly(23, 59), Timezone = timezone,
+      NotificationTime = new TimeOnly(19, 0), Timezone = timezone,
       StakeCents = 0, StakeCurrency = "USD", RatioBasisPoints = 10000
     };
     _db.HabitVersions.Add(version);

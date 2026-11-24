@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using App.Error;
@@ -12,6 +13,9 @@ public static class Utils
 {
   public const string StandardDateFormat = "dd-MM-yyyy";
   public const string StandardTimeFormat = "HH:mm:ss";
+
+  // Times in requests: "HH:mm:ss" or "HH:mm".
+  public static readonly string[] TimeFormats = [StandardTimeFormat, "HH:mm"];
 
   public static JsonSchema OptionSchema = JsonSchema.CreateAnySchema();
 
@@ -61,7 +65,7 @@ public static class Utils
 
 
   public static TimeOnly ToTime(this string time) =>
-    TimeOnly.ParseExact(time, StandardTimeFormat);
+    TimeOnly.ParseExact(time, TimeFormats, CultureInfo.InvariantCulture);
 
   public static string ToStandardDateFormat(this DateOnly date) =>
     date.ToString(StandardDateFormat);

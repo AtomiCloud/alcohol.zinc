@@ -55,14 +55,15 @@ public class StravaIntegrationTests : IAsyncLifetime
   private StravaConnectionRepository Connections() =>
     new(_db, Encryptor, NullLogger<StravaConnectionRepository>.Instance);
 
-  private StravaService Service()
-  {
-    var connections = Connections();
-    var registry = new ProofPluginRegistry([new ManualProofPlugin(), new StravaProofPlugin(connections)]);
-    var router = new ProofRouter(registry, new ProofBindingRepository(_db, NullLogger<ProofBindingRepository>.Instance),
-      Checks.Service(_db));
-    return new StravaService(_api, connections, router, NullLogger<StravaService>.Instance);
-  }
+  private StravaActivityRepository Activities() => new(_db, NullLogger<StravaActivityRepository>.Instance);
+
+  private StravaDayService Days() => new(Activities(), new CheckRepository(_db, NullLogger<CheckRepository>.Instance),
+    new ProofBindingRepository(_db, NullLogger<ProofBindingRepository>.Instance),
+    new ConfigurationRepository(_db, NullLogger<ConfigurationRepository>.Instance), Checks.Settle,
+    NullLogger<StravaDayService>.Instance);
+
+  private StravaService Service() =>
+    new(_api, Connections(), Activities(), Days(), NullLogger<StravaService>.Instance);
 
   private async Task<string> SeedUser()
   {
@@ -75,7 +76,7 @@ public class StravaIntegrationTests : IAsyncLifetime
     return userId;
   }
 
-  private async Task<Guid> SeedStravaHabit(string userId, string sportTypes = "\"Run\"")
+  private async Task<Guid> SeedStravaHabit(string userId, string sportTypes = "\"Run\"", int? habitHour = null)
   {
     var habitId = Guid.NewGuid();
     var charityId = Guid.NewGuid();
@@ -84,7 +85,8 @@ public class StravaIntegrationTests : IAsyncLifetime
     _db.HabitVersions.Add(new HabitVersionData
     {
       HabitId = habitId, CharityId = charityId, Version = 1, Task = "Run", DaysOfWeek = EveryDay,
-      NotificationTime = new TimeOnly(19, 0), Timezone = "UTC",
+      NotificationTime = new TimeOnly(19, 0), HabitTime = habitHour is { } h ? new TimeOnly(h, 0) : null,
+      Timezone = "UTC",
       StakeCents = 0, StakeCurrency = "USD", RatioBasisPoints = 10000
     });
     _db.ProofBindings.Add(new ProofBindingData
@@ -142,6 +144,7 @@ public class StravaIntegrationTests : IAsyncLifetime
     var userId = await SeedUser();
     var habitId = await SeedStravaHabit(userId);
     await Connect(userId, athleteId: 1002);
+    await Checks.Service(_db).OpenUpcoming(Now);
     _api.Activities[1] = new StravaActivity { SportType = "Run", StartDate = Morning, Manual = true };
     _api.Activities[2] = new StravaActivity { SportType = "Ride", StartDate = Morning };
 
@@ -246,6 +249,137 @@ public class StravaIntegrationTests : IAsyncLifetime
     (await Service().Disconnect(alice)).Get().Should().NotBeNull();
     (await Service().Disconnect(alice)).Get().Should().BeNull();
     _api.Revoked.Should().Equal("mallory-refresh", "refresh-3001");
+  }
+
+  private static DateTime At(int day, int hour, int minute = 0) => new(2026, 1, day, hour, minute, 0, DateTimeKind.Utc);
+
+  // Activity id -> the habit it proves, as the read endpoint reports it.
+  private async Task<Dictionary<string, Guid?>> DayOf(string userId, DateTime now) =>
+    (await Days().ListDay(userId, Monday, now)).Get().ToDictionary(a => a.Principal.ActivityId.ToString(),
+      a => a.Principal.Assignment.HabitId);
+
+  private async Task<string?> EvidenceOf(Guid habitId) =>
+    (await _db.HabitEvidence.AsNoTracking().SingleOrDefaultAsync(e => e.HabitId == habitId))?.ExternalId;
+
+  private async Task<int> ExecutionsOf(Guid habitId) =>
+    await _db.HabitExecutions.CountAsync(e => e.HabitVersion!.HabitId == habitId);
+
+  // Two runs for habits at 09:00 and 18:00. The evening run arrives first and takes the 09:00
+  // habit; the morning run then arrives and the day is matched again by start time.
+  [SkippableFact]
+  public async Task OneActivityProvesOneHabit_AndLateArrivalsAreMatchedByStartTime()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var userId = await SeedUser();
+    var evening = await SeedStravaHabit(userId, habitHour: 18);
+    var morning = await SeedStravaHabit(userId, habitHour: 9);
+    await Connect(userId, athleteId: 4001);
+    _api.Activities[20] = new StravaActivity { Name = "Evening Run", SportType = "Run", StartDate = At(5, 18, 30) };
+    _api.Activities[10] = new StravaActivity { Name = "Morning Run", SportType = "Run", StartDate = At(5, 9, 10) };
+
+    await Service().Process(Activity("create", 20, 4001), At(5, 19));
+    (await EvidenceOf(morning)).Should().Be("20", "a single 18:30 run fills the 09:00 habit");
+    (await CheckOn(evening))?.Status.Should().NotBe(HabitCheckStatusData.Done);
+
+    await Service().Process(Activity("create", 10, 4001), At(5, 20));
+
+    (await EvidenceOf(morning)).Should().Be("10");
+    (await EvidenceOf(evening)).Should().Be("20");
+    (await CheckOn(morning))!.Status.Should().Be(HabitCheckStatusData.Done);
+    (await CheckOn(evening))!.Status.Should().Be(HabitCheckStatusData.Done);
+    (await ExecutionsOf(morning)).Should().Be(1);
+    (await ExecutionsOf(evening)).Should().Be(1);
+    var day = (await Days().ListDay(userId, Monday, At(5, 20))).Get();
+    day.Select(a => (a.Principal.ActivityId, a.Principal.Record.Name, a.Principal.Assignment.HabitId, a.Locked))
+      .Should().Equal((10L, "Morning Run", (Guid?)morning, false), (20L, "Evening Run", (Guid?)evening, false));
+  }
+
+  // A long run that starts at 23:00 is only sent once it is saved, here 2 hours later.
+  [SkippableFact]
+  public async Task LongRunArrivingAfterMidnight_StillCountsForItsStartDay_UntilTheUploadWaitEnds()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var userId = await SeedUser();
+    var habitId = await SeedStravaHabit(userId);
+    await Connect(userId, athleteId: 4002, expiresAtUtc: At(6, 12));
+    await Checks.Service(_db).OpenUpcoming(At(5, 12));
+    _api.Activities[30] = new StravaActivity { SportType = "Run", StartDate = At(5, 23) };
+
+    (await Checks.Service(_db).CloseDue(At(6, 1))).Get().Should().Be(0, "a Strava day waits 2 hours");
+    await Service().Process(Activity("create", 30, 4002), At(6, 1));
+
+    (await CheckOn(habitId))!.Status.Should().Be(HabitCheckStatusData.Done);
+    (await EvidenceOf(habitId)).Should().Be("30");
+  }
+
+  [SkippableFact]
+  public async Task ActivityArrivingAfterTheDaySettled_ChangesNothing()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var userId = await SeedUser();
+    var habitId = await SeedStravaHabit(userId);
+    await Connect(userId, athleteId: 4003, expiresAtUtc: At(6, 12));
+    await Checks.Service(_db).OpenUpcoming(At(5, 12));
+    (await Checks.Service(_db).CloseDue(At(6, 2))).Get().Should().Be(1);
+    _api.Activities[40] = new StravaActivity { SportType = "Run", StartDate = At(5, 23) };
+
+    await Service().Process(Activity("create", 40, 4003), At(6, 2, 5));
+
+    (await CheckOn(habitId))!.Status.Should().Be(HabitCheckStatusData.Missed);
+    (await EvidenceOf(habitId)).Should().BeNull();
+    (await Days().ListDay(userId, Monday, At(6, 2, 5))).Get().Single().Locked.Should().BeTrue();
+  }
+
+  // Moving by hand: a swap, "not used" (its habit is open again, cleanly), a pin that the next
+  // arrival fills around, and a refusal once the day has settled.
+  [SkippableFact]
+  public async Task MovingActivities_Swaps_Unassigns_KeepsPins_AndLocksAfterSettle()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var userId = await SeedUser();
+    var morning = await SeedStravaHabit(userId, habitHour: 9);
+    var evening = await SeedStravaHabit(userId, habitHour: 18);
+    var ride = await SeedStravaHabit(userId, "\"Ride\"", habitHour: 12);
+    await Connect(userId, athleteId: 4004, expiresAtUtc: At(6, 12));
+    _api.Activities[10] = new StravaActivity { SportType = "Run", StartDate = At(5, 9, 10) };
+    _api.Activities[20] = new StravaActivity { SportType = "Run", StartDate = At(5, 18, 30) };
+    var now = At(5, 20);
+    await Service().Process(Activity("create", 10, 4004), now);
+    await Service().Process(Activity("create", 20, 4004), now);
+
+    // Swap: 10 moves to the evening habit, which held 20.
+    var swapped = (await Days().Assign(userId, 10, evening, now)).Get();
+    swapped.ToDictionary(a => a.Principal.ActivityId, a => (a.Principal.Assignment.HabitId, a.Principal.Assignment.Pinned))
+      .Should().Equal(new Dictionary<long, (Guid?, bool)> { [10] = (evening, true), [20] = (morning, true) });
+    (await EvidenceOf(evening)).Should().Be("10");
+    (await EvidenceOf(morning)).Should().Be("20");
+
+    // A sport the habit doesn't count is refused.
+    (await Days().Assign(userId, 10, ride, now)).IsFailure().Should().BeTrue();
+
+    // Not used: the morning habit is open again, with no execution or event left behind.
+    (await Days().Assign(userId, 20, null, now)).IsSuccess().Should().BeTrue();
+    (await CheckOn(morning))!.Status.Should().Be(HabitCheckStatusData.Pending);
+    (await CheckOn(morning))!.ExecutionId.Should().BeNull();
+    (await ExecutionsOf(morning)).Should().Be(0);
+    (await EvidenceOf(morning)).Should().BeNull();
+    var morningCheck = (await CheckOn(morning))!.Id;
+    (await _db.CheckEvents.CountAsync(e => e.CheckId == morningCheck)).Should().Be(0);
+
+    // An update of the unused activity keeps it unused; a new run fills the open habit.
+    await Service().Process(Activity("update", 20, 4004), now);
+    _api.Activities[30] = new StravaActivity { SportType = "Run", StartDate = At(5, 19) };
+    await Service().Process(Activity("create", 30, 4004), now);
+    (await DayOf(userId, now)).Should().Equal(new Dictionary<string, Guid?>
+    {
+      ["10"] = evening, ["20"] = null, ["30"] = morning
+    });
+
+    // After the day settles (midnight + 2 h) nothing moves.
+    var late = await Days().Assign(userId, 30, null, At(6, 2));
+    late.IsFailure().Should().BeTrue();
+    late.FailureOrDefault().Should().BeOfType<StravaDayLockedException>();
+    (await EvidenceOf(morning)).Should().Be("30");
   }
 
   private sealed class FakeStravaApi : IStravaApi

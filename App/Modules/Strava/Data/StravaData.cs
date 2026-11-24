@@ -56,3 +56,34 @@ public class StravaEventData
 
   public DateTime ReceivedAtUtc { get; set; } = DateTime.UtcNow;
 }
+
+// A fetched activity, cached at most 7 days (Strava's terms) so its day can be matched again and
+// its owner can see which habit it proved. HabitId is the habit it proves now (null: not used);
+// Pinned when the user chose that. Deleted on retention, disconnect, deauthorize, activity delete
+// and account purge (cascade).
+public class StravaActivityData
+{
+  [Key]
+  public Guid Id { get; set; }
+
+  public required long ActivityId { get; set; }
+
+  [MaxLength(128)]
+  public required string UserId { get; set; }
+  public virtual UserData? User { get; set; }
+
+  [MaxLength(256)]
+  public required string Name { get; set; }
+
+  [MaxLength(64)]
+  public required string SportType { get; set; }
+
+  public required DateTime StartUtc { get; set; }
+  public required bool Manual { get; set; }
+  public required DateOnly LocalDate { get; set; }
+
+  public Guid? HabitId { get; set; }
+  public bool Pinned { get; set; }
+
+  public required DateTime FetchedAtUtc { get; set; }
+}

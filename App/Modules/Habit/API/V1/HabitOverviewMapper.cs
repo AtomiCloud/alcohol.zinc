@@ -28,11 +28,12 @@ public static class HabitOverviewMapper
       i.TimeLeftToEodMinutes,
       new HabitVersionMetaRes(i.Version.Id.ToString(), i.Version.Version, i.Version.IsActive),
       i.TotalDebtAmount.ToString("F2", CultureInfo.InvariantCulture),
-      i.DeadlineTime.ToString("HH:mm", CultureInfo.InvariantCulture),
+      HabitMapper.DayEnd.ToString("HH:mm", CultureInfo.InvariantCulture),
       i.TodayDeadlineUtc is { } d ? DateTime.SpecifyKind(d, DateTimeKind.Utc) : null,
       i.Proof,
       i.RoutineId?.ToString(),
-      i.SortOrder
+      i.SortOrder,
+      i.HabitTime
     );
   }
 

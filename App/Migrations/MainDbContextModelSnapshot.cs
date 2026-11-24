@@ -626,13 +626,13 @@ namespace App.Migrations
                         .IsRequired()
                         .HasColumnType("text[]");
 
-                    b.Property<TimeOnly>("DeadlineTime")
-                        .HasColumnType("time without time zone");
-
                     b.Property<Guid>("HabitId")
                         .HasColumnType("uuid");
 
-                    b.Property<TimeOnly>("NotificationTime")
+                    b.Property<TimeOnly?>("HabitTime")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<TimeOnly?>("NotificationTime")
                         .HasColumnType("time without time zone");
 
                     b.Property<int>("RatioBasisPoints")
@@ -1050,6 +1050,60 @@ namespace App.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("Routines");
+                });
+
+            modelBuilder.Entity("App.Modules.Strava.Data.StravaActivityData", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("ActivityId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("FetchedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("HabitId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("LocalDate")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("Manual")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<bool>("Pinned")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("SportType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("StartUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FetchedAtUtc");
+
+                    b.HasIndex("ActivityId", "UserId")
+                        .IsUnique();
+
+                    b.HasIndex("UserId", "LocalDate");
+
+                    b.ToTable("StravaActivities");
                 });
 
             modelBuilder.Entity("App.Modules.Strava.Data.StravaConnectionData", b =>
@@ -1599,6 +1653,17 @@ namespace App.Migrations
                 });
 
             modelBuilder.Entity("App.Modules.Protection.Data.UserProtectionData", b =>
+                {
+                    b.HasOne("App.Modules.Users.Data.UserData", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("App.Modules.Strava.Data.StravaActivityData", b =>
                 {
                     b.HasOne("App.Modules.Users.Data.UserData", "User")
                         .WithMany()

@@ -1,3 +1,4 @@
+using System.Globalization;
 using App.Error.V1;
 using CSharp_Result;
 using FluentValidation;
@@ -79,16 +80,16 @@ public static class ValidationUtility
     this IRuleBuilder<T, string> ruleBuilder)
   {
     return ruleBuilder
-      .Must(x => TimeOnly.TryParseExact(x, Utils.StandardTimeFormat, out _))
-      .WithMessage($"TimeOnly must be in the format of {Utils.StandardTimeFormat}");
+      .Must(x => TimeOnly.TryParseExact(x, Utils.TimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+      .WithMessage("TimeOnly must be in the format of HH:mm or HH:mm:ss");
   }
 
   public static IRuleBuilderOptions<T, string?> NullableTimeValid<T>(
     this IRuleBuilder<T, string?> ruleBuilder)
   {
     return ruleBuilder
-      .Must(x => x is null || TimeOnly.TryParseExact(x, Utils.StandardTimeFormat, out _))
-      .WithMessage($"TimeOnly must be in the format of {Utils.StandardTimeFormat}");
+      .Must(x => x is null || TimeOnly.TryParseExact(x, Utils.TimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+      .WithMessage("TimeOnly must be in the format of HH:mm or HH:mm:ss");
   }
 
   // The same lookup the check settlement uses (CheckWindow.Resolve), so a saved timezone is one

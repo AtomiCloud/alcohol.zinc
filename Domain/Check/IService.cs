@@ -8,7 +8,8 @@ public interface ICheckService
   // Creates the Pending checks for today and tomorrow (user-local) of every enabled habit.
   Task<Result<int>> OpenUpcoming(DateTime nowUtc);
 
-  // Settles every Pending check whose deadline + grace has passed: vacation, then freeze, then missed.
+  // Settles every Pending check whose day has settled (local midnight + the habit's wait,
+  // ICheckSettlePolicy): vacation, then freeze, then missed.
   Task<Result<int>> CloseDue(DateTime nowUtc);
 
   // Delivers settled-check outbox events to stake bindings.
@@ -29,7 +30,7 @@ public interface ICheckService
   Task<Result<HabitExecutionPrincipal?>> Skip(string userId, Guid habitId, string? notes, SkipQuota quota,
     DateTime? nowUtc = null);
 
-  // Re-times Pending checks after a habit change (days, deadline time, enabled). Started
+  // Re-times Pending checks after a habit change (days, enabled). Started
   // checks never get a shorter deadline; checks no longer scheduled are removed.
   Task<Result<int>> RetimePending(string? userId, List<Guid>? habitIds, DateTime? nowUtc = null);
 

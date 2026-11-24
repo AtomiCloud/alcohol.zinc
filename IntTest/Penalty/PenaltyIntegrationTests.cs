@@ -285,14 +285,14 @@ public class PenaltyIntegrationTests : IAsyncLifetime
 
     // The habit version still says Asia/Singapore; the user's timezone (LA) decides today.
     var status = (await service.GetStatusForHabit(userId, version.HabitId,
-      "America/Los_Angeles", ["Sunday"], new TimeOnly(23, 59), now)).Get();
+      "America/Los_Angeles", ["Sunday"], now)).Get();
     var response = App.Modules.Habit.API.V1.HabitOverviewMapper.ToRes(new HabitOverviewSummary(
       [new HabitOverviewItem(version.HabitId, "Read", "22:00", "America/Los_Angeles", ["Sunday"],
         3m, "USD", true, new Domain.Charity.CharityPrincipal
         {
           Id = charityId, Record = new Domain.Charity.CharityRecord { Name = "Charity" }
         }, status, status.TimeLeftToEodMinutes, new HabitVersionMeta(version.Id, 1, true), 0m,
-        new TimeOnly(23, 59), null, "manual", null, 0)],
+        null, "manual", null, 0, null)],
       0m, 0, 3));
 
     response.Habits.Single().Status.Today.Should().Be("04-01-2026");
@@ -309,7 +309,7 @@ public class PenaltyIntegrationTests : IAsyncLifetime
     execution.CompletedAt = now.AddHours(-1);
     await _db.SaveChangesAsync();
     var nextDay = (await service.GetStatusForHabit(userId, version.HabitId,
-      "America/Los_Angeles", ["Sunday"], new TimeOnly(23, 59), now)).Get();
+      "America/Los_Angeles", ["Sunday"], now)).Get();
     nextDay.IsCompleteToday.Should().BeFalse();
     nextDay.TodayStatus.Should().Be(HabitDayStatus.NotApplicable);
     nextDay.WeekStatuses[DayOfWeek.Sunday].Should().Be(HabitDayStatus.NotApplicable);

@@ -25,7 +25,7 @@ public class StravaApi(
 
   private record AthleteRes(long Id);
 
-  private record ActivityRes(string SportType, DateTime StartDate, bool Manual);
+  private record ActivityRes(string? Name, string SportType, DateTime StartDate, bool Manual);
 
   public async Task<Result<StravaGrant>> ExchangeCode(string code)
   {
@@ -54,7 +54,7 @@ public class StravaApi(
         return (StravaActivity?)null;
       response.EnsureSuccessStatusCode();
       var a = await response.Content.ReadFromJsonAsync<ActivityRes>(Json);
-      return a == null ? null : new StravaActivity { SportType = a.SportType, StartDate = a.StartDate, Manual = a.Manual };
+      return a == null ? null : new StravaActivity { Name = a.Name ?? "", SportType = a.SportType, StartDate = a.StartDate, Manual = a.Manual };
     });
 
   public Task<Result<Unit>> Revoke(string token) =>

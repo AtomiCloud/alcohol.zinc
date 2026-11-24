@@ -1,23 +1,25 @@
 public record CreateHabitReq(
     string Task,
     string[] DaysOfWeek,
-    string NotificationTime, // string (e.g. "HH:mm")
+    string? NotificationTime, // "HH:mm" or null: the phone reminder, none when null
     string Stake,            // string decimal (e.g. "10.50")
     Guid? CharityId,         // Needed only when Stake > 0; null or empty: no charity
     string Timezone,         // string (e.g. "Asia/Singapore", "America/New_York")
-    string? DeadlineTime = null, // "HH:mm", the day's check deadline; defaults to 23:59
-    Guid? RoutineId = null   // Optional: existing routine of the user; omitted => new one-habit routine
+    string? DeadlineTime = null, // Ignored: every habit's day ends at local midnight (old app builds still send it)
+    Guid? RoutineId = null,  // Optional: existing routine of the user; omitted => new one-habit routine
+    string? HabitTime = null // "HH:mm" or null: when the user plans to do it
 );
 
 public record UpdateHabitReq(
     string Task,
     string[] DaysOfWeek,
-    string NotificationTime,
+    string? NotificationTime, // "HH:mm" or null: the phone reminder, none when null
     string Stake,
     Guid? CharityId,         // Needed only when Stake > 0; null or empty: no charity
     bool Enabled,
     string Timezone,         // string (e.g. "Asia/Singapore", "America/New_York")
-    string? DeadlineTime = null  // "HH:mm", the day's check deadline; defaults to 23:59
+    string? DeadlineTime = null, // Ignored: every habit's day ends at local midnight (old app builds still send it)
+    string? HabitTime = null // "HH:mm" or null: when the user plans to do it
 );
 
 public record HabitRes(
@@ -43,12 +45,13 @@ public record HabitVersionRes(
     ushort Version,
     string Task,
     string[] DaysOfWeek,
-    string NotificationTime,
+    string? NotificationTime, // "HH:mm" or null
     string Stake,
     string Ratio,
     Guid? CharityId,         // Null for a habit without a money stake
     string Timezone,         // string (e.g. "Asia/Singapore", "America/New_York")
-    string DeadlineTime      // "HH:mm"
+    string DeadlineTime,     // Always "23:59": the day ends at local midnight (kept for old app builds)
+    string? HabitTime        // "HH:mm" or null
 );
 
 public record MarkDailyFailuresCronRes(

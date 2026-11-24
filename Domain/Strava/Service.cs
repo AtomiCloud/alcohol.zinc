@@ -1,6 +1,4 @@
-using System.Text.Json;
 using CSharp_Result;
-using Domain.Proof;
 using Microsoft.Extensions.Logging;
 
 namespace Domain.Strava;
@@ -23,12 +21,11 @@ public interface IStravaService
 public class StravaService(
   IStravaApi api,
   IStravaConnectionRepository connections,
-  IProofRouter router,
+  IStravaActivityRepository activities,
+  IStravaDayService days,
   ILogger<StravaService> logger
 ) : IStravaService
 {
-  private static readonly JsonSerializerOptions PayloadJson = new(JsonSerializerDefaults.Web);
-
   // Refresh a little early so a token never expires between the check and the call.
   private static readonly TimeSpan RefreshMargin = TimeSpan.FromMinutes(5);
 
@@ -94,12 +91,15 @@ public class StravaService(
 
     if (e.AspectType == "delete")
     {
+      // The habit it proved stays Done; only Strava's data goes.
       var deleted = await connections.DeleteActivityEvidence(e.ObjectId);
-      return deleted.IsFailure() ? deleted.FailureOrDefault() : new Unit();
+      if (deleted.IsFailure()) return deleted.FailureOrDefault();
+      var dropped = await activities.Delete(e.ObjectId);
+      return dropped.IsFailure() ? dropped.FailureOrDefault() : new Unit();
     }
 
-    // create, or update (the sport type may have changed): fetch and route. Replays are
-    // idempotent on the activity id.
+    // create, or update (the sport type or start may have changed): fetch, then match the
+    // activity's day again. Replays are idempotent on the activity id.
     var connection = await connections.GetByAthlete(e.OwnerId);
     if (connection.IsFailure()) return connection.FailureOrDefault();
     if (connection.Get() is not { } conn) return new Unit();
@@ -112,15 +112,7 @@ public class StravaService(
     if (activity.IsFailure()) return activity.FailureOrDefault();
     if (activity.Get() is not { } act) return new Unit();
 
-    var routed = await router.Route(new ProofEvent
-    {
-      PluginKey = StravaProofPlugin.Key,
-      UserId = conn.UserId,
-      ExternalId = e.ObjectId.ToString(),
-      OccurredAtUtc = DateTime.SpecifyKind(act.StartDate, DateTimeKind.Utc),
-      Payload = JsonSerializer.Serialize(act, PayloadJson)
-    }, now);
-    return routed.IsFailure() ? routed.FailureOrDefault() : new Unit();
+    return await days.Record(conn.UserId, e.ObjectId, act, now);
   }
 
   // A valid access token, refreshing under the connection's lock when it is about to expire.

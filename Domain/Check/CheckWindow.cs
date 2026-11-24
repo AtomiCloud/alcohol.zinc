@@ -2,10 +2,8 @@ namespace Domain.Check;
 
 public static class CheckWindow
 {
-  public static readonly TimeOnly DefaultDeadline = new(23, 59);
-
-  // Late evidence that happened before the deadline can still land this long after it,
-  // and CloseDue waits this long before settling a check as missed.
+  // How long after a day ends (local midnight) its checks settle, unless the habit's proof
+  // needs longer (ICheckSettlePolicy). Late evidence for that day can still land until then.
   public static readonly TimeSpan Grace = TimeSpan.FromMinutes(30);
 
   public static TimeZoneInfo Resolve(string? timezoneId)
@@ -19,12 +17,11 @@ public static class CheckWindow
   public static DateOnly LocalDate(DateTime utc, TimeZoneInfo tz) =>
     DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), tz));
 
-  // A check opens at local midnight and its deadline is the end of the deadline minute
-  // (23:59 means "until midnight"), both in the given timezone.
-  public static (DateTime OpensAtUtc, DateTime DeadlineUtc) For(DateOnly date, TimeZoneInfo tz, TimeOnly deadline)
+  // A habit's day runs from local midnight to the next local midnight, in the given timezone.
+  public static (DateTime OpensAtUtc, DateTime DeadlineUtc) For(DateOnly date, TimeZoneInfo tz)
   {
     var opens = ToUtc(date.ToDateTime(TimeOnly.MinValue), tz);
-    var due = ToUtc(date.ToDateTime(deadline), tz).AddMinutes(1);
+    var due = ToUtc(date.AddDays(1).ToDateTime(TimeOnly.MinValue), tz);
     if (due <= opens) due = opens.AddMinutes(1);
     return (opens, due);
   }

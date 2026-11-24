@@ -9,7 +9,7 @@ public record HabitOverviewItem
 (
   Guid HabitId,
   string Name,
-  string NotificationTime,
+  string? NotificationTime,   // "HH:mm" or null
   string Timezone,
   string[] DaysOfWeek,
   decimal StakeAmount,
@@ -20,13 +20,13 @@ public record HabitOverviewItem
   int TimeLeftToEodMinutes,
   HabitVersionMeta Version,
   decimal TotalDebtAmount,
-  TimeOnly DeadlineTime,
-  // End of today's check (absolute), null when the habit isn't scheduled today.
+  // End of today's check (absolute): the user's next local midnight, null when the habit isn't scheduled today.
   DateTime? TodayDeadlineUtc,
   // How the habit is proven: "nfc" when a tag is linked, otherwise "manual".
   string Proof,
   Guid? RoutineId,
-  int SortOrder     // position in the user's habit list; items come in this order
+  int SortOrder,    // position in the user's habit list; items come in this order
+  string? HabitTime // "HH:mm" or null: when the user plans to do it
 );
 
 public record HabitOverviewSearch(string UserId, int Limit, int Skip);

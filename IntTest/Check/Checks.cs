@@ -37,8 +37,17 @@ public static class Checks
       new PenaltyStakeBinding(repo, new PenaltyRepository(db, NullLogger<PenaltyRepository>.Instance)),
       .. extra
     ];
-    return new CheckService(repo, vacations, protection, FreezeCap(db, plan), bindings,
+    return new CheckService(repo, vacations, protection, FreezeCap(db, plan), bindings, Settle,
       NullLogger<CheckService>.Instance);
+  }
+
+  // The default settings: Strava-bound habits settle 2 hours after local midnight.
+  public static readonly ICheckSettlePolicy Settle = new SettleAfter(TimeSpan.FromHours(2));
+
+  public sealed class SettleAfter(TimeSpan stravaWait) : ICheckSettlePolicy
+  {
+    public IReadOnlyDictionary<string, TimeSpan> SlowProofs { get; } =
+      new Dictionary<string, TimeSpan> { ["strava"] = stravaWait };
   }
 
   public static FreezeCapService FreezeCap(MainDbContext db, ISubscriptionService plan)

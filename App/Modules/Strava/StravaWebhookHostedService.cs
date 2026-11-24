@@ -4,9 +4,9 @@ using Microsoft.Extensions.Options;
 
 namespace App.Modules.Strava;
 
-// Drains the Strava webhook inbox: fetches each activity and routes it to the strava proof
-// plugin. A failed event stays claimed until its lease runs out, then is retried; after
-// MaxAttempts it is dropped.
+// Drains the Strava webhook inbox: fetches each activity and matches its day again
+// (IStravaDayService). A failed event stays claimed until its lease runs out, then is retried;
+// after MaxAttempts it is dropped. Hourly it deletes cached activities older than Strava's 7 days.
 public class StravaWebhookHostedService(
   IServiceProvider serviceProvider,
   IOptionsMonitor<StravaOption> options,
@@ -14,6 +14,8 @@ public class StravaWebhookHostedService(
 ) : IHostedService, IDisposable
 {
   private static readonly TimeSpan Lease = TimeSpan.FromMinutes(5);
+  private static readonly TimeSpan RetentionEvery = TimeSpan.FromHours(1);
+  private DateTime _retentionRanAtUtc = DateTime.MinValue;
   private Timer? _timer;
   private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -47,6 +49,18 @@ public class StravaWebhookHostedService(
 
       foreach (var item in claimed.Get())
         await ProcessOne(item, inbox, scope.ServiceProvider.GetRequiredService<IStravaService>());
+
+      var now = DateTime.UtcNow;
+      if (now - _retentionRanAtUtc >= RetentionEvery)
+      {
+        var activities = scope.ServiceProvider.GetRequiredService<IStravaActivityRepository>();
+        var expired = await activities.DeleteFetchedBefore(now - StravaDayService.Retention);
+        if (expired.IsSuccess())
+        {
+          _retentionRanAtUtc = now;
+          if (expired.Get() > 0) logger.LogInformation("Deleted {Count} cached Strava activities", expired.Get());
+        }
+      }
     }
     catch (Exception e)
     {
