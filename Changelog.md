@@ -1,3 +1,10 @@
+## [1.47.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.46.0...v1.47.0) (2026-11-24)
+
+
+### ✨ Features ✨
+
+* owed list and retry uncharged penalties on a new card ([504235d](https://github.com/AtomiCloud/alcohol.zinc/commit/504235d795b8c3f995b120a4409f544a483bc3d3))
+
 ## [1.46.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.45.3...v1.46.0) (2026-11-24)
 
 
