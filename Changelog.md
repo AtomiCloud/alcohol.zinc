@@ -1,3 +1,10 @@
+## [1.46.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.45.3...v1.46.0) (2026-11-24)
+
+
+### ✨ Features ✨
+
+* habit time, midnight days and one-activity Strava matching ([d37738f](https://github.com/AtomiCloud/alcohol.zinc/commit/d37738f714cb2bd896b9c29cf082fd13712fc44c))
+
 ## [1.45.3](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.45.2...v1.45.3) (2026-11-23)
 
 
