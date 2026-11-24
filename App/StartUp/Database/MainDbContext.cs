@@ -69,6 +69,7 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
   // Strava proof plugin: each user's link, and the webhook inbox
   public DbSet<StravaConnectionData> StravaConnections { get; set; }
   public DbSet<StravaEventData> StravaEvents { get; set; }
+  public DbSet<StravaActivityData> StravaActivities { get; set; }
   // Friends, the in-app inbox, and the "tell my friends if I miss" stake
   public DbSet<FriendRequestData> FriendRequests { get; set; }
   public DbSet<FriendshipData> Friendships { get; set; }
@@ -193,6 +194,16 @@ public class MainDbContext(IOptionsMonitor<Dictionary<string, DatabaseOption>> o
 
     var stravaEvent = modelBuilder.Entity<StravaEventData>();
     stravaEvent.HasIndex(x => x.ReceivedAtUtc); // Claim scan
+
+    // Cached Strava activities (7 days at most). Cascades on the account purge.
+    var stravaActivity = modelBuilder.Entity<StravaActivityData>();
+    stravaActivity.HasIndex(x => new { x.ActivityId, x.UserId }).IsUnique();
+    stravaActivity.HasIndex(x => new { x.UserId, x.LocalDate }); // a user's day
+    stravaActivity.HasIndex(x => x.FetchedAtUtc); // retention
+    stravaActivity.HasOne(x => x.User)
+                  .WithMany()
+                  .HasForeignKey(x => x.UserId)
+                  .OnDelete(DeleteBehavior.Cascade);
 
     // Friends: one pending request per ordered pair, one friendship row per direction. Every
     // user reference cascades, so deleting an account removes their side of everything.

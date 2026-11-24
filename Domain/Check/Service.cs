@@ -13,6 +13,7 @@ public class CheckService(
   IProtectionRepository protectionRepo,
   IFreezeCapService freezeCap,
   IEnumerable<IStakeBinding> bindings,
+  ICheckSettlePolicy settlePolicy,
   ILogger<CheckService> logger
 ) : ICheckService
 {
@@ -32,7 +33,7 @@ public class CheckService(
       foreach (var date in new[] { today, today.AddDays(1) })
       {
         if (!h.IsScheduledOn(date)) continue;
-        var (opens, deadline) = CheckWindow.For(date, tz, h.DeadlineTime);
+        var (opens, deadline) = CheckWindow.For(date, tz);
         // Never open a day whose deadline already passed (e.g. a habit created after its deadline).
         if (deadline <= nowUtc) continue;
         checks.Add(new NewCheck(h.HabitId, date, tz.Id, opens, deadline));
@@ -44,12 +45,14 @@ public class CheckService(
 
   public async Task<Result<int>> CloseDue(DateTime nowUtc)
   {
-    var due = (List<CheckPrincipal>)await repo.ListDuePending(nowUtc - CheckWindow.Grace, CloseBatchSize);
+    var slow = settlePolicy.SlowProofs.ToDictionary(p => p.Key, p => nowUtc - p.Value);
+    var due = (List<CheckPrincipal>)await repo.ListDuePending(nowUtc - CheckWindow.Grace, slow, CloseBatchSize);
     if (due.Count == 0) return 0;
     return (await SettleDue(due, nowUtc)).Count;
   }
 
-  // Settles Pending checks past deadline + grace, per user and date. Returns what was newly settled.
+  // Settles Pending checks whose day has settled (local midnight + the habit's wait), per user
+  // and date. Returns what was newly settled.
   private async Task<List<SettledCheck>> SettleDue(List<CheckPrincipal> due, DateTime nowUtc)
   {
     var habits = (List<SchedulableHabit>)await repo.ListSchedulableHabits(null,
@@ -174,7 +177,7 @@ public class CheckService(
     // Clock skew: evidence can't be from the future.
     var occurred = evidence.OccurredAtUtc > now ? now : evidence.OccurredAtUtc;
     var check = await OpenCheckAt(habit, occurred);
-    if (check == null || now > check.Record.DeadlineUtc + CheckWindow.Grace)
+    if (check == null || now > check.Record.DeadlineUtc + settlePolicy.WaitFor(habit.ProofKey))
       return (HabitExecutionPrincipal?)null;
 
     var status = evidence.Verdict == EvidenceVerdict.Passed ? CheckStatus.Done : CheckStatus.Missed;
@@ -204,7 +207,7 @@ public class CheckService(
       return new NotFoundException("Habit not found or not enabled", typeof(HabitPrincipal), habitId.ToString());
 
     var check = await OpenCheckAt(habit, atUtc > now ? now : atUtc);
-    return check == null || now > check.Record.DeadlineUtc + CheckWindow.Grace ? null : check;
+    return check == null || now > check.Record.DeadlineUtc + settlePolicy.WaitFor(habit.ProofKey) ? null : check;
   }
 
   public async Task<Result<HabitExecutionPrincipal?>> Skip(string userId, Guid habitId, string? notes,
@@ -250,7 +253,7 @@ public class CheckService(
     var tz = CheckWindow.Resolve(habit.Timezone);
     var date = CheckWindow.LocalDate(at, tz);
     if (!habit.IsScheduledOn(date)) return null;
-    var (opens, deadline) = CheckWindow.For(date, tz, habit.DeadlineTime);
+    var (opens, deadline) = CheckWindow.For(date, tz);
     if (at < opens || at >= deadline) return null;
 
     await repo.CreatePending([new NewCheck(habit.HabitId, date, tz.Id, opens, deadline)]);
@@ -274,8 +277,11 @@ public class CheckService(
     // so the response can tell the user, instead of on the next scheduler tick.
     var habits = (List<SchedulableHabit>)await repo.ListSchedulableHabits(userId, null);
     if (habits.Count == 0) return new List<SettledCheck>();
-    var pending = (List<CheckPrincipal>)await repo.ListPending([.. habits.Select(h => h.HabitId)]);
-    var due = pending.Where(c => c.Record.DeadlineUtc <= now - CheckWindow.Grace).ToList();
+    var byId = habits.ToDictionary(h => h.HabitId);
+    var pending = (List<CheckPrincipal>)await repo.ListPending([.. byId.Keys]);
+    var due = pending
+      .Where(c => c.Record.DeadlineUtc <= now - settlePolicy.WaitFor(byId[c.HabitId].ProofKey))
+      .ToList();
     List<SettledCheck> settled = due.Count == 0 ? [] : await SettleDue(due, now);
     return settled;
   }
@@ -299,7 +305,7 @@ public class CheckService(
       }
 
       var tz = CheckWindow.Resolve(h.Timezone);
-      var (opens, deadline) = CheckWindow.For(c.Record.LocalDate, tz, h.DeadlineTime);
+      var (opens, deadline) = CheckWindow.For(c.Record.LocalDate, tz);
       // On a habit edit a started check never gets shorter, and a check that hasn't started
       // takes the new window unless that window is already over.
       var started = c.Record.OpensAtUtc <= now;

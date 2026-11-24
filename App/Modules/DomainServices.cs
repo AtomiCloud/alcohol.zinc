@@ -96,6 +96,7 @@ public static class DomainServices
       .AutoTrace<ICheckService>();
     s.AddScoped<ICheckRepository, App.Modules.Check.Data.CheckRepository>()
       .AutoTrace<ICheckRepository>();
+    s.AddScoped<ICheckSettlePolicy, App.Modules.Check.CheckSettlePolicy>();
     s.AddScoped<IStakeBinding, PenaltyStakeBinding>();
     s.AddScoped<IStakeBinding, FriendStakeBinding>();
 
@@ -130,6 +131,10 @@ public static class DomainServices
       .AutoTrace<IStravaConnectionRepository>();
     s.AddScoped<IStravaInboxRepository, StravaInboxRepository>()
       .AutoTrace<IStravaInboxRepository>();
+    s.AddScoped<IStravaActivityRepository, StravaActivityRepository>()
+      .AutoTrace<IStravaActivityRepository>();
+    s.AddScoped<IStravaDayService, StravaDayService>()
+      .AutoTrace<IStravaDayService>();
     s.AddScoped<IStravaApi, StravaApi>()
       .AutoTrace<IStravaApi>();
 

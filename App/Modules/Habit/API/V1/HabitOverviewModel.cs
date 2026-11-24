@@ -12,7 +12,7 @@ public record HabitOverviewResponse(
 public record HabitOverviewHabitRes(
   string Id,
   string Name,
-  string NotificationTime,
+  string? NotificationTime,       // "HH:mm" or null
   string Timezone,
   bool[] Days,
   StakeRes Stake,
@@ -22,11 +22,12 @@ public record HabitOverviewHabitRes(
   int TimeLeftToEodMinutes,
   HabitVersionMetaRes Version,
   string TotalDebt,
-  string DeadlineTime,            // "HH:mm" in the user's timezone
-  DateTime? TodayDeadlineUtc,     // end of today's check (UTC); null when not scheduled today
+  string DeadlineTime,            // always "23:59": the day ends at local midnight (kept for old app builds)
+  DateTime? TodayDeadlineUtc,     // end of today's check (the next local midnight, UTC); null when not scheduled today
   string Proof,                   // "manual" | "nfc" | a bound plugin key ("strava")
   string? RoutineId,
-  int SortOrder                   // position in the user's habit list; habits come in this order
+  int SortOrder,                  // position in the user's habit list; habits come in this order
+  string? HabitTime               // "HH:mm" or null: when the user plans to do it
 );
 
 public record StakeRes(decimal Amount, string Currency);

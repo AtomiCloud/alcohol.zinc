@@ -63,17 +63,22 @@ public class CheckScenarioTests : IAsyncLifetime
   }
 
   private async Task<Guid> SeedHabit(string userId, Guid charityId, string[] days, string versionTimezone,
-    TimeOnly? deadline = null)
+    string? proofKey = null)
   {
     var habitId = Guid.NewGuid();
     _db.Habits.Add(new HabitData { Id = habitId, UserId = userId, Version = 1, Enabled = true });
     _db.HabitVersions.Add(new HabitVersionData
     {
       HabitId = habitId, CharityId = charityId, Version = 1, Task = "Run 5 km", DaysOfWeek = days,
-      NotificationTime = new TimeOnly(19, 0), DeadlineTime = deadline ?? new TimeOnly(23, 59),
+      NotificationTime = new TimeOnly(19, 0),
       Timezone = versionTimezone,
       StakeCents = 1000, StakeCurrency = "USD", RatioBasisPoints = 10000
     });
+    if (proofKey != null)
+      _db.ProofBindings.Add(new ProofBindingData
+      {
+        HabitId = habitId, PluginKey = proofKey, PluginVersion = 1, Settings = """{"sportTypes":["Run"]}"""
+      });
     await _db.SaveChangesAsync();
     return habitId;
   }
@@ -178,23 +183,6 @@ public class CheckScenarioTests : IAsyncLifetime
     (await svc.Report(userId, habitId, Checks.Manual(landed), landed)).Get().Should().BeNull();
     await svc.DispatchEvents(landed.AddMinutes(5));
     (await PenaltiesOf(userId)).Should().Be(penalties);
-  }
-
-  // A habit edit is not a timezone change: a started day keeps its End when the deadline time moves earlier.
-  [SkippableFact]
-  public async Task HabitDeadlineMovedEarlier_StartedDayKeepsItsEnd()
-  {
-    Skip.If(_conn == null, SkipReason);
-    var (userId, charityId) = await SeedUser(LosAngeles);
-    var habitId = await SeedHabit(userId, charityId, ["Tuesday"], LosAngeles);
-    var svc = Checks.Service(_db);
-
-    await svc.OpenUpcoming(U(2026, 1, 6, 18)); // Tue 10:00 SF
-    await _db.HabitVersions.Where(v => v.HabitId == habitId)
-      .ExecuteUpdateAsync(x => x.SetProperty(v => v.DeadlineTime, new TimeOnly(8, 0)));
-    await svc.RetimePending(userId, [habitId], U(2026, 1, 6, 18));
-
-    (await ChecksOf(habitId)).Single().DeadlineUtc.Should().Be(U(2026, 1, 7, 8), "Tuesday 23:59 SF stays");
   }
 
   // DST change days in Los Angeles: one check of 25 h / 23 h that settles exactly once.
@@ -326,7 +314,8 @@ public class CheckScenarioTests : IAsyncLifetime
     freezes.Should().Be(1);
   }
 
-  // Two checks of one day settle in separate ticks. The second finds the balance at 0 and the
+  // Two checks of one day settle in separate ticks: the plain habit 30 minutes after midnight, the
+  // Strava habit after the upload wait (2 hours). The second finds the balance at 0 and the
   // day already frozen: it stays frozen, and skips the cap (whose streak query loads every
   // execution of the user). The cap lookup is down for that tick, so a reconcile would fail
   // and leave the check pending.
@@ -335,18 +324,21 @@ public class CheckScenarioTests : IAsyncLifetime
   {
     Skip.If(_conn == null, SkipReason);
     var (userId, charityId) = await SeedUser("UTC", freezes: 1);
-    var noon = await SeedHabit(userId, charityId, ["Monday"], "UTC", deadline: new TimeOnly(12, 0));
-    var midnight = await SeedHabit(userId, charityId, ["Monday"], "UTC");
+    var plain = await SeedHabit(userId, charityId, ["Monday"], "UTC");
+    var strava = await SeedHabit(userId, charityId, ["Monday"], "UTC", proofKey: "strava");
     var svc = Checks.Service(_db, new Checks.FreezeBase(3));
 
     await svc.OpenUpcoming(U(2026, 1, 5, 1));
-    (await svc.CloseDue(U(2026, 1, 5, 13))).Get().Should().Be(1, "only the noon check is due");
+    (await ChecksOf(plain)).Single().DeadlineUtc.Should().Be(U(2026, 1, 6, 0), "every day ends at local midnight");
+    (await svc.CloseDue(U(2026, 1, 6, 0, 29))).Get().Should().Be(0, "nothing settles before midnight + 30 min");
+    (await svc.CloseDue(U(2026, 1, 6, 0, 30))).Get().Should().Be(1, "only the plain check is due");
     (await FreezesOf(userId)).Should().Be(0);
+    (await svc.CloseDue(U(2026, 1, 6, 1, 59))).Get().Should().Be(0, "the Strava check waits 2 hours");
 
-    (await Checks.Service(_db, new PlanLookupDown()).CloseDue(U(2026, 1, 6, 1))).Get().Should().Be(1);
+    (await Checks.Service(_db, new PlanLookupDown()).CloseDue(U(2026, 1, 6, 2))).Get().Should().Be(1);
 
-    (await ChecksOf(noon)).Single().Status.Should().Be(HabitCheckStatusData.Frozen);
-    (await ChecksOf(midnight)).Single().Status.Should().Be(HabitCheckStatusData.Frozen);
+    (await ChecksOf(plain)).Single().Status.Should().Be(HabitCheckStatusData.Frozen);
+    (await ChecksOf(strava)).Single().Status.Should().Be(HabitCheckStatusData.Frozen);
     (await _db.FreezeConsumptions.CountAsync(x => x.UserId == userId)).Should().Be(1);
   }
 
@@ -577,8 +569,6 @@ public class CheckScenarioTests : IAsyncLifetime
     });
     await _db.SaveChangesAsync();
     await _db.Habits.Where(h => h.Id == tagged).ExecuteUpdateAsync(x => x.SetProperty(h => h.RoutineId, routineId));
-    await _db.HabitVersions.Where(v => v.HabitId == tagged)
-      .ExecuteUpdateAsync(x => x.SetProperty(v => v.DeadlineTime, new TimeOnly(20, 0)));
 
     var now = U(2026, 1, 5, 18); // Mon 10:00 in Los Angeles
     var checks = Checks.Service(_db);
@@ -592,7 +582,7 @@ public class CheckScenarioTests : IAsyncLifetime
       (await overview.GetOverview(new HabitOverviewSearch(userId, 10, 0), "skips", now)).Get());
 
     var a = res.Habits.Single(h => h.Id == tagged.ToString());
-    a.DeadlineTime.Should().Be("20:00");
+    a.DeadlineTime.Should().Be("23:59");
     a.TodayDeadlineUtc.Should().Be(retimedEnd);
     a.TodayDeadlineUtc!.Value.Kind.Should().Be(DateTimeKind.Utc);
     a.Proof.Should().Be("nfc");

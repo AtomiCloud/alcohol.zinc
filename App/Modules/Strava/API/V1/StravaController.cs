@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using App.Error.V1;
 using App.Modules.Common;
@@ -5,6 +6,7 @@ using App.StartUp.Options;
 using App.StartUp.Services.Auth;
 using Asp.Versioning;
 using CSharp_Result;
+using Domain.Exceptions;
 using Domain.Strava;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -18,6 +20,7 @@ namespace App.Modules.Strava.API.V1;
 [Route("api/v{version:apiVersion}/[controller]")]
 public class StravaController(
   IStravaService service,
+  IStravaDayService days,
   IStravaInboxRepository inbox,
   IOptionsMonitor<StravaOption> options,
   IAuthHelper authHelper,
@@ -105,6 +108,37 @@ public class StravaController(
       new EntityNotFound("Strava Connection Not Found", typeof(StravaConnectionPrincipal), userId));
   }
 
+  // The user's Strava activities that started on a local date (yyyy-MM-dd, in their timezone),
+  // oldest first, with the habit each one proves. Strava data is kept 7 days, so older dates
+  // come back empty.
+  [Authorize, HttpGet("{userId}/activities")]
+  public async Task<ActionResult<List<StravaActivityRes>>> ListActivities(string userId, [FromQuery] string date)
+  {
+    if (!Opt.Enabled) return this.NotFound();
+    if (!DateOnly.TryParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None,
+          out var localDate))
+      return this.ReturnResult<List<StravaActivityRes>>(
+        new InvalidRequestException("date", "Date must be in the format of yyyy-MM-dd"));
+    var result = await this.GuardAsync(userId)
+      .ThenAwait(_ => days.ListDay(userId, localDate))
+      .Then(list => list.Select(a => a.ToRes()).ToList(), Errors.MapNone);
+    return this.ReturnResult(result);
+  }
+
+  // Moves an activity to another Strava habit of its day (habitId), or marks it "not used"
+  // (habitId null). A habit that already had an activity swaps with it; a habit that loses its
+  // activity is open again. 409 strava_day_locked once the day has settled. Returns the day.
+  [Authorize, HttpPut("{userId}/activities/{activityId}/habit")]
+  public async Task<ActionResult<List<StravaActivityRes>>> AssignActivity(string userId, long activityId,
+    [FromBody] AssignStravaActivityReq req)
+  {
+    if (!Opt.Enabled) return this.NotFound();
+    var result = await this.GuardAsync(userId)
+      .ThenAwait(_ => days.Assign(userId, activityId, req.HabitId))
+      .Then(list => list.Select(a => a.ToRes()).ToList(), Errors.MapNone);
+    return this.ReturnResult(result);
+  }
+
   // Strava's subscription check: echo hub.challenge when the verify token matches.
   [HttpGet("webhook")]
   public ActionResult WebhookChallenge([FromQuery(Name = "hub.mode")] string? mode,
@@ -143,6 +177,32 @@ public class StravaController(
 public record StravaConnectUrlRes(string Url, string AppUrl);
 
 public record StravaConnectionRes(bool Connected, DateTime? ConnectedAtUtc);
+
+public record AssignStravaActivityReq(Guid? HabitId); // null: not used
+
+public record StravaActivityRes(
+  string Id,          // Strava activity id
+  string Name,
+  string SportType,   // Strava SportType, e.g. "Run"
+  DateTime StartUtc,
+  bool Manual,        // typed in by hand: never counts
+  Guid? HabitId,      // the habit it proves; null: not used
+  bool Pinned,        // the user chose this (habit or not used); matching keeps it
+  bool Locked         // the day has settled: it can no longer move
+);
+
+public static class StravaActivityMapper
+{
+  public static StravaActivityRes ToRes(this StravaDayActivity a) => new(
+    a.Principal.ActivityId.ToString(CultureInfo.InvariantCulture),
+    a.Principal.Record.Name,
+    a.Principal.Record.SportType,
+    DateTime.SpecifyKind(a.Principal.Record.StartUtc, DateTimeKind.Utc),
+    a.Principal.Record.Manual,
+    a.Principal.Assignment.HabitId,
+    a.Principal.Assignment.Pinned,
+    a.Locked);
+}
 
 public static class StravaWebhookParser
 {

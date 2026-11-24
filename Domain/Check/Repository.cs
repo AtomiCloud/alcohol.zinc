@@ -18,7 +18,10 @@ public interface ICheckRepository
   // Inserts the checks that don't exist yet (unique per habit and local date).
   Task<Result<int>> CreatePending(List<NewCheck> checks);
 
-  Task<Result<List<CheckPrincipal>>> ListDuePending(DateTime deadlineBeforeUtc, int limit);
+  // Pending checks whose day ended before deadlineBeforeUtc, or, for habits bound to one of
+  // slowProofs' plugins, before that plugin's own cutoff. Oldest first.
+  Task<Result<List<CheckPrincipal>>> ListDuePending(DateTime deadlineBeforeUtc,
+    IReadOnlyDictionary<string, DateTime> slowProofs, int limit);
   Task<Result<List<CheckPrincipal>>> ListPending(List<Guid> habitIds);
   Task<Result<List<CheckPrincipal>>> ListForDate(List<Guid> habitIds, DateOnly localDate);
   Task<Result<List<CheckPrincipal>>> ListCovering(Guid habitId, DateTime atUtc);
@@ -38,6 +41,14 @@ public interface ICheckRepository
   // the evidence and writes a CheckSettled outbox event. Null when the check was no
   // longer Pending or the evidence was already recorded.
   Task<Result<SettleOutcome?>> Settle(SettleCheck command);
+
+  // Undoes a Done that the given evidence settled: deletes that evidence, the execution and the
+  // settle's outbox events, and makes the check Pending again. False when the check is no
+  // longer Done by that evidence.
+  Task<Result<bool>> Reopen(Guid checkId, string userId, string proofKey, string externalId);
+
+  // ExternalId of the evidence each given check was settled by, for the plugin's evidence.
+  Task<Result<Dictionary<Guid, string>>> ListEvidence(List<Guid> checkIds, string proofKey);
 
   // Outbox
   Task<Result<List<CheckEventPrincipal>>> ClaimEvents(int batchSize, int maxAttempts, DateTime nowUtc);

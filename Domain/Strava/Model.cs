@@ -22,12 +22,50 @@ public record StravaTokens(string AccessToken, string RefreshToken, DateTime Exp
 public record StravaGrant(long AthleteId, StravaTokens Tokens);
 
 // The only activity fields zinc reads. Strava's terms allow showing Strava data only to its
-// owner and caching it for at most 7 days, so this lives in memory and is never stored.
+// owner and caching it for at most 7 days (StravaActivityRecord, StravaDayService.Retention).
 public class StravaActivity
 {
+  public string Name { get; set; } = "";
   public string SportType { get; set; } = "";
   public DateTime StartDate { get; set; }
   public bool Manual { get; set; }
+}
+
+// A fetched activity, cached so a day can be matched again and its owner can see which habit
+// each activity proved. Deleted after StravaDayService.Retention, on disconnect and when the
+// activity is deleted in Strava.
+public record StravaActivityRecord
+{
+  public required string Name { get; init; }
+  public required string SportType { get; init; }
+  public required DateTime StartUtc { get; init; }
+  public required bool Manual { get; init; }
+
+  // The start's date in the user's timezone: the day the activity counts for.
+  public required DateOnly LocalDate { get; init; }
+}
+
+// The habit an activity proves (null: not used). Pinned: the user chose it, so matching keeps
+// it and fills the other habits around it.
+public record StravaAssignment(Guid? HabitId, bool Pinned);
+
+public record StravaActivityPrincipal
+{
+  public required Guid Id { get; init; }
+  public required long ActivityId { get; init; }
+  public required string UserId { get; init; }
+  public required StravaActivityRecord Record { get; init; }
+  public required StravaAssignment Assignment { get; init; }
+}
+
+// An activity as its owner sees it: Locked once its day has settled.
+public record StravaDayActivity(StravaActivityPrincipal Principal, bool Locked);
+
+// The user tried to change a day that has already settled.
+public class StravaDayLockedException(DateOnly localDate)
+  : Exception($"Strava activities of {localDate:yyyy-MM-dd} can no longer change: the day has settled")
+{
+  public DateOnly LocalDate { get; } = localDate;
 }
 
 // A webhook event as Strava sends it: IDs only.

@@ -34,13 +34,18 @@ public record CheckPrincipal
 
 // What the scheduler needs to know about an enabled habit to open and close its checks.
 // Timezone is the user's timezone (Configuration), falling back to the habit version's.
+// ProofKey is the habit's bound proof plugin (null: only the always-bound ones). SortTime
+// (habit time, else reminder time; null sorts last) then SortOrder (the user's habit order)
+// order the habits of one day.
 public record SchedulableHabit(
   Guid HabitId,
   string UserId,
   Guid VersionId,
   string[] DaysOfWeek,
-  TimeOnly DeadlineTime,
-  string Timezone)
+  string Timezone,
+  string? ProofKey = null,
+  TimeOnly? SortTime = null,
+  int SortOrder = 0)
 {
   public bool IsScheduledOn(DateOnly date) =>
     DaysOfWeek.Any(d => string.Equals(d, date.DayOfWeek.ToString(), StringComparison.OrdinalIgnoreCase));

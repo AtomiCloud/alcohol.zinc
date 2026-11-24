@@ -191,7 +191,7 @@ public class StravaTests
     var inbox = new RecordingInbox();
     var logger = new WarningLogger();
     var options = new StravaOptions(new StravaOption { Enabled = true, SubscriptionId = 120475 });
-    return (new StravaController(null!, inbox, options, null!, logger), inbox, logger);
+    return (new StravaController(null!, null!, inbox, options, null!, logger), inbox, logger);
   }
 
   private sealed class RecordingInbox : IStravaInboxRepository

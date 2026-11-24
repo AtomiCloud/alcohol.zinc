@@ -204,6 +204,38 @@ public class RequestValidationTests : IAsyncLifetime
       .And.AllSatisfy(d => d.Should().OnlyHaveUniqueItems());
   }
 
+  // ---- POST / PUT Habit: times ----
+
+  // Habit time and reminder are optional and take "HH:mm" or "HH:mm:ss". An old app's deadline is
+  // ignored: every day ends at local midnight, and responses keep reporting 23:59 (as before, HH:mm:ss here).
+  [SkippableFact]
+  public async Task HabitTimes_AreOptional_InEitherFormat_AndDeadlineIsIgnored()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (userId, _, _) = await SeedUser();
+    var controller = Habits(userId);
+
+    var created = await controller.Create(userId,
+      new CreateHabitReq("Run 5 km", ["Monday"], null, "0", null, Tz, DeadlineTime: "20:00", HabitTime: "09:00"));
+    var v = created.Result.Should().BeOfType<OkObjectResult>().Subject.Value.Should().BeOfType<HabitVersionRes>().Subject;
+    (v.HabitTime, v.NotificationTime, v.DeadlineTime).Should().Be(("09:00", (string?)null, "23:59:00"));
+
+    var updated = await controller.Update(userId, v.HabitId,
+      new UpdateHabitReq("Run 5 km", ["Monday"], "08:15", "0", null, true, Tz, HabitTime: "07:30:00"));
+    var u = updated.Result.Should().BeOfType<OkObjectResult>().Subject.Value.Should().BeOfType<HabitVersionRes>().Subject;
+    (u.HabitTime, u.NotificationTime, u.DeadlineTime).Should().Be(("07:30", "08:15:00", "23:59:00"));
+
+    var cleared = await controller.Update(userId, v.HabitId,
+      new UpdateHabitReq("Run 5 km", ["Monday"], null, "0", null, true, Tz));
+    var c = cleared.Result.Should().BeOfType<OkObjectResult>().Subject.Value.Should().BeOfType<HabitVersionRes>().Subject;
+    (c.HabitTime, c.NotificationTime).Should().Be(((string?)null, (string?)null));
+
+    var bad = await controller.Create(userId,
+      new CreateHabitReq("Run 5 km", ["Monday"], "7pm", "0", null, Tz, HabitTime: "25:00"));
+    Status(bad).Should().Be(400);
+    ErrorFields(controller).Should().BeEquivalentTo("NotificationTime", "HabitTime");
+  }
+
   // ---- POST Habit: stake ----
 
   [SkippableTheory]

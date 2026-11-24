@@ -19,8 +19,10 @@ public class CreateHabitReqValidator : AbstractValidator<CreateHabitReq>
             .DaysOfWeekValid();
 
         RuleFor(x => x.NotificationTime)
-            .NotNull()
-            .TimeValid();
+            .NullableTimeValid();
+
+        RuleFor(x => x.HabitTime)
+            .NullableTimeValid();
 
         RuleFor(x => x.Stake)
             .StakeValid(options);
@@ -33,10 +35,6 @@ public class CreateHabitReqValidator : AbstractValidator<CreateHabitReq>
         RuleFor(x => x.Timezone)
             .NotEmpty()
             .TimezoneValid();
-
-        RuleFor(x => x.DeadlineTime!)
-            .TimeValid()
-            .When(x => x.DeadlineTime != null);
     }
 }
 
@@ -53,8 +51,10 @@ public class UpdateHabitReqValidator : AbstractValidator<UpdateHabitReq>
             .DaysOfWeekValid();
 
         RuleFor(x => x.NotificationTime)
-            .NotNull()
-            .TimeValid();
+            .NullableTimeValid();
+
+        RuleFor(x => x.HabitTime)
+            .NullableTimeValid();
 
         RuleFor(x => x.Stake)
             .StakeValid(options);
@@ -67,10 +67,6 @@ public class UpdateHabitReqValidator : AbstractValidator<UpdateHabitReq>
         RuleFor(x => x.Timezone)
             .NotEmpty()
             .TimezoneValid();
-
-        RuleFor(x => x.DeadlineTime!)
-            .TimeValid()
-            .When(x => x.DeadlineTime != null);
     }
 }
 

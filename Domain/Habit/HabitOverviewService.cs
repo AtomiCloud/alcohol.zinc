@@ -157,7 +157,7 @@ public class HabitOverviewService(
               .Then(charity => new HabitOverviewItem(
                   hv.HabitId,
                   hv.Record.Task,
-                  hv.Record.NotificationTime.ToString("HH:mm"),
+                  hv.Record.NotificationTime?.ToString("HH:mm", null),
                   userTz,
                   hv.Record.DaysOfWeek,
                   hv.Record.Stake.Amount,
@@ -168,11 +168,11 @@ public class HabitOverviewService(
                   status.TimeLeftToEodMinutes,
                   new HabitVersionMeta(hv.Id, hv.Version, true),
                   debtsForHabit.Sum(d => d.Amount),
-                  hv.Record.DeadlineTime,
                   TodayDeadline(hv, userTz, localToday, check),
                   proof,
                   habitPrincipal.Record.RoutineId,
-                  habitPrincipal.Record.SortOrder
+                  habitPrincipal.Record.SortOrder,
+                  hv.Record.HabitTime?.ToString("HH:mm", null)
                 ), Errors.MapNone);
           }
         })
@@ -186,7 +186,7 @@ public class HabitOverviewService(
       var scheduled = hv.Record.DaysOfWeek.Any(d =>
         string.Equals(d, today.DayOfWeek.ToString(), StringComparison.OrdinalIgnoreCase));
       if (!scheduled) return null;
-      return CheckWindow.For(today, CheckWindow.Resolve(userTz), hv.Record.DeadlineTime).DeadlineUtc;
+      return CheckWindow.For(today, CheckWindow.Resolve(userTz)).DeadlineUtc;
     }
   }
 }

@@ -11,12 +11,11 @@ public class StreakService(IStreakRepository repo) : IStreakService
     Guid habitId,
     string timezone,
     string[] daysOfWeek,
-    TimeOnly deadlineTime,
     DateTime? nowUtc = null)
   {
     var utcNow = nowUtc ?? DateTime.UtcNow;
     return repo.GetExecutionsForHabits([habitId])
-      .Then(byHabit => Status(byHabit.GetValueOrDefault(habitId) ?? [], timezone, daysOfWeek, deadlineTime, utcNow),
+      .Then(byHabit => Status(byHabit.GetValueOrDefault(habitId) ?? [], timezone, daysOfWeek, utcNow),
         Errors.MapNone);
   }
 
@@ -31,7 +30,7 @@ public class StreakService(IStreakRepository repo) : IStreakService
       .Then(byHabit => versions
         .DistinctBy(v => v.HabitId)
         .ToDictionary(v => v.HabitId, v => Status(byHabit.GetValueOrDefault(v.HabitId) ?? [], timezone,
-          v.Record.DaysOfWeek, v.Record.DeadlineTime, utcNow)), Errors.MapNone);
+          v.Record.DaysOfWeek, utcNow)), Errors.MapNone);
   }
 
   // executions: every execution of the habit, oldest first.
@@ -39,7 +38,6 @@ public class StreakService(IStreakRepository repo) : IStreakService
     List<HabitExecutionRecord> executions,
     string timezone,
     string[] daysOfWeek,
-    TimeOnly deadlineTime,
     DateTime utcNow)
   {
       var today = StreakCalculator.TodayFor(timezone, utcNow);
@@ -71,7 +69,7 @@ public class StreakService(IStreakRepository repo) : IStreakService
       var todayStatus = todayExecution == null ? HabitDayStatus.NotApplicable : MapStatus(todayExecution.Status);
 
       var tz = TimeZoneInfo.FindSystemTimeZoneById(timezone);
-      var (_, deadlineUtc) = Check.CheckWindow.For(today, tz, deadlineTime);
+      var (_, deadlineUtc) = Check.CheckWindow.For(today, tz);
       var minutesLeft = (int)Math.Max(0, Math.Round((deadlineUtc - utcNow).TotalMinutes));
 
       return new HabitStreakStatus(

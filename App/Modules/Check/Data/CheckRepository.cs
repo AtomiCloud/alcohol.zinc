@@ -26,6 +26,8 @@ public class CheckRepository(MainDbContext db, ILogger<CheckRepository> logger) 
                   join hv in db.HabitVersions on new { h.Id, h.Version } equals new { Id = hv.HabitId, hv.Version }
                   join c in db.Configurations on h.UserId equals c.UserId into cs
                   from c in cs.DefaultIfEmpty()
+                  join b in db.ProofBindings on h.Id equals b.HabitId into bs
+                  from b in bs.DefaultIfEmpty()
                   where h.Enabled && h.DeletedAt == null
                   select new
                   {
@@ -33,9 +35,12 @@ public class CheckRepository(MainDbContext db, ILogger<CheckRepository> logger) 
                     h.UserId,
                     VersionId = hv.Id,
                     hv.DaysOfWeek,
-                    hv.DeadlineTime,
                     HabitTimezone = hv.Timezone,
-                    UserTimezone = c == null ? null : c.Timezone
+                    UserTimezone = c == null ? null : c.Timezone,
+                    ProofKey = b == null ? null : b.PluginKey,
+                    hv.HabitTime,
+                    hv.NotificationTime,
+                    h.SortOrder
                   };
       if (userId != null) query = query.Where(x => x.UserId == userId);
       if (habitIds != null) query = query.Where(x => habitIds.Contains(x.Id));
@@ -43,10 +48,13 @@ public class CheckRepository(MainDbContext db, ILogger<CheckRepository> logger) 
       var rows = await query.AsNoTracking().ToListAsync();
       // The user's timezone (Configuration) wins; fall back to the habit's when it's unknown.
       return rows.Select(x => new SchedulableHabit(
-          x.Id, x.UserId, x.VersionId, x.DaysOfWeek, x.DeadlineTime,
+          x.Id, x.UserId, x.VersionId, x.DaysOfWeek,
           x.UserTimezone != null && TimeZoneInfo.TryFindSystemTimeZoneById(x.UserTimezone, out _)
             ? x.UserTimezone
-            : x.HabitTimezone))
+            : x.HabitTimezone,
+          x.ProofKey,
+          x.HabitTime ?? x.NotificationTime,
+          x.SortOrder))
         .ToList();
     }
     catch (Exception e)
@@ -80,12 +88,25 @@ public class CheckRepository(MainDbContext db, ILogger<CheckRepository> logger) 
     }
   }
 
-  public async Task<Result<List<CheckPrincipal>>> ListDuePending(DateTime deadlineBeforeUtc, int limit)
+  public async Task<Result<List<CheckPrincipal>>> ListDuePending(DateTime deadlineBeforeUtc,
+    IReadOnlyDictionary<string, DateTime> slowProofs, int limit)
   {
     try
     {
-      var data = await db.HabitChecks.AsNoTracking()
-        .Where(c => c.Status == HabitCheckStatusData.Pending && c.DeadlineUtc <= deadlineBeforeUtc)
+      var cutoff = DateTime.SpecifyKind(deadlineBeforeUtc, DateTimeKind.Utc);
+      var slowKeys = slowProofs.Keys.ToList();
+      var due = db.HabitChecks
+        .Where(c => c.Status == HabitCheckStatusData.Pending && c.DeadlineUtc <= cutoff &&
+                    !db.ProofBindings.Any(b => b.HabitId == c.HabitId && slowKeys.Contains(b.PluginKey)));
+      foreach (var (key, before) in slowProofs)
+      {
+        var slowCutoff = DateTime.SpecifyKind(before, DateTimeKind.Utc);
+        due = due.Concat(db.HabitChecks
+          .Where(c => c.Status == HabitCheckStatusData.Pending && c.DeadlineUtc <= slowCutoff &&
+                      db.ProofBindings.Any(b => b.HabitId == c.HabitId && b.PluginKey == key)));
+      }
+
+      var data = await due.AsNoTracking()
         .OrderBy(c => c.DeadlineUtc)
         .Take(limit)
         .ToListAsync();
@@ -366,6 +387,77 @@ public class CheckRepository(MainDbContext db, ILogger<CheckRepository> logger) 
       // Drop tracked changes so a later SaveChanges on this scoped context doesn't replay them.
       db.ChangeTracker.Clear();
       return (SettleOutcome?)null;
+    }
+  }
+
+  public async Task<Result<bool>> Reopen(Guid checkId, string userId, string proofKey, string externalId)
+  {
+    await using var tx = await db.Database.BeginTransactionAsync();
+    try
+    {
+      // Same lock order as Settle: the user's lock, then the check's row.
+      await db.Database.LockUser(userId);
+      var check = (await db.HabitChecks
+          .FromSqlRaw(@"SELECT * FROM ""HabitChecks"" WHERE ""Id"" = {0} FOR UPDATE", checkId)
+          .ToListAsync())
+        .FirstOrDefault();
+      var evidence = check == null
+        ? null
+        : await db.HabitEvidence.FirstOrDefaultAsync(x =>
+          x.CheckId == check.Id && x.ProofKey == proofKey && x.ExternalId == externalId);
+      if (check is not { Status: HabitCheckStatusData.Done } || check.SettledBy != proofKey || evidence == null)
+      {
+        await tx.RollbackAsync();
+        db.ChangeTracker.Clear();
+        return false;
+      }
+
+      // The settle's events go too. A Done fires no stake today; a later Done or Missed writes its own.
+      var executionId = check.ExecutionId;
+      await db.CheckEvents.Where(x => x.CheckId == check.Id).ExecuteDeleteAsync();
+      db.HabitEvidence.Remove(evidence);
+      check.Status = HabitCheckStatusData.Pending;
+      check.SettledAtUtc = null;
+      check.SettledBy = null;
+      check.ExecutionId = null;
+      await db.SaveChangesAsync();
+      if (executionId is { } id) await db.HabitExecutions.Where(x => x.Id == id).ExecuteDeleteAsync();
+
+      await tx.CommitAsync();
+      db.ChangeTracker.Clear();
+      return true;
+    }
+    catch (Exception e) when (UserLock.IsLockTimeout(e))
+    {
+      logger.LogWarning("Reopen of CheckId={CheckId} timed out waiting for UserId={UserId}'s lock", checkId, userId);
+      await tx.RollbackAsync();
+      db.ChangeTracker.Clear();
+      return new UserBusyException(userId);
+    }
+    catch (Exception e)
+    {
+      logger.LogError(e, "Reopen failed for CheckId={CheckId}", checkId);
+      await tx.RollbackAsync();
+      db.ChangeTracker.Clear();
+      throw;
+    }
+  }
+
+  public async Task<Result<Dictionary<Guid, string>>> ListEvidence(List<Guid> checkIds, string proofKey)
+  {
+    try
+    {
+      var rows = await db.HabitEvidence.AsNoTracking()
+        .Where(x => checkIds.Contains(x.CheckId) && x.ProofKey == proofKey)
+        .Select(x => new { x.CheckId, x.ExternalId })
+        .ToListAsync();
+      // One evidence settles a check; a check never holds two of the same plugin.
+      return rows.GroupBy(x => x.CheckId).ToDictionary(g => g.Key, g => g.First().ExternalId);
+    }
+    catch (Exception e)
+    {
+      logger.LogError(e, "ListEvidence failed for ProofKey={ProofKey}", proofKey);
+      throw;
     }
   }
 

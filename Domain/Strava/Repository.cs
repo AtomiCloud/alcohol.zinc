@@ -18,12 +18,36 @@ public interface IStravaConnectionRepository
   Task<Result<StravaConnectionPrincipal?>> RefreshLocked(string userId,
     Func<StravaConnectionPrincipal, Task<Result<StravaTokens?>>> refresh);
 
-  // Deletes the connection, the user's Strava bindings and the Strava evidence on their habits
-  // (Strava's terms: delete Strava data on disconnect). Check results stay. Null when not connected.
+  // Deletes the connection, the user's Strava bindings, cached activities and the Strava evidence
+  // on their habits (Strava's terms: delete Strava data on disconnect). Check results stay. Null
+  // when not connected.
   Task<Result<Unit?>> Purge(string userId);
 
   // Removes the evidence of an activity deleted in Strava. The day it proved stays done.
   Task<Result<int>> DeleteActivityEvidence(long activityId);
+}
+
+public interface IStravaActivityRepository
+{
+  Task<Result<StravaActivityPrincipal?>> Get(string userId, long activityId);
+
+  Task<Result<List<StravaActivityPrincipal>>> ListForDate(string userId, DateOnly localDate);
+
+  // Saves a fetched activity. An existing one keeps its assignment unless its date changed.
+  Task<Result<StravaActivityPrincipal>> Upsert(string userId, long activityId, StravaActivityRecord record,
+    DateTime fetchedAtUtc);
+
+  // Sets the assignment of each given activity of the user.
+  Task<Result<Unit>> SetAssignments(string userId, Dictionary<long, StravaAssignment> assignments);
+
+  Task<Result<int>> Delete(long activityId);
+
+  // Strava's 7-day cache limit: deletes activities fetched before the cutoff.
+  Task<Result<int>> DeleteFetchedBefore(DateTime cutoffUtc);
+
+  // Runs work while holding the user's Strava day lock, so two writers (a webhook and the
+  // user) never match the same user's days at once. UserBusyException when it stays taken.
+  Task<Result<T>> Exclusive<T>(string userId, Func<Task<Result<T>>> work);
 }
 
 public interface IStravaInboxRepository

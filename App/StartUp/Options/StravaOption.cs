@@ -28,4 +28,9 @@ public class StravaOption
   [Required] public string AppRedirectUri { get; set; } = string.Empty;
 
   [Range(1, int.MaxValue)] public int MaxAttempts { get; set; } = 5;
+
+  // Strava only sends an activity once it is saved, so a Strava-bound habit's day settles this
+  // many minutes after local midnight (other habits: 30). Until then its activities still count
+  // and the user can change which habit each one proves.
+  [Range(0, 24 * 60)] public int UploadWaitMinutes { get; set; } = 120;
 }

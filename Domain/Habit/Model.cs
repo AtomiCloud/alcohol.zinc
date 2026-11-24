@@ -33,8 +33,8 @@ namespace Domain.Habit
         public required Guid? CharityId { get; init; }
         public required string Task { get; init; }
         public required string[] DaysOfWeek { get; init; }
-        public required TimeOnly NotificationTime { get; init; }   // phone reminder only
-        public TimeOnly DeadlineTime { get; init; } = Check.CheckWindow.DefaultDeadline;
+        public TimeOnly? HabitTime { get; init; }           // when the user plans to do it (local)
+        public TimeOnly? NotificationTime { get; init; }    // phone reminder only
         public required Money Stake { get; init; }
         public required decimal Ratio { get; init; }
         public required string Timezone { get; init; }

@@ -16,8 +16,8 @@ namespace App.Modules.HabitVersion.Data
         // Habit blueprint data
         public required string Task { get; set; }
         public required string[] DaysOfWeek { get; set; }
-        public TimeOnly NotificationTime { get; set; }
-        public TimeOnly DeadlineTime { get; set; } = new(23, 59);  // check deadline, separate from the reminder
+        public TimeOnly? HabitTime { get; set; }         // when the user plans to do it (local)
+        public TimeOnly? NotificationTime { get; set; }  // phone reminder only
         public int StakeCents { get; set; }              // Stake stored as cents
         public string StakeCurrency { get; set; } = "SGD";
         public int RatioBasisPoints { get; set; }        // Ratio stored as basis points

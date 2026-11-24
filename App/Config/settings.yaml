@@ -259,6 +259,8 @@ Strava:
   CallbackUrl: 'http://localhost:9050/api/v1/Strava/callback'
   AppRedirectUri: 'cloud.durian.lapras.alcohol.neon.app://strava'
   MaxAttempts: 5
+  # Minutes after local midnight a Strava-bound habit's day settles (activities upload late).
+  UploadWaitMinutes: 120
 # Subscription tier catalog + renewal worker. Single source of truth for tiers,
 # caps and prices. MUST match the public pricing page (alcohol.argon
 # src/lib/billing/pricing.ts + components/landing/Pricing.tsx):

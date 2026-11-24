@@ -3,9 +3,11 @@ using App.Modules.System;
 using App.StartUp.Database;
 using App.Utility;
 using CSharp_Result;
+using Domain.Exceptions;
 using Domain.Strava;
 using EntityFramework.Exceptions.Common;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace App.Modules.Strava.Data;
 
@@ -115,12 +117,13 @@ public class StravaConnectionRepository(
       var bindings = await db.ProofBindings
         .Where(x => x.PluginKey == StravaProofPlugin.Key && habitIds.Contains(x.HabitId))
         .ExecuteDeleteAsync();
+      var activities = await db.StravaActivities.Where(x => x.UserId == userId).ExecuteDeleteAsync();
       var connections = await db.StravaConnections.Where(x => x.UserId == userId).ExecuteDeleteAsync();
       await tx.CommitAsync();
 
       logger.LogInformation(
-        "Purged Strava data for UserId={UserId}: {Connections} connection, {Bindings} bindings, {Evidence} evidence",
-        userId, connections, bindings, evidence);
+        "Purged Strava data for UserId={UserId}: {Connections} connection, {Bindings} bindings, {Evidence} evidence, {Activities} activities",
+        userId, connections, bindings, evidence, activities);
       return connections == 0 ? (Unit?)null : new Unit();
     }
     catch (Exception e)
@@ -204,5 +207,155 @@ public class StravaInboxRepository(MainDbContext db, ILogger<StravaInboxReposito
       logger.LogError(e, "Delete Strava event failed for Id={Id}", id);
       throw;
     }
+  }
+}
+
+public class StravaActivityRepository(MainDbContext db, ILogger<StravaActivityRepository> logger)
+  : IStravaActivityRepository
+{
+  // How long Exclusive waits for another writer of the same user's Strava days.
+  private const string LockTimeout = "10s";
+
+  public async Task<Result<StravaActivityPrincipal?>> Get(string userId, long activityId)
+  {
+    try
+    {
+      var data = await db.StravaActivities.AsNoTracking()
+        .FirstOrDefaultAsync(x => x.UserId == userId && x.ActivityId == activityId);
+      return data?.ToPrincipal();
+    }
+    catch (Exception e)
+    {
+      logger.LogError(e, "Get Strava activity failed for UserId={UserId} ActivityId={ActivityId}", userId, activityId);
+      throw;
+    }
+  }
+
+  public async Task<Result<List<StravaActivityPrincipal>>> ListForDate(string userId, DateOnly localDate)
+  {
+    try
+    {
+      var data = await db.StravaActivities.AsNoTracking()
+        .Where(x => x.UserId == userId && x.LocalDate == localDate)
+        .OrderBy(x => x.StartUtc).ThenBy(x => x.ActivityId)
+        .ToListAsync();
+      return data.Select(x => x.ToPrincipal()).ToList();
+    }
+    catch (Exception e)
+    {
+      logger.LogError(e, "List Strava activities failed for UserId={UserId} Date={Date}", userId, localDate);
+      throw;
+    }
+  }
+
+  public async Task<Result<StravaActivityPrincipal>> Upsert(string userId, long activityId,
+    StravaActivityRecord record, DateTime fetchedAtUtc)
+  {
+    try
+    {
+      var data = await db.StravaActivities.FirstOrDefaultAsync(x => x.UserId == userId && x.ActivityId == activityId);
+      if (data == null) db.StravaActivities.Add(data = record.ToData(userId, activityId, fetchedAtUtc));
+      else
+      {
+        // Moved to another day: the old day's choice no longer applies.
+        if (data.LocalDate != record.LocalDate)
+        {
+          data.HabitId = null;
+          data.Pinned = false;
+        }
+
+        data.ToData(record, fetchedAtUtc);
+      }
+
+      await db.SaveChangesAsync();
+      db.ChangeTracker.Clear();
+      return data.ToPrincipal();
+    }
+    catch (Exception e)
+    {
+      logger.LogError(e, "Upsert Strava activity failed for UserId={UserId} ActivityId={ActivityId}", userId,
+        activityId);
+      db.ChangeTracker.Clear();
+      throw;
+    }
+  }
+
+  public async Task<Result<Unit>> SetAssignments(string userId, Dictionary<long, StravaAssignment> assignments)
+  {
+    try
+    {
+      if (assignments.Count == 0) return new Unit();
+      var ids = assignments.Keys.ToList();
+      var rows = await db.StravaActivities.Where(x => x.UserId == userId && ids.Contains(x.ActivityId)).ToListAsync();
+      foreach (var row in rows)
+      {
+        var a = assignments[row.ActivityId];
+        row.HabitId = a.HabitId;
+        row.Pinned = a.Pinned;
+      }
+
+      await db.SaveChangesAsync();
+      db.ChangeTracker.Clear();
+      return new Unit();
+    }
+    catch (Exception e)
+    {
+      logger.LogError(e, "Set Strava assignments failed for UserId={UserId}", userId);
+      db.ChangeTracker.Clear();
+      throw;
+    }
+  }
+
+  public async Task<Result<int>> Delete(long activityId)
+  {
+    try
+    {
+      return await db.StravaActivities.Where(x => x.ActivityId == activityId).ExecuteDeleteAsync();
+    }
+    catch (Exception e)
+    {
+      logger.LogError(e, "Delete Strava activity failed for ActivityId={ActivityId}", activityId);
+      throw;
+    }
+  }
+
+  public async Task<Result<int>> DeleteFetchedBefore(DateTime cutoffUtc)
+  {
+    try
+    {
+      var cutoff = DateTime.SpecifyKind(cutoffUtc, DateTimeKind.Utc);
+      return await db.StravaActivities.Where(x => x.FetchedAtUtc < cutoff).ExecuteDeleteAsync();
+    }
+    catch (Exception e)
+    {
+      logger.LogError(e, "Delete expired Strava activities failed");
+      throw;
+    }
+  }
+
+  // The lock lives in its own connection's transaction, so the work can run (and commit) its own
+  // transactions on db, such as check settles, which take the user's lock after this one.
+  public async Task<Result<T>> Exclusive<T>(string userId, Func<Task<Result<T>>> work)
+  {
+    await using var conn = new NpgsqlConnection(db.Database.GetConnectionString());
+    await conn.OpenAsync();
+    await using var tx = await conn.BeginTransactionAsync();
+    try
+    {
+      await using var timeout = new NpgsqlCommand($"SET LOCAL lock_timeout = '{LockTimeout}'", conn, tx);
+      await timeout.ExecuteNonQueryAsync();
+      await using var lockCmd = new NpgsqlCommand("SELECT pg_advisory_xact_lock(hashtextextended(@key, 0))", conn, tx);
+      lockCmd.Parameters.AddWithValue("key", "strava-day:" + userId);
+      await lockCmd.ExecuteNonQueryAsync();
+    }
+    catch (PostgresException e) when (e.SqlState == PostgresErrorCodes.LockNotAvailable)
+    {
+      logger.LogWarning("Strava day lock of UserId={UserId} stayed taken", userId);
+      return new UserBusyException(userId);
+    }
+
+    var result = await work();
+    await tx.CommitAsync();
+    return result;
   }
 }

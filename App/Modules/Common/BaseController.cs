@@ -66,6 +66,8 @@ public class AtomiControllerBase(IAuthHelper h) : ControllerBase
       SubscriptionBusyException sbe => this.Error(HttpStatusCode.Conflict,
         new RenewalInProgress(sbe.UserId)),
       UserBusyException ube => this.Error(HttpStatusCode.Conflict, new UserBusy(ube.UserId)),
+      Domain.Strava.StravaDayLockedException sdl => this.Error(HttpStatusCode.Conflict,
+        new StravaDayLocked(sdl.LocalDate.ToString("yyyy-MM-dd"))),
       FriendRequestException fre => fre.Error switch
       {
         FriendRequestError.IdRequired => this.Error(HttpStatusCode.Conflict, new FriendRequestIdRequired()),
