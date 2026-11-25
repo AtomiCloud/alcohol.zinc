@@ -1,3 +1,10 @@
+## [1.48.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.47.0...v1.48.0) (2026-11-25)
+
+
+### ✨ Features ✨
+
+* undo a completion tapped in the app ([c7ab51b](https://github.com/AtomiCloud/alcohol.zinc/commit/c7ab51baec492b1f3a068e47e79e81ce87ce3d16))
+
 ## [1.47.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.46.0...v1.47.0) (2026-11-24)
 
 
