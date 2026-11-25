@@ -108,6 +108,9 @@ public sealed class FakeCheckService : ICheckService
   public Task<Result<HabitExecutionPrincipal?>> Skip(string userId, Guid habitId, string? notes, SkipQuota quota,
     DateTime? nowUtc = null)
     => throw new NotImplementedException();
+  public Task<Result<CheckPrincipal>> Undo(string userId, Guid habitId, DateOnly? localDate, bool tagged,
+    DateTime? nowUtc = null)
+    => throw new NotImplementedException();
   public Task<Result<CheckPrincipal?>> PendingCheckAt(string userId, Guid habitId, DateTime atUtc, DateTime? nowUtc = null)
     => throw new NotImplementedException();
 }

@@ -681,9 +681,137 @@ public class CheckScenarioTests : IAsyncLifetime
     res.Habits.Select(h => h.SortOrder).Should().Equal(0, 1, 2);
   }
 
+  // ---- Undo a completion tapped in the app ----
+
+  private HabitService HabitsOf(CheckService checks) => new(
+    new HabitRepository(_db, NullLogger<HabitRepository>.Instance), null!, checks, null!,
+    new NfcTagRepository(_db, NullLogger<NfcTagRepository>.Instance), NullLogger<HabitService>.Instance);
+
+  private Task<Guid> VersionOf(Guid habitId) =>
+    _db.HabitVersions.AsNoTracking().Where(v => v.HabitId == habitId).Select(v => v.Id).SingleAsync();
+
+  private async Task<App.Modules.Habit.API.V1.HabitOverviewHabitRes> OverviewOf(CheckService checks, string userId,
+    Guid habitId, DateTime now)
+  {
+    var res = App.Modules.Habit.API.V1.HabitOverviewMapper.ToRes(
+      (await Overview(checks).GetOverview(new HabitOverviewSearch(userId, 10, 0), "skips", now)).Get());
+    return res.Habits.Single(h => h.Id == habitId.ToString());
+  }
+
+  private static Evidence StravaRun(DateTime at) =>
+    Checks.Manual(at) with { ProofKey = "strava", ExternalId = $"{Random.Shared.NextInt64()}" };
+
+  private static readonly DateOnly Monday = new(2026, 1, 5);
+
+  // A mistaken tap: undo leaves no trace (execution, evidence, events), the day can be
+  // completed again, and a repeated undo just returns the open day.
+  [SkippableFact]
+  public async Task Undo_TappedDone_IsPendingAgain_Idempotent_AndCompletesAgain()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (userId, charityId) = await SeedUser("UTC");
+    var habitId = await SeedHabit(userId, charityId, ["Monday"], "UTC");
+    var versionId = await VersionOf(habitId);
+    var svc = Checks.Service(_db);
+    var habits = HabitsOf(svc);
+
+    await svc.OpenUpcoming(U(2026, 1, 5, 9));
+    (await svc.Report(userId, habitId, Checks.Manual(U(2026, 1, 5, 10)), U(2026, 1, 5, 10))).Get().Should().NotBeNull();
+    var done = await OverviewOf(svc, userId, habitId, U(2026, 1, 5, 10, 1));
+    done.CanUndo.Should().BeTrue();
+    done.Status.IsCompleteToday.Should().BeTrue();
+
+    var undone = (await habits.UndoCompletion(userId, versionId, null, U(2026, 1, 5, 10, 2))).Get();
+    undone.Record.Status.Should().Be(CheckStatus.Pending);
+    undone.Record.LocalDate.Should().Be(Monday);
+    (await ChecksOf(habitId)).Single().Should().Match<HabitCheckData>(c =>
+      c.Status == HabitCheckStatusData.Pending && c.ExecutionId == null && c.SettledBy == null);
+    (await ExecutionsOf(habitId)).Should().BeEmpty();
+    (await _db.HabitEvidence.CountAsync(e => e.HabitId == habitId)).Should().Be(0);
+    (await _db.CheckEvents.CountAsync(e => e.HabitId == habitId)).Should().Be(0);
+    var open = await OverviewOf(svc, userId, habitId, U(2026, 1, 5, 10, 3));
+    open.CanUndo.Should().BeFalse();
+    open.Status.IsCompleteToday.Should().BeFalse();
+    open.Status.CurrentStreak.Should().Be(0);
+
+    (await habits.UndoCompletion(userId, versionId, null, U(2026, 1, 5, 10, 4))).Get()
+      .Record.Status.Should().Be(CheckStatus.Pending, "undoing an open day returns it as is");
+
+    (await svc.Report(userId, habitId, Checks.Manual(U(2026, 1, 5, 11)), U(2026, 1, 5, 11))).Get().Should().NotBeNull();
+    (await ChecksOf(habitId)).Single().Status.Should().Be(HabitCheckStatusData.Done);
+    (await ExecutionsOf(habitId)).Should().ContainSingle();
+    (await svc.CloseDue(U(2026, 1, 6, 1))).Get().Should().Be(0);
+    await svc.DispatchEvents(U(2026, 1, 6, 1));
+    (await PenaltiesOf(userId)).Should().Be(0);
+  }
+
+  // Only a tap in the app can be undone: not a Strava activity, and not a Done on a habit
+  // with an NFC tag (a tag tap is recorded like an app tap). The day stays Done.
+  [SkippableFact]
+  public async Task Undo_StravaOrNfcDone_IsRefused()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (userId, charityId) = await SeedUser("UTC");
+    var strava = await SeedHabit(userId, charityId, ["Monday"], "UTC", proofKey: "strava");
+    var tagged = await SeedHabit(userId, charityId, ["Monday"], "UTC");
+    _db.NfcTags.Add(new NfcTagData { Id = $"tag-{Guid.NewGuid():N}", UserId = userId, HabitId = tagged });
+    await _db.SaveChangesAsync();
+    var svc = Checks.Service(_db);
+    var habits = HabitsOf(svc);
+    var now = U(2026, 1, 5, 12);
+
+    await svc.OpenUpcoming(U(2026, 1, 5, 9));
+    (await svc.Report(userId, strava, StravaRun(U(2026, 1, 5, 10)), now)).Get().Should().NotBeNull();
+    (await svc.Report(userId, tagged, Checks.Manual(U(2026, 1, 5, 10)), now)).Get().Should().NotBeNull();
+
+    var byStrava = await habits.UndoCompletion(userId, await VersionOf(strava), null, now);
+    byStrava.FailureOrDefault().Should().BeOfType<CheckNotUndoableException>()
+      .Which.SettledBy.Should().Be("strava");
+    var byTag = await habits.UndoCompletion(userId, await VersionOf(tagged), null, now);
+    byTag.FailureOrDefault().Should().BeOfType<CheckNotUndoableException>()
+      .Which.SettledBy.Should().Be("nfc");
+
+    (await ChecksOf(strava)).Single().Status.Should().Be(HabitCheckStatusData.Done);
+    (await ChecksOf(tagged)).Single().Status.Should().Be(HabitCheckStatusData.Done);
+    (await OverviewOf(svc, userId, strava, now)).CanUndo.Should().BeFalse();
+    (await OverviewOf(svc, userId, tagged, now)).CanUndo.Should().BeFalse();
+  }
+
+  // Undo works until the day settles: midnight + 30 min for a plain habit, midnight + the
+  // Strava wait (2 h) for a Strava-bound habit completed by a tap. Then 409 habit_day_locked.
+  [SkippableFact]
+  public async Task Undo_AfterTheDaySettles_IsLocked()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (userId, charityId) = await SeedUser("UTC");
+    var plain = await SeedHabit(userId, charityId, ["Monday"], "UTC");
+    var plainLate = await SeedHabit(userId, charityId, ["Monday"], "UTC");
+    var strava = await SeedHabit(userId, charityId, ["Monday"], "UTC", proofKey: "strava");
+    var svc = Checks.Service(_db);
+    var habits = HabitsOf(svc);
+
+    await svc.OpenUpcoming(U(2026, 1, 5, 9));
+    foreach (var h in new[] { plain, plainLate, strava })
+      (await svc.Report(userId, h, Checks.Manual(U(2026, 1, 5, 10)), U(2026, 1, 5, 10))).Get().Should().NotBeNull();
+    (await OverviewOf(svc, userId, strava, U(2026, 1, 5, 23))).CanUndo.Should().BeTrue("a tap on a Strava habit");
+
+    (await habits.UndoCompletion(userId, await VersionOf(plain), Monday, U(2026, 1, 6, 0, 29))).Get()
+      .Record.Status.Should().Be(CheckStatus.Pending, "00:29 is inside the 30-minute grace");
+    var locked = await habits.UndoCompletion(userId, await VersionOf(plainLate), Monday, U(2026, 1, 6, 0, 30));
+    locked.FailureOrDefault().Should().BeOfType<CheckDayLockedException>().Which.LocalDate.Should().Be(Monday);
+    (await ChecksOf(plainLate)).Single().Status.Should().Be(HabitCheckStatusData.Done);
+
+    (await habits.UndoCompletion(userId, await VersionOf(strava), Monday, U(2026, 1, 6, 1, 59))).Get()
+      .Record.Status.Should().Be(CheckStatus.Pending, "a Strava habit settles 2 hours after midnight");
+    (await svc.Report(userId, strava, Checks.Manual(U(2026, 1, 5, 10)), U(2026, 1, 6, 1, 59))).Get().Should().NotBeNull(
+      "re-completed (the tap time is Monday)");
+    (await habits.UndoCompletion(userId, await VersionOf(strava), Monday, U(2026, 1, 6, 2))).FailureOrDefault()
+      .Should().BeOfType<CheckDayLockedException>();
+  }
+
   private HabitOverviewService Overview(CheckService checks) => new(
     new HabitService(new HabitRepository(_db, NullLogger<HabitRepository>.Instance), null!, checks,
-      null!, NullLogger<HabitService>.Instance),
+      null!, new NfcTagRepository(_db, NullLogger<NfcTagRepository>.Instance), NullLogger<HabitService>.Instance),
     new HabitRepository(_db, NullLogger<HabitRepository>.Instance),
     new Domain.Configuration.ConfigurationService(
       new ConfigurationRepository(_db, NullLogger<ConfigurationRepository>.Instance), checks, new NoTransaction()),
@@ -696,6 +824,7 @@ public class CheckScenarioTests : IAsyncLifetime
     new CheckRepository(_db, NullLogger<CheckRepository>.Instance),
     new NfcTagRepository(_db, NullLogger<NfcTagRepository>.Instance),
     new ProofBindingRepository(_db, NullLogger<ProofBindingRepository>.Instance),
+    Checks.Settle,
     new NoTransaction());
 
   // Each habit gets its own streaks and week, across its versions: current counts Completed

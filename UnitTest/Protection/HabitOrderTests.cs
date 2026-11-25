@@ -80,7 +80,7 @@ public class HabitOrderTests
     Guid[] ids = [A, B, C, D];
     for (var i = 0; i < ids.Length; i++) repo.Habits.Add(HabitFakeFactory.Habit(ids[i], "owner", sortOrder: i));
     var service = new HabitService(repo, new FakeEntitlementService(), new FakeCheckService(), null!,
-      NullLogger<HabitService>.Instance);
+      null!, NullLogger<HabitService>.Instance);
     return (service, repo);
   }
 }

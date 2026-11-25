@@ -18,6 +18,8 @@ public class CheckService(
 ) : ICheckService
 {
   public const string ManualProof = "manual";
+  // How the overview and errors name a habit with an NFC tag; a tag tap is recorded as manual proof.
+  public const string NfcProof = "nfc";
   private const int CloseBatchSize = 500;
   private const int EventBatchSize = 100;
   private const int MaxEventAttempts = 10;
@@ -235,6 +237,41 @@ public class CheckService(
     if (settled.IsFailure()) return settled.FailureOrDefault(); // e.g. the month's skips are used up
     var outcome = settled.Get();
     return outcome is { Adopted: false } ? outcome.Execution : null;
+  }
+
+  public async Task<Result<CheckPrincipal>> Undo(string userId, Guid habitId, DateOnly? localDate, bool tagged,
+    DateTime? nowUtc = null)
+  {
+    var now = nowUtc ?? DateTime.UtcNow;
+    var habit = ((List<SchedulableHabit>)await repo.ListSchedulableHabits(userId, [habitId])).FirstOrDefault();
+    if (habit == null)
+      return new NotFoundException("Habit not found or not enabled", typeof(HabitPrincipal), habitId.ToString());
+
+    var date = localDate ?? CheckWindow.LocalDate(now, CheckWindow.Resolve(habit.Timezone));
+    var check = (CheckPrincipal?)await repo.Get(habitId, date);
+    if (check == null)
+      return new NotFoundException("Habit has no check on that day", typeof(CheckPrincipal), $"{habitId}/{date:yyyy-MM-dd}");
+    if (check.Record.Status == CheckStatus.Pending) return check; // nothing to undo
+
+    var tapped = check.Record is { Status: CheckStatus.Done, SettledBy: ManualProof };
+    if (!tapped || tagged)
+      return new CheckNotUndoableException(check.Record.Status, tapped ? NfcProof : check.Record.SettledBy);
+    if (settlePolicy.Settled(check.Record, habit.ProofKey, now)) return new CheckDayLockedException(date);
+
+    var evidence = (Dictionary<Guid, string>)await repo.ListEvidence([check.Id], ManualProof);
+    if (!evidence.TryGetValue(check.Id, out var externalId))
+      return new CheckNotUndoableException(check.Record.Status, check.Record.SettledBy); // adopted legacy day
+
+    var reopened = await repo.Reopen(check.Id, userId, ManualProof, externalId);
+    if (reopened.IsFailure()) return reopened.FailureOrDefault(); // e.g. the user's lock was busy
+
+    // Reopen finds nothing to undo when another request already did (or settled it otherwise).
+    var current = (CheckPrincipal?)await repo.Get(habitId, date);
+    if (current == null)
+      return new NotFoundException("Habit has no check on that day", typeof(CheckPrincipal), $"{habitId}/{date:yyyy-MM-dd}");
+    return current.Record.Status == CheckStatus.Pending
+      ? current
+      : new CheckNotUndoableException(current.Record.Status, current.Record.SettledBy);
   }
 
   // The Pending check whose window contains `at`. If two windows ever overlap, the earlier

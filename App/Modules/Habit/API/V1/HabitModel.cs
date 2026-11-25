@@ -76,6 +76,13 @@ public record HabitExecutionRes(
     bool PaymentProcessed    // Penalty payment status
 );
 
+// A habit's check of one local day.
+public record HabitCheckRes(
+    string HabitId,
+    string Date,             // local date, yyyy-MM-dd
+    string Status            // one of: "pending", "done", "missed", "skipped", "frozen", "vacation"
+);
+
 public record SearchHabitQuery(
   Guid? Id,
   string? UserId,

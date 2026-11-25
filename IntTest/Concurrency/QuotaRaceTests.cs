@@ -238,7 +238,7 @@ public class QuotaRaceTests : IAsyncLifetime
   {
     var repo = new HabitRepository(db, NullLogger<HabitRepository>.Instance);
     var service = new HabitService(repo, Entitlement(repo), Checks.Service(db), null!,
-      NullLogger<HabitService>.Instance);
+      null!, NullLogger<HabitService>.Instance);
     var options = new StaticOptionsMonitor<HabitOption>(new HabitOption());
     return new HabitController(service, null!, null!, new MonthOf(today), null!,
       new CreateHabitReqValidator(options), new UpdateHabitReqValidator(options), new(), new(), new(), new())

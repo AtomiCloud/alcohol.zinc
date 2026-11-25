@@ -197,7 +197,7 @@ public class RoutineIntegrationTests : IAsyncLifetime
   // Habit order
   // ---------------------------------------------------------------------------
 
-  private HabitService HabitSvc() => new(HabitRepo(), null!, null!, null!, NullLogger<HabitService>.Instance);
+  private HabitService HabitSvc() => new(HabitRepo(), null!, null!, null!, null!, NullLogger<HabitService>.Instance);
 
   private async Task<List<Guid>> SearchIds(string userId, int limit = 100, int skip = 0)
     => (await HabitRepo().SearchHabits(new HabitSearch { UserId = userId, Limit = limit, Skip = skip }))

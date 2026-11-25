@@ -87,6 +87,22 @@ public record SettleCheck
 // The monthly skip limit and the user's local month it counts in.
 public record SkipQuota(Entitlement.Quota Quota, DateOnly MonthStart, DateOnly MonthEnd);
 
+// The user tried to change a check whose day has settled.
+public class CheckDayLockedException(DateOnly localDate)
+  : Exception($"The day {localDate:yyyy-MM-dd} has settled and can no longer change")
+{
+  public DateOnly LocalDate { get; } = localDate;
+}
+
+// The user tried to undo a check that wasn't completed by a tap in the app. SettledBy is
+// "nfc" for a Done on a habit with an NFC tag.
+public class CheckNotUndoableException(CheckStatus status, string? settledBy)
+  : Exception($"Only a completion tapped in the app can be undone (status {status}, by {settledBy})")
+{
+  public CheckStatus Status { get; } = status;
+  public string? SettledBy { get; } = settledBy;
+}
+
 // A check settled by the scheduler or by a timezone change (Missed, Frozen or Vacation).
 public record SettledCheck(Guid HabitId, DateOnly LocalDate, CheckStatus Status);
 

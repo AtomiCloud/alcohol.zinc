@@ -16,4 +16,15 @@ public static class CheckSettlePolicyExtensions
   // proofKey: the habit's bound proof plugin, null when it has none.
   public static TimeSpan WaitFor(this ICheckSettlePolicy policy, string? proofKey) =>
     proofKey != null && policy.SlowProofs.TryGetValue(proofKey, out var wait) ? wait : CheckWindow.Grace;
+
+  // Whether the check's day has settled at now: its End plus the habit's wait.
+  public static bool Settled(this ICheckSettlePolicy policy, CheckRecord check, string? proofKey, DateTime now) =>
+    now >= check.DeadlineUtc + policy.WaitFor(proofKey);
+
+  // Whether the user can undo the check now: a Done from a tap in the app (manual proof on a
+  // habit without an NFC tag, since a tag tap is recorded the same way) before its day settles.
+  public static bool CanUndo(this ICheckSettlePolicy policy, CheckRecord check, string? proofKey, bool tagged,
+    DateTime now) =>
+    check is { Status: CheckStatus.Done, SettledBy: CheckService.ManualProof } && !tagged
+    && !policy.Settled(check, proofKey, now);
 }
