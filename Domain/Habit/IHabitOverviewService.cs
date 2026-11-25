@@ -26,7 +26,9 @@ public record HabitOverviewItem
   string Proof,
   Guid? RoutineId,
   int SortOrder,    // position in the user's habit list; items come in this order
-  string? HabitTime // "HH:mm" or null: when the user plans to do it
+  string? HabitTime, // "HH:mm" or null: when the user plans to do it
+  // Today's Done came from a tap in the app and the day hasn't settled, so the user can undo it.
+  bool CanUndo
 );
 
 public record HabitOverviewSearch(string UserId, int Limit, int Skip);

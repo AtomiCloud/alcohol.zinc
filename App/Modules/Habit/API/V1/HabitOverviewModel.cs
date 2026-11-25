@@ -27,7 +27,8 @@ public record HabitOverviewHabitRes(
   string Proof,                   // "manual" | "nfc" | a bound plugin key ("strava")
   string? RoutineId,
   int SortOrder,                  // position in the user's habit list; habits come in this order
-  string? HabitTime               // "HH:mm" or null: when the user plans to do it
+  string? HabitTime,              // "HH:mm" or null: when the user plans to do it
+  bool CanUndo                    // today's Done was tapped in the app and the day hasn't settled: it can be undone
 );
 
 public record StakeRes(decimal Amount, string Currency);

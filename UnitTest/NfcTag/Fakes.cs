@@ -92,6 +92,10 @@ public sealed class FakeHabitService : IHabitService
     Domain.Allowance.UserMonthWindow month) =>
     throw new NotImplementedException();
 
+  public Task<Result<Domain.Check.CheckPrincipal>> UndoCompletion(string userId, Guid habitVersionId,
+    DateOnly? localDate, DateTime? nowUtc = null) =>
+    throw new NotImplementedException();
+
   public Task<Result<List<HabitExecutionPrincipal>>> SearchHabitExecutions(string userId, HabitExecutionSearch habitExecutionSearch) =>
     throw new NotImplementedException();
 }

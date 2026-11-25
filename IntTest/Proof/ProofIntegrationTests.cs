@@ -169,7 +169,7 @@ public class ProofIntegrationTests : IAsyncLifetime
     var versionId = await _db.HabitVersions.Where(v => v.HabitId == habitId).Select(v => v.Id).SingleAsync();
     var checks = Checks.Service(_db);
     var habits = new HabitService(new HabitRepository(_db, NullLogger<HabitRepository>.Instance), null!, checks,
-      Router(), NullLogger<HabitService>.Instance);
+      Router(), null!, NullLogger<HabitService>.Instance);
 
     var first = await habits.CompleteHabit(userId, versionId, "felt good");
     var second = await habits.CompleteHabit(userId, versionId, null);

@@ -30,6 +30,14 @@ public interface ICheckService
   Task<Result<HabitExecutionPrincipal?>> Skip(string userId, Guid habitId, string? notes, SkipQuota quota,
     DateTime? nowUtc = null);
 
+  // Undoes a completion tapped in the app: the check of localDate (default: the user's today) is
+  // Pending again, without its execution, evidence or events. Already Pending: returned as is.
+  // tagged: the habit has an NFC tag, whose taps can't be told apart from app taps, so they
+  // can't be undone. CheckNotUndoableException for any other settle, CheckDayLockedException
+  // once the day has settled.
+  Task<Result<CheckPrincipal>> Undo(string userId, Guid habitId, DateOnly? localDate, bool tagged,
+    DateTime? nowUtc = null);
+
   // Re-times Pending checks after a habit change (days, enabled). Started
   // checks never get a shorter deadline; checks no longer scheduled are removed.
   Task<Result<int>> RetimePending(string? userId, List<Guid>? habitIds, DateTime? nowUtc = null);

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Mime;
 using App.Error.V1;
 using App.Modules.Common;
@@ -7,6 +8,7 @@ using App.Utility;
 using Asp.Versioning;
 using CSharp_Result;
 using Domain;
+using Domain.Exceptions;
 using Domain.Habit;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -105,6 +107,30 @@ public class HabitController(
       .ThenAwait(_ => service.CompleteHabit(userId, habitVersionId, req.Notes))
       .Then(execution => execution.ToRes(), Errors.MapNone);
 
+    return this.ReturnResult(result);
+  }
+
+  // Undoes a completion tapped in the app, for a mistaken tap: the day (default: the user's
+  // today) is open again. Already open: returned as is. 409 completion_not_undoable when the day
+  // was settled another way (Strava, an NFC-tagged habit, a skip or the scheduler), 409
+  // habit_day_locked once the day has settled.
+  [Authorize, HttpDelete("{userId}/{habitVersionId:guid}/executions")]
+  public async Task<ActionResult<HabitCheckRes>> UndoCompletion(string userId, Guid habitVersionId,
+    [FromQuery] string? date)
+  {
+    DateOnly? localDate = null;
+    if (date != null)
+    {
+      if (!DateOnly.TryParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None,
+            out var parsed))
+        return this.ReturnResult<HabitCheckRes>(
+          new InvalidRequestException("date", "Date must be in the format of yyyy-MM-dd"));
+      localDate = parsed;
+    }
+
+    var result = await this.GuardAsync(userId)
+      .ThenAwait(_ => service.UndoCompletion(userId, habitVersionId, localDate))
+      .Then(check => check.ToRes(), Errors.MapNone);
     return this.ReturnResult(result);
   }
 

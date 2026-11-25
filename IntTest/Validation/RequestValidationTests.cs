@@ -1,10 +1,12 @@
 using System.Security.Claims;
 using App.Modules.Charities.Data;
+using App.Modules.Check.Data;
 using App.Modules.Configurations.API.V1;
 using App.Modules.Configurations.Data;
 using App.Modules.Entitlement;
 using App.Modules.Habit.API.V1;
 using App.Modules.Habit.Data;
+using App.Modules.NfcTag.Data;
 using App.Modules.Protection;
 using App.Modules.System;
 using App.Modules.Users.Data;
@@ -83,7 +85,8 @@ public class RequestValidationTests : IAsyncLifetime
   {
     var repo = new HabitRepository(_db, NullLogger<HabitRepository>.Instance);
     var entitlement = new EntitlementService(new AnyPlan(), repo, new FreezePolicy(), null!);
-    var service = new HabitService(repo, entitlement, Checks.Service(_db), null!, NullLogger<HabitService>.Instance);
+    var service = new HabitService(repo, entitlement, Checks.Service(_db), null!,
+      new NfcTagRepository(_db, NullLogger<NfcTagRepository>.Instance), NullLogger<HabitService>.Instance);
     var options = new StaticOptionsMonitor<HabitOption>(new HabitOption());
     return new HabitController(service, null!, null!, null!, null!,
       new CreateHabitReqValidator(options), new UpdateHabitReqValidator(options), new(), new(), new(), new())
@@ -147,6 +150,44 @@ public class RequestValidationTests : IAsyncLifetime
     var res = await Habits(userId).GetDailyExecutions(userId, new SearchHabitExecutionQuery(null, "05-01-2026", 100, 0));
 
     res.Result.Should().BeOfType<OkObjectResult>();
+  }
+
+  // ---- DELETE Habit/{userId}/{habitVersionId}/executions ----
+
+  // A bad date is 400; a day not tapped Done is 409 completion_not_undoable; a settled day is
+  // 409 habit_day_locked. Nothing changes.
+  [SkippableFact]
+  public async Task UndoCompletion_BadDateOrNotUndoable_IsRefused()
+  {
+    Skip.If(_conn == null, SkipReason);
+    var (userId, _, _) = await SeedUser();
+    var controller = Habits(userId);
+    var created = await controller.Create(userId,
+      Habit(["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]));
+    var version = created.Result.Should().BeOfType<OkObjectResult>().Subject.Value
+      .Should().BeOfType<HabitVersionRes>().Subject;
+    HabitCheckData Day(int day, HabitCheckStatusData status, string? by) => new()
+    {
+      HabitId = version.HabitId, LocalDate = new DateOnly(2026, 1, day), Timezone = Tz,
+      OpensAtUtc = new DateTime(2026, 1, day - 1, 16, 0, 0, DateTimeKind.Utc),
+      DeadlineUtc = new DateTime(2026, 1, day, 16, 0, 0, DateTimeKind.Utc), Status = status, SettledBy = by
+    };
+    _db.HabitChecks.AddRange(Day(5, HabitCheckStatusData.Missed, null), Day(6, HabitCheckStatusData.Done, "manual"));
+    await _db.SaveChangesAsync();
+
+    Status(await controller.UndoCompletion(userId, version.Id, "05-01-2026")).Should().Be(400);
+
+    var missed = Habits(userId);
+    Status(await missed.UndoCompletion(userId, version.Id, "2026-01-05")).Should().Be(409);
+    missed.HttpContext.Items["DomainProblemContext"]!.GetType().Name.Should().Be("CompletionNotUndoable");
+
+    var settled = Habits(userId);
+    Status(await settled.UndoCompletion(userId, version.Id, "2026-01-06")).Should().Be(409);
+    settled.HttpContext.Items["DomainProblemContext"]!.GetType().Name.Should().Be("HabitDayLocked");
+
+    (await _db.HabitChecks.AsNoTracking().Where(c => c.HabitId == version.HabitId).OrderBy(c => c.LocalDate)
+        .Select(c => c.Status).ToListAsync())
+      .Should().StartWith([HabitCheckStatusData.Missed, HabitCheckStatusData.Done]);
   }
 
   // ---- POST / PUT Habit: weekdays ----

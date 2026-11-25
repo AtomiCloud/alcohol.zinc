@@ -2,6 +2,7 @@ using CSharp_Result;
 using Domain.Check;
 using Domain.Entitlement;
 using Domain.Exceptions;
+using Domain.NfcTag;
 using Domain.Proof;
 using Microsoft.Extensions.Logging;
 
@@ -12,6 +13,7 @@ public class HabitService(
   IEntitlementService entitlementService,
   ICheckService checkService,
   IProofRouter proofRouter,
+  INfcTagRepository nfcTags,
   ILogger<HabitService> logger
 ) : IHabitService
 {
@@ -104,6 +106,17 @@ public class HabitService(
     var execution = skipped.Get();
     if (execution == null) return NotCompletable(habitVersionId);
     return execution;
+  }
+
+  public async Task<Result<CheckPrincipal>> UndoCompletion(string userId, Guid habitVersionId, DateOnly? localDate,
+    DateTime? nowUtc = null)
+  {
+    var hv = (HabitVersionPrincipal?)await repo.GetVersion(habitVersionId);
+    if (hv == null)
+      return new NotFoundException("Habit not found", typeof(HabitVersionPrincipal), habitVersionId.ToString());
+    var tagged = await nfcTags.ListTaggedHabits(userId);
+    if (tagged.IsFailure()) return tagged.FailureOrDefault();
+    return await checkService.Undo(userId, hv.HabitId, localDate, tagged.Get().Contains(hv.HabitId), nowUtc);
   }
 
   // Same failure the endpoints returned before checks existed (404).

@@ -33,7 +33,8 @@ public static class HabitOverviewMapper
       i.Proof,
       i.RoutineId?.ToString(),
       i.SortOrder,
-      i.HabitTime
+      i.HabitTime,
+      i.CanUndo
     );
   }
 

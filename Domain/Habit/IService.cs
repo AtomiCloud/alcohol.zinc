@@ -15,5 +15,8 @@ public interface IHabitService
   // month: the user's local month, which the monthly skip limit counts in.
   Task<Result<HabitExecutionPrincipal>> SkipHabit(string userId, Guid habitVersionId, string? notes,
     Allowance.UserMonthWindow month);
+  // Undoes a completion tapped in the app on localDate (default: the user's today); see ICheckService.Undo.
+  Task<Result<Check.CheckPrincipal>> UndoCompletion(string userId, Guid habitVersionId, DateOnly? localDate,
+    DateTime? nowUtc = null);
   Task<Result<List<HabitExecutionPrincipal>>> SearchHabitExecutions(string userId, HabitExecutionSearch habitExecutionSearch);
 }

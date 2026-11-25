@@ -22,10 +22,11 @@ public class HabitOverviewService(
   ICheckRepository checkRepository,
   INfcTagRepository nfcTagRepository,
   IProofBindingRepository proofBindingRepository,
+  ICheckSettlePolicy settlePolicy,
   ITransactionManager tm
 ) : IHabitOverviewService
 {
-  public const string NfcProof = "nfc";
+  public const string NfcProof = CheckService.NfcProof;
 
   public Task<Result<HabitOverviewSummary>> GetOverview(HabitOverviewSearch search, string skipsMonthlyKey, 
     DateTime? nowUtc = null)
@@ -116,13 +117,16 @@ public class HabitOverviewService(
               // Items keep the search's order: the user's habit order.
               foreach (var hv in ctx.habits)
               {
+                var check = b.checks.GetValueOrDefault(hv.HabitId);
+                var boundPlugin = ctx.bound.GetValueOrDefault(hv.HabitId);
+                var tagged = ctx.tagged.Contains(hv.HabitId);
                 acc = acc
                   .ThenAwait(list => BuildItem(hv, search.UserId, ctx.userTz, today,
-                    b.habits.GetValueOrDefault(hv.HabitId), b.statuses[hv.HabitId], b.checks.GetValueOrDefault(hv.HabitId),
+                    b.habits.GetValueOrDefault(hv.HabitId), b.statuses[hv.HabitId], check,
                     ctx.debtsByHabit.TryGetValue(hv.HabitId, out var ds) ? ds : [],
                     // A bound plugin (strava) wins over an NFC tag; Check in is always available too.
-                    ctx.bound.TryGetValue(hv.HabitId, out var plugin) ? plugin
-                    : ctx.tagged.Contains(hv.HabitId) ? NfcProof : CheckService.ManualProof)
+                    boundPlugin ?? (tagged ? NfcProof : CheckService.ManualProof),
+                    check != null && settlePolicy.CanUndo(check.Record, boundPlugin, tagged, utcNow))
                     .Then(item => { list.Add(item); return list; }, Errors.MapNone));
               }
               return await acc
@@ -147,7 +151,8 @@ public class HabitOverviewService(
             HabitStreakStatus status,
             CheckPrincipal? check,
             List<HabitDebtItem> debtsForHabit,
-            string proof)
+            string proof,
+            bool canUndo)
           {
             if (habitPrincipal == null || habitPrincipal.UserId != userId)
               return Task.FromResult<Result<HabitOverviewItem>>(
@@ -172,7 +177,8 @@ public class HabitOverviewService(
                   proof,
                   habitPrincipal.Record.RoutineId,
                   habitPrincipal.Record.SortOrder,
-                  hv.Record.HabitTime?.ToString("HH:mm", null)
+                  hv.Record.HabitTime?.ToString("HH:mm", null),
+                  canUndo
                 ), Errors.MapNone);
           }
         })

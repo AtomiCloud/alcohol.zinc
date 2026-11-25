@@ -163,7 +163,7 @@ public class PenaltyIntegrationTests : IAsyncLifetime
     var ownVersionId = await _db.HabitExecutions.Where(x => x.Id == ownExecution)
       .Select(x => x.HabitVersionId).SingleAsync();
     var service = new HabitService(new HabitRepository(_db, NullLogger<HabitRepository>.Instance),
-      null!, null!, null!, NullLogger<HabitService>.Instance);
+      null!, null!, null!, null!, NullLogger<HabitService>.Instance);
     var controller = new App.Modules.Habit.API.V1.HabitController(service, null!, null!, null!,
       null!, null!, null!, new(), new(), new(), new())
     {
@@ -292,7 +292,7 @@ public class PenaltyIntegrationTests : IAsyncLifetime
         {
           Id = charityId, Record = new Domain.Charity.CharityRecord { Name = "Charity" }
         }, status, status.TimeLeftToEodMinutes, new HabitVersionMeta(version.Id, 1, true), 0m,
-        null, "manual", null, 0, null)],
+        null, "manual", null, 0, null, false)],
       0m, 0, 3));
 
     response.Habits.Single().Status.Today.Should().Be("04-01-2026");

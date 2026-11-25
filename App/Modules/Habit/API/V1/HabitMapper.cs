@@ -74,6 +74,9 @@ public static class HabitMapper
             false  // PaymentProcessed - not exposed in domain model yet
         );
 
+    public static HabitCheckRes ToRes(this Domain.Check.CheckPrincipal c) =>
+        new(c.HabitId.ToString(), c.Record.LocalDate.ToStandardDateFormat(), c.Record.Status.ToString().ToLowerInvariant());
+
     private static string MapExecutionStatus(ExecutionStatus s) => s switch
     {
         ExecutionStatus.Completed => "succeeded",
