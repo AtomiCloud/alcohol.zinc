@@ -70,3 +70,14 @@ jobs:
             echo "Integration tests were skipped; every DB-backed test must run in CI." >&2
             exit 1
           fi
+
+      # A model change without `dotnet ef migrations add` passes the tests above (they build
+      # tables from the model) but breaks the migrated database. Fail it here instead.
+      - name: Check for pending model changes
+        env:
+          LANDSCAPE: lapras
+        shell: nix develop .#ci -c bash -eo pipefail {0}
+        run: |
+          dotnet tool restore
+          dotnet ef migrations has-pending-model-changes --project ./App --context MainDbContext \
+            || { echo "::error::The EF model has changes with no migration. Run 'pls migration:create -- <Name>' and commit the generated files." >&2; exit 1; }
