@@ -98,6 +98,9 @@ public record PaymentIntentResult
   public required string Currency { get; init; }
   public required string CustomerId { get; init; }
   public required string MerchantOrderId { get; init; }
+  // The intent's latest payment attempt (null before the first confirm). A confirm after a
+  // failed attempt is a new request, so its idempotency key derives from this.
+  public string? LatestAttemptId { get; init; }
 }
 
 public record ClientSecretResult

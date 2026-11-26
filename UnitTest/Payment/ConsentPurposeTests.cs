@@ -59,7 +59,7 @@ public class ConsentPurposeTests
       => Task.FromResult<Result<PaymentIntentResult>>(Intent("int_1", "REQUIRES_CUSTOMER_ACTION"));
 
     public Task<Result<PaymentIntentResult>> ConfirmPaymentIntentAsync(string paymentIntentId, string paymentConsentId, string customerId,
-      Func<Task>? beforeSend = null)
+      Func<Task>? beforeSend = null, string? afterAttemptId = null)
     {
       ConfirmedConsentIds.Add(paymentConsentId);
       return Task.FromResult<Result<PaymentIntentResult>>(Intent(paymentIntentId, "SUCCEEDED"));

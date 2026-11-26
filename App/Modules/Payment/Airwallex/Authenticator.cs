@@ -26,6 +26,9 @@ public class AirwallexAuthenticator(
 ) : IAirwallexAuthenticator
 {
   private const string AirwallexKey = "airwallex_auth_token";
+  // Renew this long before the token's expiry: expires_at is cut to whole seconds, so a token used
+  // in its last second is already rejected (401).
+  private static readonly TimeSpan RenewBefore = TimeSpan.FromMinutes(1);
   private IRedisDatabase Redis => factory.GetRedisClient(Caches.Main).Db0;
   private HttpClient HttpClient => httpClientsFactory.CreateClient(HttpClients.Airwallex);
 
@@ -91,11 +94,11 @@ public class AirwallexAuthenticator(
   {
     logger.LogInformation("Checking for local cached Access Token");
     localCache.TryGetValue(AirwallexKey, out AirwallexAuthenticatorToken? token);
-    if (token is null || token.Expiry <= DateTime.Now)
+    if (token is null || token.Expiry <= DateTime.Now + RenewBefore)
     {
       logger.LogInformation("Local cached Access Token missing or expired, checking Redis for cached Access Token");
       token = await this.Redis.GetAsync<AirwallexAuthenticatorToken>(AirwallexKey);
-      if (token is null || token.Expiry <= DateTime.Now)
+      if (token is null || token.Expiry <= DateTime.Now + RenewBefore)
       {
         logger.LogInformation("Redis cached Access Token missing or expired");
         return ((string, DateTime)?)null;

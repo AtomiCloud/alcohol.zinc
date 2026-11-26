@@ -85,7 +85,8 @@ public class AirwallexGateway(AirwallexClient client) : IPaymentGateway
         Amount = res.Amount,
         Currency = res.Currency,
         CustomerId = res.CustomerId,
-        MerchantOrderId = res.MerchantOrderId
+        MerchantOrderId = res.MerchantOrderId,
+        LatestAttemptId = res.LatestPaymentAttempt?.Id
       }, Errors.MapNone);
   }
 
@@ -100,19 +101,22 @@ public class AirwallexGateway(AirwallexClient client) : IPaymentGateway
         Amount = res.Amount,
         Currency = res.Currency,
         CustomerId = res.CustomerId,
-        MerchantOrderId = res.MerchantOrderId
+        MerchantOrderId = res.MerchantOrderId,
+        LatestAttemptId = res.LatestPaymentAttempt?.Id
       }, Errors.MapNone);
   }
 
   public async Task<Result<PaymentIntentResult>> ConfirmPaymentIntentAsync(string paymentIntentId, string paymentConsentId, string customerId,
-    Func<Task>? beforeSend = null)
+    Func<Task>? beforeSend = null, string? afterAttemptId = null)
   {
     var req = new AirwallexConfirmPaymentIntentReq
     {
-      // Deterministic idempotency: derive request_id from the (stable) intent id so a
-      // retried/concurrent confirm of the SAME intent dedupes on Airwallex's side instead
-      // of minting a fresh id each time (which would let a repeat confirm slip through).
-      RequestId = $"confirm-{paymentIntentId}",
+      // Deterministic idempotency: derive request_id from the intent and its latest failed attempt,
+      // so concurrent confirms of the SAME intent state dedupe on Airwallex's side. A confirm after a
+      // failed attempt (a decline, then a retry or a new card) is a new request: with the intent id
+      // alone Airwallex refuses every later confirm as duplicate_request, and the penalty can never
+      // be charged. An intent that already SUCCEEDED is never confirmed again (callers check first).
+      RequestId = afterAttemptId == null ? $"confirm-{paymentIntentId}" : $"confirm-{paymentIntentId}-{afterAttemptId}",
       PaymentConsentId = paymentConsentId,
       CustomerId = customerId,
       ReturnUrl = ReturnUrl,
@@ -130,7 +134,8 @@ public class AirwallexGateway(AirwallexClient client) : IPaymentGateway
         Amount = res.Amount,
         Currency = res.Currency,
         CustomerId = res.CustomerId,
-        MerchantOrderId = res.MerchantOrderId
+        MerchantOrderId = res.MerchantOrderId,
+        LatestAttemptId = res.LatestPaymentAttempt?.Id
       }, Errors.MapNone);
   }
 }
