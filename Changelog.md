@@ -1,3 +1,10 @@
+## [1.48.1](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.48.0...v1.48.1) (2026-11-26)
+
+
+### 🐛 Bug Fixes 🐛
+
+* retry a declined penalty charge on the same Airwallex intent ([173347a](https://github.com/AtomiCloud/alcohol.zinc/commit/173347a19d47a2e971801f3f08bb8aaf2cc6801d))
+
 ## [1.48.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.47.0...v1.48.0) (2026-11-25)
 
 
