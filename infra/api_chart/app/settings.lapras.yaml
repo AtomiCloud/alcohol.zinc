@@ -51,6 +51,8 @@ BlockStorage:
     EnsureBucketCreation: true
 # external
 HttpClient:
+  PLEDGE:
+    BaseAddress: https://api-staging.pledge.to
   AIRWALLEX:
     BaseAddress: 'https://api-demo.airwallex.com'
     Timeout: 60
