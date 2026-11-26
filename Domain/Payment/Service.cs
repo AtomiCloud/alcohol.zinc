@@ -234,7 +234,9 @@ public class PaymentService(
               // Money already moved on the prior attempt: do not re-charge.
               if (intent.Status == "SUCCEEDED") return intent.ToResult();
               // Not yet settled: confirm the SAME intent (no new intent id), unless the caller stops it.
-              return await gateway.ConfirmPaymentIntentAsync(intent.Id, consentId, r.AirwallexCustomerId, beforeConfirm);
+              // After a failed attempt (a decline, or the user's new card) this is a new confirm.
+              return await gateway.ConfirmPaymentIntentAsync(intent.Id, consentId, r.AirwallexCustomerId, beforeConfirm,
+                intent.LatestAttemptId);
             });
         }
 

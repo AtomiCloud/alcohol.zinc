@@ -101,6 +101,15 @@ public record AirwallexPaymentIntentRes
 
   [JsonPropertyName("client_secret")]
   public string? ClientSecret { get; init; }
+
+  [JsonPropertyName("latest_payment_attempt")]
+  public AirwallexPaymentAttemptRef? LatestPaymentAttempt { get; init; }
+}
+
+public record AirwallexPaymentAttemptRef
+{
+  [JsonPropertyName("id")]
+  public string? Id { get; init; }
 }
 
 public record AirwallexPaymentConsentRes

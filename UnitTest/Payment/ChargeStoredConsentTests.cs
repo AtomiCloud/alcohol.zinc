@@ -72,7 +72,8 @@ public class ChargeStoredConsentTests
   {
     var gateway = new FakeGateway
     {
-      RetrieveResult = Intent("int_old", "REQUIRES_PAYMENT_METHOD"),
+      // Declined before: Airwallex refuses a confirm that reuses the first confirm's request id.
+      RetrieveResult = Intent("int_old", "REQUIRES_PAYMENT_METHOD") with { LatestAttemptId = "att_failed" },
       ConfirmResult = Intent("int_old", "SUCCEEDED")
     };
     var svc = new PaymentService(new FakeCustomerRepo(VerifiedCustomer()), gateway);
@@ -90,6 +91,7 @@ public class ChargeStoredConsentTests
     res.Get().Status.Should().Be("SUCCEEDED");                    // returns the confirmed intent
     res.Get().Id.Should().Be("int_old");
     hookCalled.Should().BeFalse();                                // nothing new created -> hook not used
+    gateway.ConfirmedAfter.Should().Equal("att_failed");          // a new confirm after the failed attempt
   }
 
   // The caller's beforeConfirm runs right before EVERY confirm, and throwing from it stops the confirm
@@ -147,6 +149,7 @@ public class ChargeStoredConsentTests
     public Result<PaymentIntentResult>? CreateResult { get; init; }
     public Result<PaymentIntentResult>? RetrieveResult { get; init; }
     public Result<PaymentIntentResult>? ConfirmResult { get; init; }
+    public List<string?> ConfirmedAfter { get; } = [];
 
     public Task<Result<PaymentIntentResult>> CreatePaymentIntentAsync(CreatePaymentIntentRequest request)
     {
@@ -161,8 +164,9 @@ public class ChargeStoredConsentTests
     }
 
     public async Task<Result<PaymentIntentResult>> ConfirmPaymentIntentAsync(string paymentIntentId, string paymentConsentId, string customerId,
-      Func<Task>? beforeSend = null)
+      Func<Task>? beforeSend = null, string? afterAttemptId = null)
     {
+      ConfirmedAfter.Add(afterAttemptId);
       Calls.Add("authenticate");
       if (beforeSend != null) await beforeSend();
       Calls.Add("confirm");
