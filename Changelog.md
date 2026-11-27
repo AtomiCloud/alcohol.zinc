@@ -1,3 +1,10 @@
+## [1.49.0](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.48.1...v1.49.0) (2026-11-27)
+
+
+### ✨ Features ✨
+
+* plan limits for skips and vacations ([#121](https://github.com/AtomiCloud/alcohol.zinc/issues/121)) ([5a70d42](https://github.com/AtomiCloud/alcohol.zinc/commit/5a70d42e98885c3f9bcfc8c5a631ebe2305e33f9))
+
 ## [1.48.1](https://github.com/AtomiCloud/alcohol.zinc/compare/v1.48.0...v1.48.1) (2026-11-26)
 
 
