@@ -111,6 +111,21 @@ public class VacationRepository(MainDbContext db, ILogger<VacationRepository> lo
     }
   }
 
+  public async Task<Result<int>> DeleteStartingAfter(string userId, DateOnly day)
+  {
+    try
+    {
+      return await db.VacationPeriods
+        .Where(x => x.UserId == userId && x.StartDate > day)
+        .ExecuteDeleteAsync();
+    }
+    catch (Exception e)
+    {
+      logger.LogError(e, "DeleteStartingAfter failed for UserId={UserId} Day={Day}", userId, day);
+      throw;
+    }
+  }
+
   public async Task<Result<List<VacationPrincipal>>> Search(VacationSearch search)
   {
     try

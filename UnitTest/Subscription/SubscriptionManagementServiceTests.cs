@@ -17,6 +17,7 @@ public class SubscriptionManagementServiceTests
     => new(repo, plans ?? FakePlanProvider.Default(), payment,
       notifier ?? new RecordingEmailNotifier(),
       new RecordingFreezeCapService(repo),
+      new RecordingVacationService(repo),
       NullLogger<SubscriptionManagementService>.Instance);
 
   private static UserSubscriptionPrincipal Row(

@@ -10,6 +10,8 @@ public interface IVacationRepository
   Task<Result<VacationPrincipal>> Create(string userId, VacationRecord record, Entitlement.Quota windows);
   Task<Result<VacationPrincipal?>> Update(Guid id, VacationRecord record);
   Task<Result<Unit?>> Delete(Guid id, string userId);
+  // Deletes the user's vacations starting after the given day; returns how many.
+  Task<Result<int>> DeleteStartingAfter(string userId, DateOnly day);
   Task<Result<List<VacationPrincipal>>> Search(VacationSearch search);
   Task<Result<List<VacationPrincipal>>> ListActiveForUserOnDate(string userId, DateOnly date);
   Task<Result<int>> CountWindowsForYear(string userId, int year);

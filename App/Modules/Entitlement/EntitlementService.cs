@@ -24,6 +24,9 @@ public class EntitlementService(
   public Task<Result<Quota>> VacationWindowQuota(string userId) =>
     this.Quota(userId, EntitlementKeys.VacationWindowsYearly);
 
+  public Task<Result<Quota>> VacationMaxDaysQuota(string userId) =>
+    this.Quota(userId, EntitlementKeys.VacationMaxDays);
+
   private Task<Result<Quota>> Quota(string userId, string key) =>
     subscription.GetUserTier(userId)
       .ThenAwait(tier => subscription.GetLimitForTier(tier, key)

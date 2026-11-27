@@ -9,6 +9,8 @@ public interface IEntitlementService
   Task<Result<Quota>> HabitQuota(string userId);
   Task<Result<Quota>> SkipQuota(string userId);
   Task<Result<Quota>> VacationWindowQuota(string userId);
+  // Not counted: the longest single vacation, in days (both ends included).
+  Task<Result<Quota>> VacationMaxDaysQuota(string userId);
 
   Task<Result<int>> GetFreezeCapForUser(string userId, int userMaxStreak);
 

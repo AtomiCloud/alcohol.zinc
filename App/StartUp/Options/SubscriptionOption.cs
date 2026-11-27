@@ -32,5 +32,8 @@ public class SubscriptionTierOption
 
   [Range(0, int.MaxValue)] public int VacationWindowsYearly { get; set; }
 
+  // Longest single vacation in days, counting both its start and end day.
+  [Range(0, int.MaxValue)] public int VacationMaxDays { get; set; }
+
   [Range(0, int.MaxValue)] public int FreezeBase { get; set; }
 }

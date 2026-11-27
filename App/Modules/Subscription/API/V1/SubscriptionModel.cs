@@ -22,7 +22,8 @@ public record PlanRes(
   bool HabitsUnlimited,
   int SkipsMonthly,
   int VacationWindowsYearly,
-  int FreezeBase
+  int FreezeBase,
+  int VacationMaxDays // longest single vacation in days, both ends included
 );
 
 public record SubscriptionRes(
