@@ -20,7 +20,6 @@ Root Chart to a single Service
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | api.affinity | object | `{}` |  |
-| api.annotations."argocd.argoproj.io/hook" | string | `"Sync"` |  |
 | api.annotations."argocd.argoproj.io/sync-wave" | string | `"4"` |  |
 | api.annotations.drop_log | string | `"true"` |  |
 | api.appSettings.App.Mode | string | `"Server"` |  |
@@ -40,16 +39,20 @@ Root Chart to a single Service
 | api.ingress.tls[0].hosts[0] | string | `"api.zinc.alcohol.lapras.lvh.me"` |  |
 | api.ingress.tls[0].issuerRef | string | `"sample"` |  |
 | api.ingress.tls[0].secretName | string | `"sample"` |  |
-| api.livenessProbe.httpGet.path | string | `"/"` |  |
+| api.livenessProbe.failureThreshold | int | `6` |  |
+| api.livenessProbe.httpGet.path | string | `"/health/live"` |  |
 | api.livenessProbe.httpGet.port | string | `"http"` |  |
-| api.livenessProbe.periodSeconds | int | `30` |  |
+| api.livenessProbe.periodSeconds | int | `10` |  |
+| api.livenessProbe.timeoutSeconds | int | `3` |  |
 | api.nameOverride | string | `"zinc-api"` |  |
 | api.nodeSelector | object | `{}` |  |
 | api.podAnnotations | object | `{}` |  |
 | api.podSecurityContext | object | `{}` |  |
-| api.readinessProbe.httpGet.path | string | `"/"` |  |
+| api.readinessProbe.failureThreshold | int | `3` |  |
+| api.readinessProbe.httpGet.path | string | `"/health/ready"` |  |
 | api.readinessProbe.httpGet.port | string | `"http"` |  |
-| api.readinessProbe.periodSeconds | int | `30` |  |
+| api.readinessProbe.periodSeconds | int | `5` |  |
+| api.readinessProbe.timeoutSeconds | int | `3` |  |
 | api.replicaCount | int | `1` |  |
 | api.resources.limits.cpu | string | `"1"` |  |
 | api.resources.limits.memory | string | `"1Gi"` |  |
@@ -67,6 +70,11 @@ Root Chart to a single Service
 | api.serviceTree.<<.platform | string | `"alcohol"` |  |
 | api.serviceTree.<<.service | string | `"zinc"` |  |
 | api.serviceTree.module | string | `"api"` |  |
+| api.startupProbe.failureThreshold | int | `90` |  |
+| api.startupProbe.httpGet.path | string | `"/health/live"` |  |
+| api.startupProbe.httpGet.port | string | `"http"` |  |
+| api.startupProbe.periodSeconds | int | `2` |  |
+| api.startupProbe.timeoutSeconds | int | `2` |  |
 | api.tolerations | list | `[]` |  |
 | api.topologySpreadConstraints | object | `{}` |  |
 | bromine.annotations."argocd.argoproj.io/sync-wave" | string | `"1"` |  |

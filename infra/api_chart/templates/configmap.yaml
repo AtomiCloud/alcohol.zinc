@@ -9,11 +9,11 @@ data:
     {{- $pathBase := printf "%ssettings.yaml" "app/" -}}
     {{- $fileContentBase := .Files.Get $pathBase -}}
     {{- $configBase := fromYaml $fileContentBase -}}
-    {{- $finalBase := deepCopy $configBase | merge (deepCopy .Values.appSettings) -}}
+    {{- $finalBase := merge (include "dotnet-chart.versionSettings" . | fromYaml) (deepCopy .Values.appSettings) (deepCopy $configBase) -}}
     {{- toYaml $finalBase | nindent 4 }}
   settings.{{ .Values.serviceTree.landscape }}.yaml: |
     {{- $path := printf "%ssettings.%s.yaml" "app/" .Values.serviceTree.landscape -}}
     {{- $fileContent := .Files.Get $path -}}
     {{- $config := fromYaml $fileContent -}}
-    {{- $final := deepCopy $config | merge (deepCopy .Values.appSettings)  -}}
+    {{- $final := merge (include "dotnet-chart.versionSettings" . | fromYaml) (deepCopy .Values.appSettings) (deepCopy $config) -}}
     {{- toYaml $final | nindent 4 }}
