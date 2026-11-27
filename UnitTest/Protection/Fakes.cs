@@ -159,6 +159,7 @@ public sealed class FakeVacationRepository : IVacationRepository
   public Task<Result<VacationPrincipal>> Create(string userId, VacationRecord record, Quota windows) => throw new NotImplementedException();
   public Task<Result<VacationPrincipal?>> Update(Guid id, VacationRecord record) => throw new NotImplementedException();
   public Task<Result<Unit?>> Delete(Guid id, string userId) => throw new NotImplementedException();
+  public Task<Result<int>> DeleteStartingAfter(string userId, DateOnly day) => throw new NotImplementedException();
   public Task<Result<List<VacationPrincipal>>> Search(VacationSearch search) => throw new NotImplementedException();
   public Task<Result<int>> CountWindowsForYear(string userId, int year) => throw new NotImplementedException();
   public Task<Result<bool>> HasOverlap(string userId, DateOnly start, DateOnly end) => throw new NotImplementedException();
@@ -262,6 +263,7 @@ public sealed class FakeEntitlementService : IEntitlementService
   public Task<Result<Quota>> HabitQuota(string userId) => throw new NotImplementedException();
   public Task<Result<Quota>> SkipQuota(string userId) => throw new NotImplementedException();
   public Task<Result<Quota>> VacationWindowQuota(string userId) => throw new NotImplementedException();
+  public Task<Result<Quota>> VacationMaxDaysQuota(string userId) => throw new NotImplementedException();
 
   public Task<Result<int>> GetFreezeCapForUser(string userId, int userMaxStreak)
   {

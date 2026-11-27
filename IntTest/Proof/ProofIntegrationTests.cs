@@ -96,6 +96,7 @@ public class ProofIntegrationTests : IAsyncLifetime
     public Task<Result<Quota>> HabitQuota(string userId) => throw new NotImplementedException();
     public Task<Result<Quota>> SkipQuota(string userId) => throw new NotImplementedException();
     public Task<Result<Quota>> VacationWindowQuota(string userId) => throw new NotImplementedException();
+    public Task<Result<Quota>> VacationMaxDaysQuota(string userId) => throw new NotImplementedException();
     public Task<Result<int>> GetFreezeCapForUser(string userId, int userMaxStreak) => throw new NotImplementedException();
     public Task<Result<Unit>> EnsureHabitsAllowed(string userId) => throw new NotImplementedException();
   }

@@ -19,7 +19,8 @@ public static class SubscriptionMapper
         t.Value.HabitsMax == int.MaxValue,
         t.Value.SkipsMonthly,
         t.Value.VacationWindowsYearly,
-        t.Value.FreezeBase))
+        t.Value.FreezeBase,
+        t.Value.VacationMaxDays))
       .ToList();
   }
 

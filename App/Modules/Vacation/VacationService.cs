@@ -25,7 +25,24 @@ public class VacationService(
           ).ToException()
         : record.ToResult())
       .ThenAwait(rec => entitlementService.VacationWindowQuota(userId)
-        .ThenAwait(windows => repo.Create(userId, rec, windows)));
+        .ThenAwait(windows => entitlementService.VacationMaxDaysQuota(userId)
+          .ThenAwait(maxDays =>
+          {
+            // A plan without vacation windows is refused for that, by the repository.
+            var days = rec.EndDate.DayNumber - rec.StartDate.DayNumber + 1;
+            if (windows.Limit > 0 && days > maxDays.Limit)
+              return Task.FromResult((Result<VacationPrincipal>)
+                new TierInsufficient(maxDays.Tier, maxDays.Key, maxDays.Limit).ToException());
+            return repo.Create(userId, rec, windows);
+          })));
+  }
+
+  public async Task<Result<int>> CancelUnstarted(string userId)
+  {
+    // Vacation dates are user-local days; one starting today has started.
+    var userToday = await allowanceService.GetUserToday(userId);
+    if (userToday.IsFailure()) return userToday.FailureOrDefault();
+    return await repo.DeleteStartingAfter(userId, userToday.Get().Today);
   }
 
   public Task<Result<List<VacationPrincipal>>> Search(VacationSearch search)

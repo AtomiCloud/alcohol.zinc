@@ -2,6 +2,7 @@ using CSharp_Result;
 using Domain.Payment;
 using Domain.Protection;
 using Domain.Subscription;
+using Domain.Vacation;
 using NodaMoney;
 
 namespace UnitTest.Subscription;
@@ -237,6 +238,23 @@ public sealed class RecordingFreezeCapService(FakeSubscriptionRepository repo) :
     if (this.Fails is not null) return Task.FromResult<Result<FreezeBalance>>(this.Fails);
     return Task.FromResult<Result<FreezeBalance>>(new FreezeBalance(0, 0));
   }
+}
+
+// Records CancelUnstarted calls with the subscription row as it was at the call.
+public sealed class RecordingVacationService(FakeSubscriptionRepository repo) : IVacationService
+{
+  public List<(string UserId, UserSubscriptionRecord? RowAtCall)> CancelCalls { get; } = [];
+
+  public Task<Result<int>> CancelUnstarted(string userId)
+  {
+    this.CancelCalls.Add((userId, repo.Row(userId)?.Record));
+    return Task.FromResult<Result<int>>(0);
+  }
+
+  public Task<Result<VacationPrincipal>> Create(string userId, VacationRecord record) => throw new NotImplementedException();
+  public Task<Result<List<VacationPrincipal>>> Search(VacationSearch search) => throw new NotImplementedException();
+  public Task<Result<Unit?>> Delete(string userId, Guid vacationId) => throw new NotImplementedException();
+  public Task<Result<VacationPrincipal?>> EndToday(string userId, Guid vacationId) => throw new NotImplementedException();
 }
 
 // Payment fake tailored to the subscription flows: implements

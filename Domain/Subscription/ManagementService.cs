@@ -3,6 +3,7 @@ using Domain.Exceptions;
 using Domain.Notification;
 using Domain.Payment;
 using Domain.Protection;
+using Domain.Vacation;
 using Microsoft.Extensions.Logging;
 using NodaMoney;
 
@@ -14,6 +15,7 @@ public class SubscriptionManagementService(
   IPaymentService payment,
   IEmailNotifier notifier,
   IFreezeCapService freezeCap,
+  IVacationService vacations,
   ILogger<SubscriptionManagementService> logger
 ) : ISubscriptionManagementService
 {
@@ -326,7 +328,7 @@ public class SubscriptionManagementService(
     {
       var cancelled = await repo.MarkCancelled(sub.Id);
       if (!cancelled.IsSuccess()) return cancelled.FailureOrDefault()!;
-      await this.ReconcileFreezes(rec.UserId);
+      await this.DropToFree(rec.UserId);
       return 1;
     }
 
@@ -341,7 +343,7 @@ public class SubscriptionManagementService(
     {
       var lapsed = await repo.MarkCancelled(sub.Id);
       if (!lapsed.IsSuccess()) return lapsed.FailureOrDefault()!;
-      await this.ReconcileFreezes(rec.UserId);
+      await this.DropToFree(rec.UserId);
       await notifier.NotifySubscriptionEnded(rec.UserId, rec.Tier, nowUtc);
       return 1;
     }
@@ -465,6 +467,20 @@ public class SubscriptionManagementService(
     await notifier.NotifySubscriptionRenewed(
       sub.Record.UserId, targetTier, sub.Record.PeriodEnd.AddMonths(1));
     return 1;
+  }
+
+  // The plan ended: free has no vacations, so the ones not started yet are cancelled. Best
+  // effort like the freeze reconcile: the cancellation stands either way, and it is safe to repeat.
+  private async Task DropToFree(string userId)
+  {
+    await this.ReconcileFreezes(userId);
+    var cancelled = await vacations.CancelUnstarted(userId);
+    if (!cancelled.IsSuccess())
+      logger.LogWarning(cancelled.FailureOrDefault(),
+        "Cancelling unstarted vacations failed for {UserId} after the plan ended", userId);
+    else if (cancelled.Get() > 0)
+      logger.LogInformation("Cancelled {Count} unstarted vacation(s) for {UserId} after the plan ended",
+        cancelled.Get(), userId);
   }
 
   // After a tier drop, cut banked freezes to the new cap. Best effort: the renewal stands

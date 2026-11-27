@@ -265,8 +265,9 @@ Strava:
 # caps and prices. MUST match the public pricing page (alcohol.argon
 # src/lib/billing/pricing.ts + components/landing/Pricing.tsx):
 #   free: 2 habits, 3 skips/mo, no vacation mode, no freezes (not even streak bonuses)
-#   pro $4.99: 10 habits, 20 skips/mo, 6 vacations/yr, freeze base 14
-#   ultimate $7.99: unlimited habits, 60 skips/mo, 12 vacations/yr, freeze base 30
+#   pro $4.99: 10 habits, 5 skips/mo, 2 vacations/yr of up to 14 days each, freeze base 14
+#   ultimate $7.99: unlimited habits, 10 skips/mo, 5 vacations/yr of up to 30 days each, freeze base 30
+# A vacation counts in the year it starts. VacationMaxDays counts both its first and last day.
 Subscription:
   RenewalEnabled: false
   GracePeriodDays: 7
@@ -277,18 +278,21 @@ Subscription:
       HabitsMax: 2
       SkipsMonthly: 3
       VacationWindowsYearly: 0
+      VacationMaxDays: 0
       FreezeBase: 0
     pro:
       PriceCents: 499
       Currency: USD
       HabitsMax: 10
-      SkipsMonthly: 20
-      VacationWindowsYearly: 6
+      SkipsMonthly: 5
+      VacationWindowsYearly: 2
+      VacationMaxDays: 14
       FreezeBase: 14
     ultimate:
       PriceCents: 799
       Currency: USD
       HabitsMax: 2147483647
-      SkipsMonthly: 60
-      VacationWindowsYearly: 12
+      SkipsMonthly: 10
+      VacationWindowsYearly: 5
+      VacationMaxDays: 30
       FreezeBase: 30

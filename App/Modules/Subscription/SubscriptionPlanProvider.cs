@@ -39,6 +39,7 @@ public class SubscriptionPlanProvider(IOptionsMonitor<SubscriptionOption> option
         [EntitlementKeys.HabitsMax] = t.HabitsMax,
         [EntitlementKeys.SkipsMonthly] = t.SkipsMonthly,
         [EntitlementKeys.VacationWindowsYearly] = t.VacationWindowsYearly,
+        [EntitlementKeys.VacationMaxDays] = t.VacationMaxDays,
         [EntitlementKeys.FreezeBase] = t.FreezeBase
       },
       GracePeriodDays = opt.GracePeriodDays

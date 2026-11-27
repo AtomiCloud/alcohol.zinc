@@ -58,6 +58,7 @@ public class TierInsufficient : IDomainProblem
       EntitlementKeys.HabitsMax => ("habit", string.Empty),
       EntitlementKeys.SkipsMonthly => ("skip", " per month"),
       EntitlementKeys.VacationWindowsYearly => ("vacation window", " per year"),
+      EntitlementKeys.VacationMaxDays => ("day", " per vacation"),
       EntitlementKeys.FreezeBase => ("streak freeze", string.Empty),
       _ => ((string?)null, string.Empty),
     };

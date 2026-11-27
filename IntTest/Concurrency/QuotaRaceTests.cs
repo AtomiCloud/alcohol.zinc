@@ -338,6 +338,7 @@ public class QuotaRaceTests : IAsyncLifetime
       EntitlementKeys.HabitsMax => this.Habits,
       EntitlementKeys.SkipsMonthly => this.Skips,
       EntitlementKeys.VacationWindowsYearly => this.VacationWindows,
+      EntitlementKeys.VacationMaxDays => 14,
       _ => throw new InvalidOperationException($"unexpected limit {key}")
     });
   }
